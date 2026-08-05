@@ -1713,6 +1713,89 @@ function ModalHistorialPrecios({ open, onClose, producto }) {
 }
 
 /* ──────────────────────────────────────────────
+   MODAL: Compras por proveedor (a quién se le compró
+   este producto y a qué precio cada vez)
+────────────────────────────────────────────── */
+function ModalHistorialCompras({ open, onClose, producto }) {
+  const isMobile = useIsMobile();
+  const [historial, setHistorial] = useState(null); // null = cargando
+
+  useEffect(() => {
+    if (!open || !producto) return;
+    let active = true;
+    productosService.getHistorialCompras(producto.id)
+      .then(data => { if (active) setHistorial(data); })
+      .catch(() => { if (active) setHistorial([]); });
+    return () => { active = false; };
+  }, [open, producto]);
+
+  const loading = historial === null;
+
+  const COLS_COMPRAS = '1fr 1fr 0.85fr 0.7fr';
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
+      PaperProps={{ sx: modalPaperSx }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 1.5, sm: 3 }, pt: { xs: 1.75, sm: 3 }, pb: 0 }}>
+        <Box>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 18 }}>Compras por proveedor</Typography>
+          {producto && <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>{producto.nombre}</Typography>}
+        </Box>
+        <IconButton size="small" onClick={onClose} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <DialogContent sx={{ px: { xs: 1.5, sm: 3 }, pt: { xs: 1.5, sm: 2 }, pb: { xs: 1.75, sm: 3 } }}>
+        {loading ? (
+          <Typography sx={{ color: MUTED, fontSize: 14, textAlign: 'center', py: 4 }}>Cargando historial...</Typography>
+        ) : historial.length === 0 ? (
+          <Box sx={{ py: 5, textAlign: 'center' }}>
+            <HistoryIcon sx={{ color: MUTED, fontSize: 40, mb: 1 }} />
+            <Typography sx={{ color: MUTED, fontSize: 14 }}>Todavía no se compró este producto</Typography>
+            <Typography sx={{ color: MUTED, fontSize: 12, mt: 0.5 }}>Solo se cuentan las compras confirmadas</Typography>
+          </Box>
+        ) : isMobile ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {historial.map((h) => (
+              <Box key={h.idLinea} sx={{ bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '10px', p: 1.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                  <Typography sx={{ color: INK, fontSize: 13.5, fontWeight: 700 }} noWrap>{h.proveedorNombre}</Typography>
+                  <Typography sx={{ color: MUTED, fontSize: 11.5 }}>{fmtDate(h.fecha)}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography sx={{ color: INK2, fontSize: 12.5 }}>Cantidad: {h.cantidad}</Typography>
+                  <Typography sx={{ color: INK, fontSize: 13.5, fontWeight: 700 }}>{fmtMoney(h.precioCompra)}</Typography>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '10px', overflow: 'hidden' }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: COLS_COMPRAS, px: 2, py: 1, bgcolor: HOVER, borderBottom: `1px solid ${BORDER}` }}>
+              <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Proveedor</Typography>
+              <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Fecha</Typography>
+              <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', textAlign: 'right' }}>Cantidad</Typography>
+              <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', textAlign: 'right' }}>Precio pagado</Typography>
+            </Box>
+            {historial.map((h, i) => (
+              <Box key={h.idLinea} sx={{
+                display: 'grid', gridTemplateColumns: COLS_COMPRAS, px: 2, py: 1.25, alignItems: 'center',
+                borderBottom: i < historial.length - 1 ? `1px solid ${BORDER}` : 'none',
+              }}>
+                <Typography sx={{ color: INK, fontSize: 13.5, fontWeight: 600 }} noWrap>{h.proveedorNombre}</Typography>
+                <Typography sx={{ color: INK2, fontSize: 13 }}>{fmtDate(h.fecha)}</Typography>
+                <Typography sx={{ color: INK2, fontSize: 13, textAlign: 'right' }}>{h.cantidad}</Typography>
+                <Typography sx={{ color: INK, fontSize: 13.5, fontWeight: 700, textAlign: 'right' }}>{fmtMoney(h.precioCompra)}</Typography>
+              </Box>
+            ))}
+          </Box>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ──────────────────────────────────────────────
    MODAL: Detalle de Producto (solo lectura)
 ────────────────────────────────────────────── */
 function DetalleItem({ label, value }) {
@@ -1724,7 +1807,7 @@ function DetalleItem({ label, value }) {
   );
 }
 
-function ModalDetalleProducto({ open, onClose, producto, onVerHistorial, productos = [], actualizarProducto }) {
+function ModalDetalleProducto({ open, onClose, producto, onVerHistorial, onVerHistorialCompras, productos = [], actualizarProducto }) {
   const toast = useToast();
   const [varianteADesactivar, setVarianteADesactivar] = useState(null);
   if (!producto) return null;
@@ -1871,11 +1954,18 @@ function ModalDetalleProducto({ open, onClose, producto, onVerHistorial, product
           );
         })()}
 
-        <Button fullWidth startIcon={<HistoryIcon sx={{ fontSize: 16 }} />} onClick={onVerHistorial}
-          sx={{ color: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', border: `1px solid ${BORDER}`, py: 1,
-            '&:hover': { bgcolor: `${P}0c`, borderColor: P } }}>
-          Ver historial de precios
-        </Button>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
+          <Button fullWidth startIcon={<HistoryIcon sx={{ fontSize: 16 }} />} onClick={onVerHistorial}
+            sx={{ color: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', border: `1px solid ${BORDER}`, py: 1,
+              '&:hover': { bgcolor: `${P}0c`, borderColor: P } }}>
+            Ver historial de precios
+          </Button>
+          <Button fullWidth startIcon={<HistoryIcon sx={{ fontSize: 16 }} />} onClick={onVerHistorialCompras}
+            sx={{ color: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', border: `1px solid ${BORDER}`, py: 1,
+              '&:hover': { bgcolor: `${P}0c`, borderColor: P } }}>
+            Ver compras por proveedor
+          </Button>
+        </Box>
       </DialogContent>
     </Dialog>
   );
@@ -2374,6 +2464,7 @@ export default function Productos() {
   const [filtroVencimiento, setFiltroVencimiento] = useState(false);
   const [filtroPromocion,   setFiltroPromocion]   = useState(false);
   const [historialProducto, setHistorialProducto] = useState(null);
+  const [historialComprasProducto, setHistorialComprasProducto] = useState(null);
   const [productoDetalle,   setProductoDetalle]   = useState(null);
   const [elimSelLoading,  setElimSelLoading]  = useState(false);
   const [confirmBulkElim, setConfirmBulkElim] = useState(false);
@@ -2592,8 +2683,8 @@ export default function Productos() {
 
   const colTh = { color: MUTED, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', userSelect: 'none' };
   const COLS = mostrarStockTotal
-    ? '44px repeat(7, minmax(0, 1fr)) 112px'
-    : '44px repeat(6, minmax(0, 1fr)) 112px';
+    ? '44px repeat(7, minmax(0, 1fr)) 130px 112px'
+    : '44px repeat(6, minmax(0, 1fr)) 130px 112px';
 
   const swSx = {
     '& .MuiSwitch-switchBase.Mui-checked': { color: P },
@@ -3014,6 +3105,7 @@ export default function Productos() {
             )}
             <ColSortHeader col="precioFinal" label="Precio"    sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
             <Typography sx={colTh}>Proveedor</Typography>
+            <Typography sx={colTh}>Última modificación</Typography>
             <Typography data-tour="prod-acciones" sx={{ ...colTh, textAlign: 'right' }}>Acciones</Typography>
           </Box>
 
@@ -3103,6 +3195,9 @@ export default function Productos() {
             <Typography sx={{ color: p.proveedor === 'Sin proveedor' ? MUTED : INK2, fontSize: 14 }}>
               {p.proveedor}
             </Typography>
+            <Typography sx={{ color: p.ultimaModificacionPrecio ? INK2 : MUTED, fontSize: 13 }}>
+              {p.ultimaModificacionPrecio ? fmtDate(p.ultimaModificacionPrecio) : 'Sin cambios'}
+            </Typography>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }} onClick={e => e.stopPropagation()}>
               <Tooltip title="Ver detalle">
                 <IconButton size="small" onClick={() => setProductoDetalle(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: `${P}14` }, borderRadius: '6px' }}>
@@ -3186,6 +3281,14 @@ export default function Productos() {
         producto={historialProducto}
       />
 
+      {/* Modal compras por proveedor */}
+      <ModalHistorialCompras
+        key={historialComprasProducto?.id}
+        open={!!historialComprasProducto}
+        onClose={() => setHistorialComprasProducto(null)}
+        producto={historialComprasProducto}
+      />
+
       {/* Modal detalle de producto */}
       <ModalDetalleProducto
         open={!!productoDetalle}
@@ -3197,6 +3300,7 @@ export default function Productos() {
         productos={productos}
         actualizarProducto={actualizarProducto}
         onVerHistorial={() => { setHistorialProducto(productoDetalle); setProductoDetalle(null); }}
+        onVerHistorialCompras={() => { setHistorialComprasProducto(productoDetalle); setProductoDetalle(null); }}
       />
 
       {/* Confirmación eliminar */}

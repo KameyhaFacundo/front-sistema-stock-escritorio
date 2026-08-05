@@ -11,7 +11,7 @@ function Loading() {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-      height: '100dvh', background: '#0f172a', color: '#94a3b8',
+      height: '100dvh', background: '#111010', color: '#a09a99',
       fontFamily: 'Geist, ui-sans-serif, system-ui, sans-serif', fontSize: 14,
     }}>
       <img src={LOGO_URL_DARK} alt={APP_NAME} style={{ height: 48, width: 'auto' }} />

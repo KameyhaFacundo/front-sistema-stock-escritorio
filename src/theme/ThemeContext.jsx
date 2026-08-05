@@ -6,38 +6,39 @@ import { PRIMARY_COLOR } from '../config/brand';
 
 // ── CSS variable sets ──────────────────────────────────────────────────────
 
-// ── Dark theme — Slate/Navy ──────────────────────────────────────────────────
+// ── Dark theme — Marrón oscuro (paleta cálida, a juego con el dorado/mostaza
+// de VITE_PRIMARY_COLOR) ──────────────────────────────────────────────────
 const DARK = {
-  '--bg':           '#0f172a',
-  '--card':         '#1e293b',
-  '--border':       '#334155',
-  '--border-hover': '#475569',
-  '--ink':          '#f1f5f9',
-  '--ink2':         '#b0bdd0',
-  '--muted':        '#64748b',
-  '--input':        '#1e293b',
-  '--hover':        '#334155',
-  '--active-bg':    '#1e3a5f',
-  '--table-header': '#172033',
-  '--dropdown':     '#1e293b',
-  '--modal':        '#0f172a',
+  '--bg':           '#111010',
+  '--card':         '#1c1b1b',
+  '--border':       '#2c2b2b',
+  '--border-hover': '#3d3b3b',
+  '--ink':          '#f0edec',
+  '--ink2':         '#a09a99',
+  '--muted':        '#706969',
+  '--input':        '#201f1f',
+  '--hover':        '#252323',
+  '--active-bg':    '#0d2820',
+  '--table-header': '#161414',
+  '--dropdown':     '#201f1f',
+  '--modal':        '#111010',
 };
 
-// ── Dark theme — Original (negro casi puro) ──────────────────────────────────
+// ── Dark theme — Slate/Navy (versión anterior) ────────────────────────────
 // const DARK = {
-//   '--bg':           '#111010',
-//   '--card':         '#1c1b1b',
-//   '--border':       '#2c2b2b',
-//   '--border-hover': '#3d3b3b',
-//   '--ink':          '#f0edec',
-//   '--ink2':         '#a09a99',
-//   '--muted':        '#706969',
-//   '--input':        '#201f1f',
-//   '--hover':        '#252323',
-//   '--active-bg':    '#0d2820',
-//   '--table-header': '#161414',
-//   '--dropdown':     '#201f1f',
-//   '--modal':        '#111010',
+//   '--bg':           '#0f172a',
+//   '--card':         '#1e293b',
+//   '--border':       '#334155',
+//   '--border-hover': '#475569',
+//   '--ink':          '#f1f5f9',
+//   '--ink2':         '#b0bdd0',
+//   '--muted':        '#64748b',
+//   '--input':        '#1e293b',
+//   '--hover':        '#334155',
+//   '--active-bg':    '#1e3a5f',
+//   '--table-header': '#172033',
+//   '--dropdown':     '#1e293b',
+//   '--modal':        '#0f172a',
 // };
 
 const LIGHT = {
@@ -84,10 +85,9 @@ export function ThemeContextProvider({ children }) {
     palette: {
       mode,
       background: {
-        // Slate/Navy dark mode
-        default: mode === 'dark' ? '#0f172a' : '#f4f6fa',
-        paper:   mode === 'dark' ? '#1e293b' : '#ffffff',
-        // Original dark mode — comentado: '#111010' / '#1c1b1b'
+        default: mode === 'dark' ? '#111010' : '#f4f6fa',
+        paper:   mode === 'dark' ? '#1c1b1b' : '#ffffff',
+        // Slate/Navy dark mode (versión anterior) — comentado: '#0f172a' / '#1e293b'
       },
       primary: { main: PRIMARY_COLOR },
     },

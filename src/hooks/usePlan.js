@@ -17,7 +17,10 @@ export default function usePlan() {
   return {
     plan: 'local',
     tieneCatalogo: true,
-    tieneIA: true,
+    // IA (Gemini) desactivada por ahora a pedido — las rutas del backend
+    // también están comentadas (ver routes/api.php). Volver a `true` alcanza
+    // para reactivar toda la UI: cada botón/chip de IA ya chequea este flag.
+    tieneIA: false,
     tieneCobros: true,
     tieneFacturacion: facturacionActivada,
     planTieneFacturacion: true,

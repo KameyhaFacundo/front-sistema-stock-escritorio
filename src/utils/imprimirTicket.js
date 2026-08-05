@@ -192,7 +192,9 @@ async function generarTicketHtml(data, empresa, factura) {
       </div>
     ` : `
       <hr class="tk-sep" />
-      <div class="tk-footer">Comprobante no válido como factura</div>
+      <div class="tk-footer">${factura?.estado === 'pendiente'
+        ? 'Comprobante pendiente de confirmación ARCA — se emite solo apenas vuelva la conexión'
+        : 'Comprobante no válido como factura'}</div>
       <div class="tk-footer">¡Gracias por su compra!</div>
     `}
     <div style="height:5mm"></div>

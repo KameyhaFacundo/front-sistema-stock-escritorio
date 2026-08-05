@@ -54,6 +54,7 @@ import { useCaja } from '../../context/CajaContextBase';
 import { useToast } from '../../context/ToastContext';
 import { fmtMoney } from '../../utils/format';
 import { emitirFactura, mapFactura } from '../../services/arcaService';
+import { useFactura } from '../../hooks/queries/useFacturasQueries';
 import { carritosVaciadosService } from '../../services/carritosVaciadosService';
 import { mercadopagoService } from '../../services/mercadopagoService';
 import QRCode from 'qrcode';
@@ -217,7 +218,6 @@ function ModalSeleccionTalle({ producto, onClose, onAgregar }) {
 
 function Home() {
   const { user } = useContext(AuthContext);
-  const saldoFacturas = user?.empresa?.facturas_disponibles ?? null;
   const { productos } = useProductos();
   const { registrarVenta, confirmarVentaPoint } = useVentas();
   const { caja } = useCaja();
@@ -383,6 +383,14 @@ function Home() {
   const [productoParaTalles, setProductoParaTalles] = useState(null);
   const [facturando,    setFacturando]    = useState(false);
   const [facturaData,   setFacturaData]   = useState(null);
+  // Cuando la factura queda "pendiente" (ver EmitirFacturaJob en el
+  // backend, corte de internet a mitad de facturar) se sigue el resultado
+  // acá — refetchInterval se apaga solo apenas deja de estar pendiente.
+  const [facturaPendienteId, setFacturaPendienteId] = useState(null);
+  const { data: facturaResuelta } = useFactura(facturaPendienteId, {
+    enabled: !!facturaPendienteId,
+    refetchInterval: (query) => query.state.data?.estado === 'pendiente' ? 3000 : false,
+  });
 
   // ── Cobro con Mercado Pago Point / QR ────────────────────────────────
   const [mpConectado,    setMpConectado]    = useState(false);
@@ -416,6 +424,20 @@ function Home() {
     }
   }, []);
 
+  // Se resolvió una factura que estaba pendiente (ARCA ya respondió, en un
+  // sentido o el otro) — se actualiza el comprobante para reimprimir con el
+  // CAE real, se avisa, y se corta el polling.
+  useEffect(() => {
+    if (!facturaResuelta || facturaResuelta.estado === 'pendiente') return;
+    setFacturaData(facturaResuelta);
+    if (facturaResuelta.estado === 'emitida') {
+      toast(`Factura ${facturaResuelta.numeroCompleto} confirmada por ARCA`, 'success');
+    } else {
+      toast(`No se pudo emitir la factura: ${facturaResuelta.errorMensaje || 'error desconocido'}`, 'error');
+    }
+    setFacturaPendienteId(null);
+  }, [facturaResuelta, toast]);
+
   const cartTieneManual = cart.some(i => String(i.id).startsWith('manual-'));
   // Point deshabilitado temporalmente a pedido, vía VITE_POINT_HABILITADO en
   // .env (default false) — sacado del selector de métodos de pago y de
@@ -436,8 +458,16 @@ function Home() {
       if (res.success) {
         // qr_url viene null en modo prueba (CAE ficticio) — ahí no hay nada que
         // escanear, imprimirTicket lo maneja solo (ver utils/imprimirTicket.js).
-        setFacturaData(mapFactura(res.data));
+        const factura = mapFactura(res.data);
+        setFacturaData(factura);
         setAutoImprimir(true);
+        if (res.pendiente) {
+          // Sin internet o ARCA no respondió: se imprime igual (con la
+          // leyenda de "pendiente"), y se seguirá el resultado solo hasta
+          // que el Job del backend la termine de emitir.
+          toast('Sin conexión con ARCA — la factura se va a confirmar sola cuando vuelva la conexión.', 'warning');
+          setFacturaPendienteId(factura.id);
+        }
       } else {
         toast(res.errores?.[0] || 'Error al emitir factura', 'error');
       }
@@ -1938,24 +1968,9 @@ function Home() {
             </Box>
           </motion.div>
 
-          <Typography sx={{ color: MUTED, fontSize: 12, textAlign: 'center', mb: saldoFacturas != null ? 0.5 : 2 }}>
+          <Typography sx={{ color: MUTED, fontSize: 12, textAlign: 'center', mb: 2 }}>
             La facturación fiscal está desactivada para esta venta
           </Typography>
-
-          {/* Saldo de facturas visible justo donde se consume (mismo criterio
-              que Twilio/SendGrid: nunca dejar que se enteren del corte recién
-              al chocar contra el 403) — viaja en user.empresa vía /me, no hace
-              falta pedirlo aparte. */}
-          {saldoFacturas != null && (
-            <Typography sx={{
-              color: saldoFacturas === 0 ? ERROR : saldoFacturas <= 20 ? ORANGE : MUTED,
-              fontSize: 11.5, fontWeight: 600, textAlign: 'center', mb: 2,
-            }}>
-              {saldoFacturas === 0
-                ? 'Sin facturas disponibles — comprá un pack para facturar'
-                : `${saldoFacturas.toLocaleString('es-AR')} facturas disponibles`}
-            </Typography>
-          )}
 
           {/* Acción principal — imprimir el ticket detallado. No cierra el modal:
               después de imprimir puede que quieras volver a imprimir, descargar
@@ -1977,9 +1992,11 @@ function Home() {
           )}
           {tieneFacturacion && (
             <Button fullWidth variant="text" startIcon={<ReceiptIcon sx={{ fontSize: 18 }} />}
-              onClick={handleEmitirFactura} disabled={facturando}
+              onClick={handleEmitirFactura} disabled={facturando || facturaData?.estado === 'pendiente'}
               sx={{ color: ORANGE, textTransform: 'none', fontWeight: 600, fontSize: 13.5, borderRadius: '8px', py: 1, mb: 1, '&:hover': { bgcolor: `${ORANGE}15` } }}>
-              {facturando ? 'Emitiendo factura...' : 'Facturar ARCA'}
+              {facturando ? 'Emitiendo factura...'
+                : facturaData?.estado === 'pendiente' ? 'Esperando confirmación de ARCA...'
+                : 'Facturar ARCA'}
             </Button>
           )}
           <Button fullWidth variant="outlined" startIcon={<CancelIcon />} onClick={handleCerrarVentaOk}

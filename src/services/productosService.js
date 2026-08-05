@@ -21,6 +21,9 @@ export function mapProducto(p) {
     proveedor:        p.proveedor?.persona || null,
     precioFinal:      parseFloat(p.precio ?? 0),
     costo:            parseFloat(p.costo ?? 0),
+    // Fecha del último cambio de precio/costo (ver HistorialPrecio) — null si
+    // nunca se modificó desde que se creó el producto.
+    ultimaModificacionPrecio: p.ultima_modificacion_precio || null,
     id_categoria:     p.id_categoria,
     fechaVencimiento: p.fecha_vencimiento || null,
     esCombo:          p.es_combo ?? false,
@@ -113,6 +116,21 @@ export const productosService = {
       precioNuevo:    parseFloat(h.precio_nuevo),
       fecha:          h.created_at,
       usuario:        h.usuario?.des_usu || null,
+    }));
+  },
+
+  // A qué proveedores se le compró este producto y a qué precio cada vez —
+  // solo compras confirmadas (ver ProductosController::historialCompras).
+  async getHistorialCompras(id) {
+    const res = await api.get(`productos/${id}/historial-compras`);
+    const items = res.data.data ?? [];
+    return items.map(l => ({
+      idLinea:         l.id_linea,
+      precioCompra:    parseFloat(l.precio_compra),
+      cantidad:        parseFloat(l.cantidad),
+      fecha:           l.compra?.fecha,
+      idCompra:        l.compra?.id,
+      proveedorNombre: l.compra?.proveedor?.persona || 'Proveedor eliminado',
     }));
   },
 };

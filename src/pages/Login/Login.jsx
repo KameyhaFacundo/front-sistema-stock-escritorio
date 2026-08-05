@@ -14,29 +14,23 @@ import ArrowBackIcon          from "@mui/icons-material/ArrowBack";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import WbSunnyOutlinedIcon    from "@mui/icons-material/WbSunnyOutlined";
 import DarkModeOutlinedIcon   from "@mui/icons-material/DarkModeOutlined";
-import PointOfSaleIcon        from "@mui/icons-material/PointOfSale";
-import InventoryIcon          from "@mui/icons-material/Inventory";
-import BarChartIcon           from "@mui/icons-material/BarChart";
-import GroupIcon              from "@mui/icons-material/Group";
-import { APP_NAME, APP_TAGLINE, PRIMARY_COLOR, PRIMARY_HOVER, LOGO_URL } from "../../config/brand";
+import { APP_NAME, PRIMARY_COLOR, PRIMARY_HOVER } from "../../config/brand";
 import { SIDEBAR_COLLAPSED_STORAGE_KEY } from "../../layout/sidebarConstants";
 import useLogo from "../../hooks/useLogo";
 import { BG, CARD, BORDER, INK, INK2, MUTED, INPUT, HOVER, ERROR } from "../../theme/tokens";
 import { useAppTheme } from "../../theme/useAppTheme";
-import TiltCard from "../../components/shared/TiltCard";
 
 const SUCCESS_COLOR = '#10b981';
 
 const slideUp   = keyframes`from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}`;
 const slideLeft = keyframes`from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}`;
-const floatBlob = keyframes`0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-18px,22px) scale(1.08)}`;
 
 /* Autofill fix: necesita hex reales (no CSS vars) */
 const getAutofillFix = (mode) => {
-  // Slate/Navy dark mode
-  const bg   = mode === 'dark' ? '#1e293b' : '#f8fafc';
-  const text = mode === 'dark' ? '#f1f5f9' : '#0f172a';
-  // Original dark mode — comentado: bg '#201f1f' / text '#f0edec'
+  // Marrón oscuro (a juego con --input/--ink del tema dark, ver ThemeContext.jsx)
+  const bg   = mode === 'dark' ? '#201f1f' : '#f8fafc';
+  const text = mode === 'dark' ? '#f0edec' : '#0f172a';
+  // Slate/Navy dark mode (versión anterior) — comentado: bg '#1e293b' / text '#f1f5f9'
   return `
     input:-webkit-autofill,
     input:-webkit-autofill:hover,
@@ -176,12 +170,6 @@ function ViewLogin({ onForgot, onRequiere2fa }) {
   const { setToken } = authCtx;
   const navigate = useNavigate();
 
-  const API_URL = import.meta.env.VITE_API_URL;
-
-  const handleGoogleLogin = () => {
-    window.location.href = `${API_URL}auth/google/redirect`;
-  };
-
   const onSubmit = async (data) => {
     setLoading(true); setError('');
     try {
@@ -247,39 +235,6 @@ function ViewLogin({ onForgot, onRequiere2fa }) {
             '&:hover': { bgcolor: PRIMARY_HOVER, boxShadow: `0 4px 22px ${PRIMARY_COLOR}50` },
             '&.Mui-disabled': { bgcolor: PRIMARY_COLOR, opacity: 0.45, color: '#fff' } }}>
           {loading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Iniciar sesión'}
-        </Button>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, my: 1 }}>
-          <Box sx={{ flex: 1, height: '1px', bgcolor: BORDER }} />
-          <Typography sx={{ color: MUTED, fontSize: 12, fontWeight: 500 }}>o</Typography>
-          <Box sx={{ flex: 1, height: '1px', bgcolor: BORDER }} />
-        </Box>
-
-        <Button
-          variant="outlined"
-          fullWidth
-          onClick={handleGoogleLogin}
-          sx={{
-            py: 1.2,
-            fontSize: 14,
-            fontWeight: 600,
-            borderRadius: '10px',
-            textTransform: 'none',
-            borderColor: BORDER,
-            color: INK,
-            bgcolor: INPUT,
-            '&:hover': { bgcolor: HOVER, borderColor: BORDER },
-          }}
-        >
-          <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continuar con Google
-          </Box>
         </Button>
       </Stack>
     </Box>
@@ -494,106 +449,6 @@ function ViewReset({ token, email, onDone }) {
   );
 }
 
-/* ── Panel de marca (solo desktop) ── */
-const BRAND_FEATURES = [
-  { icon: InventoryIcon,   label: 'Stock y lotes con vencimientos bajo control' },
-  { icon: PointOfSaleIcon, label: 'Ventas y caja en un mismo flujo' },
-  { icon: BarChartIcon,    label: 'Reportes claros para decidir mejor' },
-  { icon: GroupIcon,       label: 'Multiusuario con permisos por rol' },
-];
-
-function FeatureItem({ icon: Icon, label }) {
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-      <Box sx={{
-        width: 32, height: 32, borderRadius: '9px', flexShrink: 0,
-        bgcolor: `${PRIMARY_COLOR}14`, border: `1px solid ${PRIMARY_COLOR}28`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Icon sx={{ fontSize: 17, color: PRIMARY_COLOR }} />
-      </Box>
-      <Typography sx={{ color: '#334155', fontSize: 14, fontWeight: 500 }}>{label}</Typography>
-    </Box>
-  );
-}
-
-function BrandPanel({ onLogoClick }) {
-  return (
-    <Box sx={{
-      display: { xs: 'none', md: 'flex' },
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      width: '42%', minWidth: 'clamp(300px, 30vw, 420px)', maxWidth: 'clamp(360px, 34vw, 560px)',
-      position: 'relative', overflowX: 'hidden', overflowY: 'auto',
-      background: 'linear-gradient(165deg, #f8faff 0%, #f3f0ff 50%, #eef6ff 100%)',
-      borderRight: '1px solid #e2e8f0',
-      p: 'clamp(24px, 3vw, 48px)',
-    }}>
-      {/* Glow blobs */}
-      <Box sx={{ position:'absolute', top:-140, right:-100, width:420, height:420, borderRadius:'50%', background:`radial-gradient(closest-side, ${PRIMARY_COLOR}30, transparent)`, filter:'blur(70px)', animation:`${floatBlob} 12s ease-in-out infinite` }} />
-      <Box sx={{ position:'absolute', bottom:-120, left:-90, width:380, height:380, borderRadius:'50%', background:'radial-gradient(closest-side, #8b5cf630, transparent)', filter:'blur(70px)', animation:`${floatBlob} 15s ease-in-out infinite 2s` }} />
-      <Box sx={{ position:'absolute', top:'40%', left:'52%', width:280, height:280, borderRadius:'50%', background:'radial-gradient(closest-side, #22d3ee22, transparent)', filter:'blur(60px)', animation:`${floatBlob} 18s ease-in-out infinite 4s` }} />
-
-      <Box sx={{
-        position: 'absolute', inset: 0,
-        backgroundImage: 'radial-gradient(circle, #64748b1c 1px, transparent 1px)',
-        backgroundSize: '26px 26px',
-      }} />
-
-      <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={onLogoClick}>
-        <Box component="img" src={LOGO_URL} alt={APP_NAME}
-          sx={{ height: 'clamp(28px, 3vw, 40px)', width: 'auto', display: 'block' }} />
-      </Box>
-
-      <Box sx={{ position: 'relative' }}>
-        <Typography sx={{ color: '#0f172a', fontWeight: 800, fontSize: 'clamp(20px, 2.2vw, 32px)', lineHeight: 1.25, letterSpacing: '-0.02em', mb: 'clamp(8px, 1vw, 12px)' }}>
-          Gestioná tu negocio<br />de punta a punta.
-        </Typography>
-        <Typography sx={{ color: '#475569', fontSize: 'clamp(12.5px, 1vw, 15px)', lineHeight: 1.7, mb: 'clamp(16px, 2.2vw, 28px)', maxWidth: 380 }}>
-          {APP_TAGLINE} — stock, ventas, caja y reportes en un solo lugar, pensado para comercios que necesitan moverse rápido.
-        </Typography>
-
-        {/* Mismo mockup del hero de la Landing, más chico — para que el panel
-            del login no se sienta como una página aparte sin nada de producto. */}
-        <Box sx={{ animation: `${slideUp} 0.5s 0.15s cubic-bezier(0.16,1,0.3,1) both`, mb: 'clamp(16px, 2.2vw, 28px)', maxWidth: 'clamp(220px, 22vw, 320px)' }}>
-          <TiltCard sx={{
-            bgcolor: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', p: 2,
-            boxShadow: '0 24px 60px rgba(15,23,42,0.12)',
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.75 }}>
-              {['#ff5f57', '#febc2e', '#28c840'].map(c => <Box key={c} sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: c }} />)}
-              <Box sx={{ flex: 1, height: 15, bgcolor: '#f1f5f9', borderRadius: '5px' }} />
-            </Box>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.25, mb: 1.25 }}>
-              {[['Ventas hoy', '$284.500', PRIMARY_COLOR], ['Stock bajo', '3 items', '#f59e0b']].map(([l, v, c]) => (
-                <Box key={l} sx={{ bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '9px', p: 1.25 }}>
-                  <Typography sx={{ color: '#94a3b8', fontSize: 10.5 }}>{l}</Typography>
-                  <Typography sx={{ color: c, fontWeight: 800, fontSize: 15, mt: 0.25 }}>{v}</Typography>
-                </Box>
-              ))}
-            </Box>
-            <Box sx={{ bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '9px', p: 1.25 }}>
-              <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'flex-end', height: 28 }}>
-                {[40, 65, 50, 80, 55, 90, 70].map((h, i) => (
-                  <Box key={i} sx={{ flex: 1, height: `${h}%`, bgcolor: PRIMARY_COLOR, opacity: i === 5 ? 1 : 0.3, borderRadius: '2px 2px 0 0' }} />
-                ))}
-              </Box>
-            </Box>
-          </TiltCard>
-        </Box>
-
-        <Stack spacing={1.5}>
-          {BRAND_FEATURES.map(f => <FeatureItem key={f.label} icon={f.icon} label={f.label} />)}
-        </Stack>
-      </Box>
-
-      <Typography sx={{ position: 'relative', color: '#94a3b8', fontSize: 12.5 }}>
-        © {new Date().getFullYear()} {APP_NAME} · Todos los derechos reservados
-      </Typography>
-    </Box>
-  );
-}
-
 /* ══════════════════════════════
    COMPONENTE PRINCIPAL
 ══════════════════════════════ */
@@ -607,14 +462,12 @@ export default function Login() {
   const resetToken  = searchParams.get('token');
   const resetEmail  = searchParams.get('email');
 
-  const googleError     = searchParams.get('error');
   const pending2faToken = searchParams.get('pending_2fa');
 
   const initialView = pending2faToken ? '2fa' : (resetToken ? 'reset' : 'main');
 
   const [view, setView] = useState(initialView);
   const [pendingToken, setPendingToken] = useState(pending2faToken || null);
-  const oauthError = googleError || null;
 
   if (token) return <Navigate to="/dashboard" />;
 
@@ -628,8 +481,6 @@ export default function Login() {
         fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
       }}>
 
-        <BrandPanel onLogoClick={() => navigate('/')} />
-
         {/* ── Panel del formulario ── */}
         <Box sx={{
           flex: 1,
@@ -642,28 +493,21 @@ export default function Login() {
 
           {/* ── Top bar ── */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'space-between', md: 'flex-end' }, px: { xs: 3, sm: 5 }, py: { xs: 1.5, md: 2.5 } }}>
-            <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', cursor: 'pointer' }} onClick={() => navigate('/')}>
+            <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center' }}>
               <Box component="img" src={logoSrc} alt={APP_NAME}
                 sx={{ height: 40, width: 'auto', display: 'block' }} />
             </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Tooltip title={mode === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
-                <IconButton onClick={toggle} size="small"
-                  sx={{ color: MUTED, bgcolor: HOVER, borderRadius: '8px', p: '7px',
-                    '&:hover': { color: INK, bgcolor: BORDER } }}>
-                  {mode === 'dark'
-                    ? <WbSunnyOutlinedIcon sx={{ fontSize: 18 }} />
-                    : <DarkModeOutlinedIcon sx={{ fontSize: 18 }} />
-                  }
-                </IconButton>
-              </Tooltip>
-              <Button onClick={() => navigate('/')}
-                sx={{ color: MUTED, textTransform: 'none', fontWeight: 500, fontSize: 13, borderRadius: '8px',
-                  '&:hover': { bgcolor: HOVER, color: INK } }}>
-                ← Volver al inicio
-              </Button>
-            </Box>
+            <Tooltip title={mode === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
+              <IconButton onClick={toggle} size="small"
+                sx={{ color: MUTED, bgcolor: HOVER, borderRadius: '8px', p: '7px',
+                  '&:hover': { color: INK, bgcolor: BORDER } }}>
+                {mode === 'dark'
+                  ? <WbSunnyOutlinedIcon sx={{ fontSize: 18 }} />
+                  : <DarkModeOutlinedIcon sx={{ fontSize: 18 }} />
+                }
+              </IconButton>
+            </Tooltip>
           </Box>
 
           {/* ── Card centrada ── */}
@@ -713,15 +557,6 @@ export default function Login() {
                     </Typography>
                   </Box>
 
-                  {oauthError && (
-                    <Alert severity="error" sx={{ mb: 2.5, fontSize: 13, borderRadius: '10px' }}>
-                      {oauthError === 'google_auth_failed' && 'No se pudo autenticar con Google. Intentá de nuevo.'}
-                      {oauthError === 'google_no_email' && 'Google no compartió tu correo. Intentá con otro método.'}
-                      {oauthError === 'oauth_no_token' && 'El inicio de sesión con Google no se completó correctamente.'}
-                      {oauthError === 'oauth_failed' && 'No se pudo verificar tu cuenta. Probá iniciar sesión con correo y contraseña.'}
-                    </Alert>
-                  )}
-
                   <Box sx={{ animation: `${slideLeft} 0.25s ease` }}>
                     <ViewLogin onForgot={() => setView('forgot')} onRequiere2fa={(token) => { setPendingToken(token); setView('2fa'); }} />
                   </Box>
@@ -730,8 +565,8 @@ export default function Login() {
             </Box>
           </Box>
 
-          {/* ── Footer (solo mobile, en desktop vive en el panel de marca) ── */}
-          <Box sx={{ display: { xs: 'block', md: 'none' }, textAlign: 'center', px: 3, pb: 3 }}>
+          {/* ── Footer ── */}
+          <Box sx={{ textAlign: 'center', px: 3, pb: 3 }}>
             <Typography sx={{ color: MUTED, fontSize: 12 }}>
               © {new Date().getFullYear()} {APP_NAME} · Todos los derechos reservados
             </Typography>

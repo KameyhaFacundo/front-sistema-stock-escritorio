@@ -32,7 +32,9 @@ export function mapFactura(f) {
     tipoLabel:             TIPO_LABELS[f.tipo_comprobante] || `Comprobante ${f.tipo_comprobante}`,
     puntoVenta:            f.punto_venta,
     numero:                f.numero,
-    numeroCompleto:        f.numero_completo || `#${f.numero}`,
+    // Una factura "pendiente" (ver EmitirFacturaJob en el backend) todavía
+    // no tiene número real — ARCA es quien lo asigna recién al resolverse.
+    numeroCompleto:        f.numero_completo || (f.numero != null ? `#${f.numero}` : null),
     cae:                   f.cae,
     vencimientoCae:        ymdToIso(f.vencimiento_cae),
     fecha:                 ymdToIso(f.fecha),
@@ -42,6 +44,7 @@ export function mapFactura(f) {
     clienteNombre:         f.cliente_nombre || 'Consumidor Final',
     numeroDocumento:       f.numero_documento,
     estado:                f.estado,
+    errorMensaje:          f.error_mensaje || null,
     qrUrl:                 f.qr_url || null,
     comprobanteAsociado:   f.comprobante_asociado ? mapFactura(f.comprobante_asociado) : null,
     notasCredito:          (f.notas_credito ?? []).map(mapFactura),

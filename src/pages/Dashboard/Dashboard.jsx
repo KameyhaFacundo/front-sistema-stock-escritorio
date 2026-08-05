@@ -460,7 +460,14 @@ function ModalNotaCredito({ open, onClose, factura, montoSugerido, idDevolucion 
     try {
       const res = await emitirNotaCredito(factura.id, montoNum, idDevolucion);
       if (res.success) {
-        toast(`Nota de crédito ${res.data.numero_completo ?? 'emitida'}${res.data.cae ? ` · CAE: ${res.data.cae.slice(0, 6)}...` : ''}`, 'success');
+        if (res.pendiente) {
+          // Sin internet o ARCA no respondió — igual que con una factura, el
+          // backend la termina sola en cuanto vuelva la conexión (ver
+          // EmitirNotaCreditoJob); se puede seguir el resultado desde Facturas.
+          toast('Sin conexión con ARCA — la nota de crédito se va a confirmar sola. Podés seguirla desde Facturas.', 'warning');
+        } else {
+          toast(`Nota de crédito ${res.data.numero_completo ?? 'emitida'}${res.data.cae ? ` · CAE: ${res.data.cae.slice(0, 6)}...` : ''}`, 'success');
+        }
         onClose();
       } else {
         toast(res.errores?.[0] || res.message || 'No se pudo emitir la nota de crédito', 'error');

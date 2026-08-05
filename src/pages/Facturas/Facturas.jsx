@@ -13,7 +13,7 @@ import { Navigate } from 'react-router-dom';
 
 import {
   BG, CARD, BORDER, INK, INK2, MUTED, P, HOVER, TABLE_HEADER, modalPaperSx,
-  SUCCESS, SUCCESS_BG, SUCCESS_BORDER, SUCCESS_LIGHT, ERROR, WARNING, WARNING_BG,
+  SUCCESS, SUCCESS_BG, SUCCESS_BORDER, SUCCESS_LIGHT, ERROR, ERROR_BG, ERROR_BORDER, WARNING, WARNING_BG,
 } from '../../theme/tokens';
 import { useIsMobile } from '../../utils/responsive';
 import { fmtMoney, fmtDate, toLocalDateStr } from '../../utils/format';
@@ -41,6 +41,25 @@ function TipoChip({ factura }) {
   );
 }
 
+const ESTADO_LABELS = { pendiente: 'Pendiente', error: 'Con error' };
+
+/* ── Chip de estado (solo para pendiente/error — emitida/prueba no lo necesitan) ── */
+function EstadoChip({ factura }) {
+  if (factura.estado !== 'pendiente' && factura.estado !== 'error') return null;
+  const esError = factura.estado === 'error';
+  return (
+    <Tooltip title={esError ? (factura.errorMensaje || 'No se pudo emitir') : 'Esperando confirmación de ARCA'}>
+      <Chip label={ESTADO_LABELS[factura.estado]} size="small"
+        sx={{
+          height: 20, fontSize: 11, fontWeight: 600,
+          bgcolor: esError ? ERROR_BG : WARNING_BG,
+          color: esError ? ERROR : WARNING,
+          border: `1px solid ${esError ? ERROR_BORDER : `${WARNING}55`}`,
+        }} />
+    </Tooltip>
+  );
+}
+
 /* ── Modal detalle de un comprobante ── */
 function ModalDetalleFactura({ id, onClose }) {
   const { data: factura, isLoading } = useFactura(id);
@@ -60,6 +79,19 @@ function ModalDetalleFactura({ id, onClose }) {
         {isLoading && <Typography sx={{ color: MUTED, fontSize: 13 }}>Cargando...</Typography>}
         {factura && (
           <>
+            {(factura.estado === 'pendiente' || factura.estado === 'error') && (
+              <Box sx={{
+                p: 1.5, mb: 2, borderRadius: '10px',
+                bgcolor: factura.estado === 'error' ? ERROR_BG : WARNING_BG,
+                border: `1px solid ${factura.estado === 'error' ? ERROR_BORDER : `${WARNING}55`}`,
+              }}>
+                <Typography sx={{ color: factura.estado === 'error' ? ERROR : WARNING, fontSize: 13, fontWeight: 600 }}>
+                  {factura.estado === 'error'
+                    ? `No se pudo emitir: ${factura.errorMensaje || 'error desconocido'}`
+                    : 'Esperando confirmación de ARCA — se completa sola apenas vuelva la conexión.'}
+                </Typography>
+              </Box>
+            )}
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2.5 }}>
               <Box>
                 <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }}>Cliente</Typography>
@@ -248,6 +280,8 @@ export default function Facturas() {
               <MenuItem value="todos">Todos los estados</MenuItem>
               <MenuItem value="emitida">Emitida</MenuItem>
               <MenuItem value="prueba">Modo prueba</MenuItem>
+              <MenuItem value="pendiente">Pendiente</MenuItem>
+              <MenuItem value="error">Con error</MenuItem>
             </Select>
           </FormControl>
           <TextField type="date" size="small" label="Desde" InputLabelProps={{ shrink: true }}
@@ -300,7 +334,7 @@ export default function Facturas() {
                     <Typography sx={{ color: P, fontSize: 13, fontWeight: 700, fontFamily: 'monospace' }}>{f.numeroCompleto}</Typography>
                     <Typography sx={{ color: INK2, fontSize: 13 }}>{f.clienteNombre}</Typography>
                   </Box>
-                  <Box sx={{ flexShrink: 0 }}><TipoChip factura={f} /></Box>
+                  <Box sx={{ flexShrink: 0, display: 'flex', gap: 0.5 }}><TipoChip factura={f} /><EstadoChip factura={f} /></Box>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography sx={{ color: MUTED, fontSize: 12 }}>{fmtDate(f.fecha)}</Typography>
@@ -325,7 +359,7 @@ export default function Facturas() {
                 <Typography sx={{ color: P, fontSize: 13.5, fontWeight: 700, fontFamily: 'monospace' }}>{f.numeroCompleto}</Typography>
                 <Typography sx={{ color: INK2, fontSize: 14 }} noWrap>{f.clienteNombre}</Typography>
                 <Typography sx={{ color: INK2, fontSize: 13.5 }}>{fmtDate(f.fecha)}</Typography>
-                <Box><TipoChip factura={f} /></Box>
+                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}><TipoChip factura={f} /><EstadoChip factura={f} /></Box>
                 <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14, textAlign: 'right' }}>{fmtMoney(f.total)}</Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <Tooltip title="Ver detalle">
