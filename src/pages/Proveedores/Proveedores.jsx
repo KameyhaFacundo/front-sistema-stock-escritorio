@@ -1,0 +1,563 @@
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import {
+  Box, Typography, TextField, Button, InputAdornment, IconButton,
+  Dialog, DialogContent, Chip, Tooltip,
+} from '@mui/material';
+import SearchIcon       from '@mui/icons-material/Search';
+import AddIcon          from '@mui/icons-material/Add';
+import CloseIcon        from '@mui/icons-material/Close';
+import PaymentIcon      from '@mui/icons-material/Payment';
+import BusinessIcon     from '@mui/icons-material/Business';
+import VisibilityIcon   from '@mui/icons-material/Visibility';
+import EditIcon         from '@mui/icons-material/Edit';
+import DeleteIcon       from '@mui/icons-material/Delete';
+
+import { BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, INPUT, HOVER, fieldSx,
+         SUCCESS, SUCCESS_BG, SUCCESS_BORDER, SUCCESS_LIGHT,
+         ERROR, ERROR_BG, ERROR_BORDER, modalPaperSx } from '../../theme/tokens';
+import { useToast }    from '../../context/ToastContext';
+import { fmtMoney, fmtDate } from '../../utils/format';
+import DataTable       from '../../components/shared/DataTable';
+import TablePagination from '../../components/shared/TablePagination';
+import PaymentModal   from '../../components/shared/PaymentModal';
+import ConfirmDialog  from '../../components/shared/ConfirmDialog';
+import AyudaButton    from '../../components/shared/AyudaButton';
+import { registerTour } from '../../utils/tour';
+import { proveedoresService } from '../../services/proveedoresService';
+import { deudasService }      from '../../services/deudasService';
+import DEUDA_COLORS from '../../constants/deudaStatus';
+
+
+/* ── Modal nuevo proveedor ── */
+export function ModalNuevoProveedor({ open, onClose, onCrear }) {
+  const toast = useToast();
+  const empty = { persona: '', cuit: '', telefono: '', email: '', direccion: '' };
+  const [form, setForm]     = useState(empty);
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const set = (k) => (e) => {
+    setForm(f => ({ ...f, [k]: e.target.value }));
+    setErrors(prev => { const next = { ...prev }; delete next[k]; return next; });
+  };
+
+  const validate = () => {
+    const errs = {};
+    if (!form.persona.trim()) errs.persona = 'El nombre es requerido';
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleCrear = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const nuevo = await proveedoresService.create({ ...form, estado: true });
+      onCrear(nuevo);
+      toast('Proveedor creado correctamente', 'success');
+      setForm(empty);
+      setErrors({});
+      onClose();
+    } catch (e) {
+      toast(e.response?.data?.message || 'Error al crear el proveedor', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClose = () => { setForm(empty); setErrors({}); onClose(); };
+
+  // Un poco más chico que el fieldSx de base — este modal es angosto (maxWidth="sm")
+  // y en mobile el 14px por defecto se sentía grande para un form tan compacto.
+  const fieldSxSm = { ...fieldSx, '& .MuiOutlinedInput-root': { ...fieldSx['& .MuiOutlinedInput-root'], fontSize: 13 } };
+  const labelSx = { color: INK2, fontSize: 12.5, fontWeight: 500, mb: 0.75 };
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth
+      PaperProps={{ sx: modalPaperSx }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 1.5, sm: 3 }, pt: { xs: 1.75, sm: 3 }, pb: 0 }}>
+        <Typography sx={{ color: INK, fontWeight: 700, fontSize: 18 }}>Nuevo Proveedor</Typography>
+        <IconButton data-tour="prov-modal-cerrar" size="small" onClick={handleClose} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <DialogContent sx={{ px: { xs: 1.5, sm: 3 }, pt: { xs: 1.5, sm: 2.5 }, pb: { xs: 1.75, sm: 3 } }}>
+        <Box data-tour="prov-modal-datos" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+          <Box>
+            <Typography sx={labelSx}>Nombre / Razón social *</Typography>
+            <TextField fullWidth placeholder="Textiles S.A." value={form.persona} onChange={set('persona')} error={!!errors.persona} helperText={errors.persona} sx={fieldSxSm} />
+          </Box>
+          <Box>
+            <Typography sx={labelSx}>CUIT</Typography>
+            <TextField fullWidth placeholder="30-12345678-9" value={form.cuit} onChange={set('cuit')} sx={fieldSxSm} />
+          </Box>
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+          <Box>
+            <Typography sx={labelSx}>Teléfono</Typography>
+            <TextField fullWidth placeholder="11-1234-5678" value={form.telefono} onChange={set('telefono')} sx={fieldSxSm} />
+          </Box>
+          <Box>
+            <Typography sx={labelSx}>Email</Typography>
+            <TextField fullWidth placeholder="contacto@empresa.com" value={form.email} onChange={set('email')} sx={fieldSxSm} />
+          </Box>
+        </Box>
+        <Box sx={{ mb: 3 }}>
+          <Typography sx={labelSx}>Dirección</Typography>
+          <TextField fullWidth placeholder="Dirección completa" value={form.direccion} onChange={set('direccion')} sx={fieldSxSm} />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end' }}>
+          <Button onClick={handleClose} sx={{ color: INK2, textTransform: 'none', fontWeight: 600, fontSize: 13, px: 3, borderRadius: '8px', '&:hover': { bgcolor: HOVER } }}>Cancelar</Button>
+          <Button data-tour="prov-modal-crear" variant="contained" onClick={handleCrear} disabled={saving}
+            sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, fontSize: 13, px: 3, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { opacity: 0.6 } }}>
+            {saving ? 'Guardando...' : 'Crear Proveedor'}
+          </Button>
+        </Box>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Modal editar proveedor ── */
+function ModalEditarProveedor({ open, onClose, onActualizar, proveedor }) {
+  const toast = useToast();
+  const empty = { persona: '', cuit: '', telefono: '', email: '', direccion: '' };
+  const [form, setForm]     = useState(empty);
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (proveedor) {
+      setForm({
+        persona:   proveedor.nombre    || '',
+        cuit:      proveedor.cuit      || '',
+        telefono:  proveedor.telefono  || '',
+        email:     proveedor.email     || '',
+        direccion: proveedor.direccion || '',
+      });
+      setErrors({});
+    }
+  }, [proveedor]);
+
+  const set = (k) => (e) => {
+    setForm(f => ({ ...f, [k]: e.target.value }));
+    setErrors(prev => { const next = { ...prev }; delete next[k]; return next; });
+  };
+
+  const validate = () => {
+    const errs = {};
+    if (!form.persona.trim()) errs.persona = 'El nombre es requerido';
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleGuardar = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const actualizado = await proveedoresService.update(proveedor.id, form);
+      onActualizar(actualizado);
+      toast('Proveedor actualizado correctamente', 'success');
+      onClose();
+    } catch (e) {
+      toast(e.response?.data?.message || 'Error al actualizar el proveedor', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
+      PaperProps={{ sx: modalPaperSx }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 1.5, sm: 3 }, pt: { xs: 1.75, sm: 3 }, pb: 0 }}>
+        <Typography sx={{ color: INK, fontWeight: 700, fontSize: 20 }}>Editar Proveedor</Typography>
+        <IconButton size="small" onClick={onClose} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <DialogContent sx={{ px: { xs: 1.5, sm: 3 }, pt: { xs: 1.5, sm: 2.5 }, pb: { xs: 1.75, sm: 3 } }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+          <Box>
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Nombre / Razón social *</Typography>
+            <TextField fullWidth placeholder="Textiles S.A." value={form.persona} onChange={set('persona')} error={!!errors.persona} helperText={errors.persona} sx={fieldSx} />
+          </Box>
+          <Box>
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>CUIT</Typography>
+            <TextField fullWidth placeholder="30-12345678-9" value={form.cuit} onChange={set('cuit')} sx={fieldSx} />
+          </Box>
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+          <Box>
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Teléfono</Typography>
+            <TextField fullWidth placeholder="11-1234-5678" value={form.telefono} onChange={set('telefono')} sx={fieldSx} />
+          </Box>
+          <Box>
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Email</Typography>
+            <TextField fullWidth placeholder="contacto@empresa.com" value={form.email} onChange={set('email')} sx={fieldSx} />
+          </Box>
+        </Box>
+        <Box sx={{ mb: 3 }}>
+          <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Dirección</Typography>
+          <TextField fullWidth placeholder="Dirección completa" value={form.direccion} onChange={set('direccion')} sx={fieldSx} />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end' }}>
+          <Button onClick={onClose} sx={{ color: INK2, textTransform: 'none', fontWeight: 600, px: 3, borderRadius: '8px', '&:hover': { bgcolor: HOVER } }}>Cancelar</Button>
+          <Button variant="contained" onClick={handleGuardar} disabled={saving}
+            sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, px: 3, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { opacity: 0.6 } }}>
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </Button>
+        </Box>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Modal Detalle de Proveedor ── */
+function ModalProveedorDetalle({ open, onClose, proveedor, onPagar }) {
+  const [deudas,     setDeudas]     = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [deudaPagar, setDeudaPagar] = useState(null);
+
+  useEffect(() => {
+    if (proveedor && open) {
+      deudasService.getAll({ id_proveedor: proveedor.id })
+        .then(({ deudas: d }) => setDeudas(d))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }
+  }, [proveedor, open]);
+
+  const handlePagado = (actualizada) => {
+    if (actualizada.estado_deuda === 'pagado') {
+      setDeudas(prev => prev.filter(d => d.id !== actualizada.id));
+    } else {
+      setDeudas(prev => prev.map(d => d.id === actualizada.id ? actualizada : d));
+    }
+    onPagar();
+    setDeudaPagar(null);
+  };
+
+  if (!proveedor) return null;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { ...modalPaperSx, borderRadius: '14px' } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 1.5, sm: 3 }, pt: { xs: 1.75, sm: 3 }, pb: 1 }}>
+        <Box>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 18 }}>Detalle del Proveedor</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 13 }}>{proveedor.nombre}</Typography>
+        </Box>
+        <IconButton size="small" onClick={onClose} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <DialogContent sx={{ px: { xs: 1.5, sm: 3 }, pt: 1, pb: { xs: 1.75, sm: 3 } }}>
+        {loading && <Typography sx={{ color: MUTED, fontSize: 13 }}>Cargando deudas...</Typography>}
+
+        {!loading && deudas.length === 0 && (
+          <Typography sx={{ color: MUTED, fontSize: 13 }}>✓ Sin deudas pendientes con este proveedor.</Typography>
+        )}
+
+        {!loading && deudas.length > 0 && (
+          <>
+            <Typography sx={{ color: INK, fontWeight: 600, fontSize: 13, mb: 1.5 }}>Compras pendientes de pago</Typography>
+            {deudas.map(d => {
+              const ec = DEUDA_COLORS[d.estado_deuda] || DEUDA_COLORS.pendiente;
+              const pct = d.total > 0 ? Math.round((d.pagado / d.total) * 100) : 0;
+              return (
+                <Box key={d.id} sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px', p: 2, mb: 1.5 }}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', minWidth: 0 }}>
+                      <Typography sx={{ color: INK2, fontSize: 13 }}>{fmtDate(d.fecha)}</Typography>
+                      <Chip label={ec.label} size="small" sx={{ height: 18, fontSize: 11, fontWeight: 600, bgcolor: ec.bg, color: ec.fg, border: `1px solid ${ec.border}` }} />
+                    </Box>
+                    <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                      <Typography sx={{ color: ERROR, fontWeight: 700, fontSize: 14 }}>{fmtMoney(d.saldo)}</Typography>
+                      <Typography sx={{ color: MUTED, fontSize: 11 }}>de {fmtMoney(d.total)}</Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                    <Box sx={{ flex: 1, height: 5, bgcolor: BORDER, borderRadius: 3, overflow: 'hidden' }}>
+                      <Box sx={{ height: '100%', width: `${pct}%`, bgcolor: pct === 100 ? SUCCESS : P, borderRadius: 3 }} />
+                    </Box>
+                    <Typography sx={{ color: MUTED, fontSize: 11, flexShrink: 0 }}>{pct}%</Typography>
+                  </Box>
+                  {d.pagos.length > 0 && (
+                    <Box sx={{ mb: 1 }}>
+                      {d.pagos.map(p => (
+                        <Box key={p.id} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                          <Typography sx={{ color: MUTED, fontSize: 12 }}>{fmtDate(p.fecha)} — {p.metodo_pago}{p.nota ? ` · ${p.nota}` : ''}</Typography>
+                          <Typography sx={{ color: SUCCESS, fontSize: 12, fontWeight: 600 }}>{fmtMoney(p.monto)}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                  <Button size="small" startIcon={<PaymentIcon sx={{ fontSize: 14 }} />}
+                    onClick={() => setDeudaPagar(d)}
+                    sx={{ color: P, textTransform: 'none', fontWeight: 600, fontSize: 12, '&:hover': { bgcolor: HOVER } }}>
+                    Registrar pago
+                  </Button>
+                </Box>
+              );
+            })}
+          </>
+        )}
+
+        <PaymentModal
+          open={!!deudaPagar} onClose={() => setDeudaPagar(null)}
+          deuda={deudaPagar}
+          type="pago"
+          title="Registrar Pago"
+          subtitle={deudaPagar ? `Compra del ${fmtDate(deudaPagar.fecha)}` : ''}
+          serviceFn={(id, payload) => deudasService.pagar(id, payload)}
+          onSuccess={handlePagado}
+          confirmLabel="Registrar Pago"
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const PROV_COLUMNS = [
+  {
+    key: 'nombre', header: 'Proveedor', flex: true,
+    render: (p) => (
+      <Box>
+        <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600 }}>{p.nombre}</Typography>
+        <Typography sx={{ color: MUTED, fontSize: 12 }}>{p.cuit || '—'}</Typography>
+      </Box>
+    ),
+  },
+  {
+    key: 'telefono', header: 'Teléfono', flex: true,
+    render: (p) => <Typography sx={{ color: INK2, fontSize: 14 }}>{p.telefono || '—'}</Typography>,
+  },
+  {
+    key: 'email', header: 'Email', flex: true,
+    render: (p) => <Typography sx={{ color: INK2, fontSize: 13 }} noWrap>{p.email || '—'}</Typography>,
+  },
+  {
+    key: '_deuda', header: 'Deuda', flex: true,
+    render: (p) => p.tieneDeuda ? (
+      <Box>
+        <Typography sx={{ color: ERROR, fontWeight: 700, fontSize: 14 }}>{fmtMoney(p._deuda.saldo_pendiente)}</Typography>
+        <Typography sx={{ color: MUTED, fontSize: 11 }}>{p._deuda.cantidad_compras} compra{p._deuda.cantidad_compras !== 1 ? 's' : ''}</Typography>
+      </Box>
+    ) : (
+      <Typography sx={{ color: MUTED, fontSize: 13 }}>Sin deuda</Typography>
+    ),
+  },
+  {
+    key: 'activo', header: 'Estado', flex: true,
+    render: (p) => (
+      <Chip label={p.activo ? 'Activo' : 'Inactivo'} size="small"
+        sx={{ height: 20, fontSize: 11, fontWeight: 600, width: 'fit-content',
+          bgcolor: p.activo ? SUCCESS_BG : ERROR_BG,
+          color: p.activo ? SUCCESS_LIGHT : ERROR,
+          border: `1px solid ${p.activo ? SUCCESS_BORDER : ERROR_BORDER}` }} />
+    ),
+  },
+];
+
+export default function Proveedores() {
+  const toast = useToast();
+  const [proveedores,  setProveedores]  = useState([]);
+  const [deudaResumen, setDeudaResumen] = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [search,       setSearch]       = useState('');
+  const [openModal,    setOpenModal]    = useState(false);
+  const [proveedorVer, setProveedorVer] = useState(null);
+  const [proveedorEditar, setProveedorEditar] = useState(null);
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(null);
+  const [eliminandoId, setEliminandoId] = useState(null);
+  const [pagina,       setPagina]       = useState(1);
+  const [pageSize,     setPageSize]     = useState(10);
+
+  const cargarDeudas = useCallback(async () => {
+    try { setDeudaResumen(await deudasService.resumen()); } catch { toast('No se pudo cargar el resumen de deudas', 'error'); }
+  }, [toast]);
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [ps] = await Promise.all([proveedoresService.getAll(), cargarDeudas()]);
+      setProveedores(ps);
+    } catch { toast('Error al cargar los proveedores', 'error'); } finally {
+      setLoading(false);
+    }
+  }, [cargarDeudas]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  useEffect(() => {
+    registerTour('/proveedores', [
+      { element: '[data-tour="prov-deuda"]', optional: true, title: 'Deuda total', description: 'La suma de todo lo que le debés a tus proveedores por cuenta corriente.' },
+      { element: '[data-tour="prov-buscar"]', title: 'Buscar proveedor', description: 'Encontrá un proveedor por nombre o CUIT.' },
+      { element: '[data-tour="prov-tabla"]', title: 'Lista de proveedores', description: 'Hacé clic en una fila para ver el detalle de deudas y registrar pagos.' },
+      { element: '[data-tour="prov-acciones"]', title: 'Acciones de la fila', description: 'Ojo: ver el detalle de deudas y pagos. Lápiz: editar los datos del proveedor. Tacho: eliminarlo (si no tiene compras asociadas).' },
+      { element: '[data-tour="prov-nueva"]', title: 'Nuevo proveedor', description: 'Vamos a ver el formulario para dar de alta uno. Hacé clic en "Siguiente".', click: true, clickDelay: 300 },
+      { element: '[data-tour="prov-modal-datos"]', title: 'Datos del proveedor', description: 'Solo el nombre o razón social es obligatorio. El resto de los datos (CUIT, teléfono, email, dirección) son opcionales y podés completarlos después.' },
+      { element: '[data-tour="prov-modal-crear"]', title: 'Crear proveedor', description: 'Guardá el proveedor con los datos cargados.' },
+      { element: '[data-tour="prov-modal-cerrar"]', title: 'Listo', description: 'Cerramos el formulario y volvemos al listado.', click: true, clickDelay: 200 },
+    ]);
+  }, []);
+
+  const totalDeuda = useMemo(
+    () => deudaResumen.reduce((s, d) => s + d.saldo_pendiente, 0),
+    [deudaResumen]
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? proveedores.filter(p => p.nombre.toLowerCase().includes(q) || (p.cuit || '').includes(q)) : proveedores;
+  }, [proveedores, search]);
+
+  const totalPages   = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paged        = filtered.slice((pagina - 1) * pageSize, pagina * pageSize);
+  const pagedEnriched = paged.map(p => {
+    const dr = deudaResumen.find(d => d.id_proveedor === p.id) ?? null;
+    return { ...p, _deuda: dr, tieneDeuda: Boolean(dr?.saldo_pendiente > 0) };
+  });
+
+  const handleCrear      = (nuevo) => setProveedores(ps => [...ps, nuevo]);
+  const handleActualizar = (actualizado) => setProveedores(ps => ps.map(p => p.id === actualizado.id ? actualizado : p));
+  const handleEliminar = async (row) => {
+    setEliminandoId(row.id);
+    try {
+      await proveedoresService.delete(row.id);
+      setProveedores(ps => ps.filter(p => p.id !== row.id));
+      toast('Proveedor eliminado', 'success');
+    } catch (e) {
+      toast(e.response?.data?.message || 'No se puede eliminar este proveedor', 'error');
+    } finally {
+      setEliminandoId(null);
+    }
+  };
+
+  return (
+    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
+
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
+        <Box>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.2 }}>Proveedores</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{proveedores.length} {proveedores.length === 1 ? 'proveedor registrado' : 'proveedores registrados'}</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+          {totalDeuda > 0 && (
+            <Box data-tour="prov-deuda" sx={{ bgcolor: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '10px', px: 2, py: 1, textAlign: 'right' }}>
+              <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 600 }}>DEUDA TOTAL</Typography>
+              <Typography sx={{ color: ERROR, fontWeight: 800, fontSize: 18 }}>{fmtMoney(totalDeuda)}</Typography>
+            </Box>
+          )}
+          <Tooltip title="Nuevo Proveedor">
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
+              sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Nuevo Proveedor</Box>
+            </Button>
+          </Tooltip>
+          <AyudaButton />
+        </Box>
+      </Box>
+
+      <TextField data-tour="prov-buscar" fullWidth placeholder="Buscar por nombre o CUIT..."
+        value={search} onChange={e => { setSearch(e.target.value); setPagina(1); }}
+        InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: MUTED }} /></InputAdornment> }}
+        sx={{
+          mb: 2.5,
+          '& .MuiOutlinedInput-root': { bgcolor: INPUT, color: INK, fontSize: 14, borderRadius: '10px', '& fieldset': { borderColor: BORDER }, '&:hover fieldset': { borderColor: 'var(--border-hover)' }, '&.Mui-focused fieldset': { borderColor: P, borderWidth: 1 } },
+          '& .MuiInputBase-input': { py: '13px', px: '14px' },
+          '& .MuiInputBase-input::placeholder': { color: MUTED, opacity: 1 },
+        }}
+      />
+
+      <Box data-tour="prov-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
+        <Box sx={{ px: 3, py: 2.5, borderBottom: `1px solid ${BORDER}` }}>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>Lista de Proveedores</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>{proveedores.length} proveedores · hacé clic en una fila para ver las deudas</Typography>
+        </Box>
+
+        {!loading && pagedEnriched.length === 0 ? (
+          <Box sx={{ py: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ width: 56, height: 56, borderRadius: '16px', bgcolor: `${P}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <BusinessIcon sx={{ color: P, fontSize: 28 }} />
+            </Box>
+            <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>No hay proveedores</Typography>
+            <Typography sx={{ color: MUTED, fontSize: 14 }}>Registrá tu primer proveedor para empezar.</Typography>
+          <Button data-tour="prov-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
+              sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
+              Registrar primer proveedor
+            </Button>
+          </Box>
+        ) : (
+          <>
+            <DataTable
+              columns={PROV_COLUMNS}
+              rows={pagedEnriched}
+              loading={loading}
+              actions={{ onView: setProveedorVer, onEdit: setProveedorEditar, onDelete: setConfirmandoEliminar, deleteLoading: eliminandoId }}
+              actionsTourId="prov-acciones"
+              emptyMessage="Sin proveedores"
+              mobileCard={(p, acts) => (
+                <Box sx={{ bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '10px', p: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.75 }}>
+                    <Box>
+                      <Typography sx={{ color: INK, fontWeight: 600, fontSize: 14 }}>{p.nombre}</Typography>
+                      <Typography sx={{ color: MUTED, fontSize: 12 }}>{p.cuit || '—'}</Typography>
+                    </Box>
+                    <Chip label={p.activo ? 'Activo' : 'Inactivo'} size="small"
+                      sx={{ height: 20, fontSize: 11, fontWeight: 600,
+                        bgcolor: p.activo ? SUCCESS_BG : ERROR_BG,
+                        color: p.activo ? SUCCESS_LIGHT : ERROR,
+                        border: `1px solid ${p.activo ? SUCCESS_BORDER : ERROR_BORDER}` }} />
+                  </Box>
+                  {p.telefono && <Typography sx={{ color: INK2, fontSize: 13, mb: 0.25 }}>{p.telefono}</Typography>}
+                  {p.email && <Typography sx={{ color: MUTED, fontSize: 12, mb: 0.5 }}>{p.email}</Typography>}
+                  {p.tieneDeuda && (
+                    <Typography sx={{ color: ERROR, fontWeight: 700, fontSize: 13, mb: 0.5 }}>Deuda: {fmtMoney(p._deuda.saldo_pendiente)}</Typography>
+                  )}
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, mt: 0.5, pt: 1, borderTop: `1px solid ${BORDER}` }}>
+                    {acts.onView && (
+                      <Tooltip title="Ver detalle de deudas">
+                        <IconButton size="small" onClick={() => acts.onView(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: `${P}18` }, borderRadius: '6px' }}>
+                          <VisibilityIcon sx={{ fontSize: 17 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {acts.onEdit && (
+                      <Tooltip title="Editar">
+                        <IconButton size="small" onClick={() => acts.onEdit(p)} sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: HOVER }, borderRadius: '6px' }}>
+                          <EditIcon sx={{ fontSize: 17 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {acts.onDelete && (
+                      <Tooltip title="Eliminar">
+                        <IconButton size="small" onClick={() => acts.onDelete(p)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
+                          <DeleteIcon sx={{ fontSize: 17 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
+                </Box>
+              )}
+            />
+            <TablePagination pagina={pagina} totalPages={totalPages} pageSize={pageSize} totalItems={filtered.length} label="proveedores" onPageChange={setPagina} onPageSizeChange={(s) => { setPageSize(s); setPagina(1); }} />
+          </>
+        )}
+      </Box>
+
+      <ModalNuevoProveedor open={openModal} onClose={() => setOpenModal(false)} onCrear={handleCrear} />
+      <ModalEditarProveedor open={!!proveedorEditar} onClose={() => setProveedorEditar(null)} onActualizar={handleActualizar} proveedor={proveedorEditar} />
+      {proveedorVer && (
+        <ModalProveedorDetalle open onClose={() => setProveedorVer(null)} proveedor={proveedorVer} onPagar={cargarDeudas} />
+      )}
+      <ConfirmDialog
+        open={!!confirmandoEliminar}
+        onClose={() => setConfirmandoEliminar(null)}
+        onConfirm={() => confirmandoEliminar && handleEliminar(confirmandoEliminar)}
+        title="¿Eliminar este proveedor?"
+        message="Se eliminarán todos sus datos. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+      />
+    </Box>
+  );
+}

@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+Allow: /planes
+Allow: /privacidad
+Allow: /terminos
+Allow: /catalogo/
+Disallow: /dashboard
+Disallow: /pos
+Disallow: /productos
+Disallow: /movimientos
+Disallow: /compras
+Disallow: /proveedores
+Disallow: /clientes
+Disallow: /usuarios
+Disallow: /caja
+Disallow: /super-admin
+Disallow: /bienvenida
+Disallow: /onboarding
+Disallow: /pago/
+Disallow: /reset-password
+
+Sitemap: https://kamexsolutions.com.ar/sitemap.xml

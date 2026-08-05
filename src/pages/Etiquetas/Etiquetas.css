@@ -1,0 +1,14 @@
+.etiquetas-print-area { display: none; }
+
+@media print {
+  #root { display: none !important; }
+  .etiquetas-print-area { display: block !important; }
+  .print-page {
+    display: flex; flex-wrap: wrap;
+    padding: 10mm;
+    page-break-after: always;
+  }
+  .etiqueta-item {
+    break-inside: avoid !important;
+  }
+}

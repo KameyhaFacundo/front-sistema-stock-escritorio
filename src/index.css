@@ -1,0 +1,77 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* ── iOS Safari hace zoom automático al enfocar un input con font-size
+   menor a 16px. Forzamos 16px en mobile para evitarlo (el tamaño visual
+   en desktop, definido por cada componente, no se toca). ── */
+@media (max-width: 600px) {
+  input, textarea, select,
+  .MuiInputBase-input {
+    font-size: 16px !important;
+  }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: var(--bg); }
+::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── SweetAlert2: toast temateado (antes quedaba con los colores
+   default de la librería — blanco puro, chocaba con el tema oscuro) ── */
+.swal2-popup.swal2-toast {
+  background: var(--card) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18) !important;
+}
+.swal2-popup.swal2-toast .swal2-title { color: var(--ink) !important; }
+.swal2-popup.swal2-toast .swal2-html-container { color: var(--ink2) !important; }
+.swal2-popup.swal2-toast .swal2-timer-progress-bar { background: var(--p) !important; }
+
+/* ── SweetAlert2: toasts compactos en mobile ────────────────── */
+@media (max-width: 600px) {
+  .swal2-container.swal2-top-end,
+  .swal2-container.swal2-top-right {
+    top: 8px !important;
+    right: 8px !important;
+    left: 8px !important;
+    width: auto !important;
+  }
+  .swal2-popup.swal2-toast {
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    min-width: unset !important;
+    max-width: calc(100vw - 16px) !important;
+    width: auto !important;
+    gap: 8px !important;
+  }
+  .swal2-popup.swal2-toast .swal2-title {
+    font-size: 13px !important;
+    margin: 0 !important;
+  }
+  /* Ojo: el ícono (y sus líneas/anillos internos de "error"/"success") usa
+     unidades em relativas al font-size del popup en el CSS propio de
+     SweetAlert2 — no forzar un tamaño en px acá, porque solo pisaría el
+     contenedor del ícono y no sus elementos internos, dejándolos
+     descentrados. Bajar el font-size de arriba ya los achica a todos
+     proporcionalmente y de forma consistente. */
+  .swal2-popup.swal2-toast .swal2-timer-progress-bar {
+    height: 2px !important;
+  }
+}
+

@@ -1,0 +1,36 @@
+// ── Brand & app configuration ──────────────────────────────────────────────
+// All values come from environment variables so each deployment (client) can
+// be customised without touching source code. Set them in .env (local) or in
+// the hosting platform's env settings (e.g. Vercel).
+
+export const APP_NAME      = import.meta.env.VITE_APP_NAME      || 'Kamex Solutions';
+export const APP_TAGLINE   = import.meta.env.VITE_APP_TAGLINE   || 'Sistema de gestión de inventario';
+export const COMPANY_NAME  = import.meta.env.VITE_COMPANY_NAME  || 'Mi Negocio';
+export const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || '';
+
+export const APP_VERSION = '1.0.0';
+
+// Logo completo (isotipo + wordmark "Kamex"). El wordmark es oscuro y se
+// pierde sobre fondos oscuros, así que hay una variante con wordmark claro
+// para modo oscuro — usar el hook useLogo() en vez de importar estas
+// constantes directamente en componentes.
+export const LOGO_URL      = '/img/kamex_negro.png';
+export const LOGO_URL_DARK = '/img/kamex_blanco.png';
+
+// Primary brand color and its hover/active shade.
+// Must be a valid CSS hex color string (e.g. #5c6ef8).
+const hexColorRx = /^#[0-9a-fA-F]{6}$/;
+
+function validHex(val, fallback) {
+  const clean = val?.trim();
+  return hexColorRx.test(clean) ? clean : fallback;
+}
+
+export const PRIMARY_COLOR = validHex(import.meta.env.VITE_PRIMARY_COLOR, '#5c6ef8');
+export const PRIMARY_HOVER = validHex(import.meta.env.VITE_PRIMARY_HOVER, '#4a5cf0');
+
+// Cobrar con Point (lector de tarjeta Mercado Pago) deshabilitado temporalmente
+// a pedido — no afecta a QR. Para reactivarlo, poner VITE_POINT_HABILITADO=true
+// en el .env de este build (y POINT_HABILITADO=true en el .env del backend,
+// ver PagoPointController::crearIntento).
+export const POINT_HABILITADO = import.meta.env.VITE_POINT_HABILITADO === 'true';

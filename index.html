@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/img/kamex_icon.png" />
+    <link rel="apple-touch-icon" href="/img/kamex_icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#5c6ef8" />
+    <!-- Sin esto, iOS Safari subraya cualquier número con forma de teléfono y
+         lo convierte en un link nativo de "Llamar", pisando el onClick propio
+         (ej. abrir WhatsApp) que le pongamos en React. -->
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta property="og:image" content="/img/kamex_icon.png" />
+    <meta name="twitter:image" content="/img/kamex_icon.png" />
+    <title>%VITE_APP_NAME%</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="/theme-init.js"></script>
+    <script type="module" src="/src/main.jsx"></script>
+    <script src="/sw-register.js"></script>
+  </body>
+</html>
