@@ -12,7 +12,6 @@ import PersonIcon           from '@mui/icons-material/Person';
 import SettingsIcon         from '@mui/icons-material/Settings';
 import ContentCopyIcon      from '@mui/icons-material/ContentCopy';
 import WarningAmberIcon     from '@mui/icons-material/WarningAmber';
-import ChevronRightIcon     from '@mui/icons-material/ChevronRight';
 import ReceiptLongIcon      from '@mui/icons-material/ReceiptLong';
 import CheckCircleIcon      from '@mui/icons-material/CheckCircle';
 import PointOfSaleIcon      from '@mui/icons-material/PointOfSale';
@@ -38,7 +37,6 @@ import { mercadopagoService } from '../services/mercadopagoService';
 import { empresaService } from '../services/empresaService';
 import { usuariosService } from '../services/usuariosService';
 import { getEstadoArca } from '../services/arcaService';
-import { crearPagoPackApi } from '../services/facturacionPackApi';
 import { twoFactorService } from '../services/twoFactorService';
 import { useSucursales, useCrearSucursal, useActualizarSucursal, useEliminarSucursal } from '../hooks/queries/useSucursalesQueries';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
@@ -47,8 +45,6 @@ import { useToast } from '../context/ToastContext';
 import { AuthContext } from '../auth/AuthContextBase';
 import useHasPermiso from '../hooks/useHasPermiso';
 import usePlan from '../hooks/usePlan';
-import { PACKS_FACTURACION } from '../config/planes';
-import { fmtMoney, fmtDate } from '../utils/format';
 
 const card = { bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px' };
 
@@ -1195,7 +1191,6 @@ function TabFacturacion() {
   const [passphrase, setPassphrase] = useState('');
   const [puntoVenta, setPuntoVenta] = useState('');
   const [homologacion, setHomologacion] = useState(true);
-  const [loadingPack, setLoadingPack] = useState(null);
   const certRef = useRef(null);
   const keyRef  = useRef(null);
 
@@ -1256,23 +1251,6 @@ function TabFacturacion() {
       toast(e.response?.data?.message || 'No se pudo actualizar la facturación', 'error');
     } finally {
       setGuardandoActivacion(false);
-    }
-  };
-
-  const handleElegirPack = async (packId) => {
-    setLoadingPack(packId);
-    try {
-      const data = await crearPagoPackApi(packId);
-      if (data.success && data.init_point) {
-        // eslint-disable-next-line react-hooks/immutability -- corre solo al elegir un pack, nunca durante el render
-        window.location.href = data.init_point;
-      } else {
-        toast(data.message || 'No se pudo iniciar el pago', 'error');
-        setLoadingPack(null);
-      }
-    } catch (e) {
-      toast(e.response?.data?.message || 'No se pudo iniciar el pago', 'error');
-      setLoadingPack(null);
     }
   };
 
@@ -1357,48 +1335,6 @@ function TabFacturacion() {
               {eliminando ? <CircularProgress size={16} sx={{ color: ERROR }} /> : 'Quitar certificado'}
             </Button>
           )}
-        </Box>
-
-        {/* Saldo de facturas — el plan ya regala un bono único al activarse
-            (ver Empresa::otorgarBonoFacturas); estos packs son solo para
-            cuando ese bono (o los packs previos) se agotan. */}
-        <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${BORDER}` }}>
-          {(() => {
-            const saldo = estado?.facturas_disponibles ?? 0;
-            const colorSaldo = saldo === 0 ? ERROR : saldo <= 20 ? ORANGE : INK;
-            return (
-              <Typography sx={{ color: colorSaldo, fontSize: 13.5, fontWeight: 700 }}>
-                {saldo === 0
-                  ? 'Sin facturas disponibles'
-                  : `Te quedan ${saldo.toLocaleString('es-AR')} facturas disponibles`}
-              </Typography>
-            );
-          })()}
-          <Typography sx={{ color: MUTED, fontSize: 12, mb: 1.5 }}>Se descuentan una por una al emitir. Comprá un pack cuando se te acaben.</Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {PACKS_FACTURACION.map(pack => (
-              <Box key={pack.id} sx={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5,
-                bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '10px', px: 2, py: 1.25,
-              }}>
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>
-                    {pack.cantidad.toLocaleString('es-AR')} <Box component="span" sx={{ color: MUTED, fontWeight: 400, fontSize: 12 }}>facturas</Box>
-                  </Typography>
-                  <Typography sx={{ color: MUTED, fontSize: 12 }}>${pack.precio.toLocaleString('es-AR')} · pago único</Typography>
-                </Box>
-                <Button size="small" disabled={loadingPack !== null} onClick={() => handleElegirPack(pack.id)}
-                  sx={{
-                    bgcolor: P, color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: 12.5, px: 2, py: 0.6, borderRadius: '100px',
-                    flexShrink: 0, minWidth: 88,
-                    '&:hover': { bgcolor: P_HOVER },
-                    '&.Mui-disabled': { bgcolor: `${P}50`, color: '#fff' },
-                  }}>
-                  {loadingPack === pack.id ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : 'Activar →'}
-                </Button>
-              </Box>
-            ))}
-          </Box>
         </Box>
 
         {!configurado && (
@@ -1608,127 +1544,6 @@ function TabSeguridad() {
   );
 }
 
-/* ─────────────────────────── TAB PLAN ─────────────────────────── */
-const PLAN_LABELS = { free: 'Plan Gratis', esencial: 'Plan Esencial', pro: 'Plan Pro', ia: 'Plan IA' };
-
-function TabPlan({ onClose }) {
-  const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
-  const [pagos, setPagos] = useState([]);
-  const [cargandoPagos, setCargandoPagos] = useState(true);
-
-  useEffect(() => {
-    empresaService.getPagos()
-      .then(setPagos)
-      .catch(() => {})
-      .finally(() => setCargandoPagos(false));
-  }, []);
-
-  const empresa   = user?.empresa;
-  const planId    = empresa?.plan || 'free';
-  const planNombre = PLAN_LABELS[planId] || 'Plan Gratis';
-
-  // Solo el plan gratis tiene fecha de vencimiento (trial); los planes pagos
-  // se renuevan/gestionan manualmente desde SuperAdmin, sin fecha de corte.
-  const diasRestantes = useMemo(() => {
-    const ends = empresa?.trial_ends_at;
-    if (!ends || planId !== 'free') return null;
-    return Math.ceil((new Date(ends) - new Date()) / (1000 * 60 * 60 * 24));
-  }, [empresa?.trial_ends_at, planId]);
-
-  const vencimientoValue = planId === 'free'
-    ? (empresa?.trial_ends_at
-        ? new Date(empresa.trial_ends_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })
-        : '—')
-    : 'Sin vencimiento';
-
-  const diasRestantesValue = planId === 'free'
-    ? (diasRestantes === null ? '—' : diasRestantes <= 0 ? 'Vencido' : `${diasRestantes} día${diasRestantes === 1 ? '' : 's'}`)
-    : '—';
-
-  return (
-    <Box>
-      <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 18, sm: 22 }, mb: 0.5 }}>Plan y facturación</Typography>
-      <Typography sx={{ color: MUTED, fontSize: 13.5, mb: 3 }}>
-        Consultá tu suscripción, renová el plan y revisá el historial de pagos.
-      </Typography>
-
-      {/* Plan actual */}
-      <Box sx={{ ...card, p: 2.5, mb: 2.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2.5 }}>
-          <Box>
-            <Typography sx={{ color: P, fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', mb: 0.5 }}>PLAN ACTUAL</Typography>
-            <Typography sx={{ color: INK, fontWeight: 800, fontSize: 24, lineHeight: 1.1 }}>{planNombre}</Typography>
-            <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.75 }}>
-              La gestión de cambios y pagos se realiza desde el flujo formal de planes.
-            </Typography>
-          </Box>
-          <Button
-            variant="contained"
-            endIcon={<ChevronRightIcon />}
-            onClick={() => { onClose(); navigate('/planes'); }}
-            sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '8px', flexShrink: 0, '&:hover': { bgcolor: P_HOVER } }}
-          >
-            Ver planes
-          </Button>
-        </Box>
-
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1.5 }}>
-          {[
-            { label: 'RENOVACIÓN',      value: 'Manual' },
-            { label: 'VENCIMIENTO',     value: vencimientoValue },
-            { label: 'DÍAS RESTANTES',  value: diasRestantesValue },
-          ].map(({ label, value }) => (
-            <Box key={label} sx={{ bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '8px', px: 2, py: 1.5 }}>
-              <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', mb: 0.5 }}>{label}</Typography>
-              <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>{value}</Typography>
-            </Box>
-          ))}
-        </Box>
-      </Box>
-
-      {/* Historial de pagos */}
-      <Box sx={{ ...card, overflow: 'hidden' }}>
-        <Box sx={{ px: 2.5, py: 2, borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <ReceiptLongIcon sx={{ color: INK2, fontSize: 18 }} />
-          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>Historial de pagos</Typography>
-        </Box>
-        {cargandoPagos ? (
-          <Box sx={{ textAlign: 'center', py: 5 }}>
-            <CircularProgress size={22} sx={{ color: P }} />
-          </Box>
-        ) : pagos.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 5, px: 3 }}>
-            <Typography sx={{ color: MUTED, fontSize: 13.5 }}>
-              Todavía no registramos ningún pago de suscripción para tu negocio.
-            </Typography>
-          </Box>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {['Fecha', 'Plan', 'Ciclo', 'Monto'].map(h => (
-                  <Box component="th" key={h} sx={{ color: MUTED, fontSize: 12, fontWeight: 600, py: 1.5, px: 2.5, textAlign: 'left', borderBottom: `1px solid ${BORDER}`, bgcolor: TABLE_HEADER }}>{h}</Box>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pagos.map(p => (
-                <Box component="tr" key={p.id} sx={{ '&:hover': { bgcolor: HOVER } }}>
-                  <Box component="td" sx={{ color: INK, fontSize: 13, py: 1.5, px: 2.5, borderBottom: `1px solid ${BORDER}` }}>{fmtDate(p.fecha)}</Box>
-                  <Box component="td" sx={{ color: INK, fontSize: 13, py: 1.5, px: 2.5, borderBottom: `1px solid ${BORDER}` }}>{PLAN_LABELS[p.plan] || p.plan}</Box>
-                  <Box component="td" sx={{ color: INK, fontSize: 13, py: 1.5, px: 2.5, borderBottom: `1px solid ${BORDER}`, textTransform: 'capitalize' }}>{p.ciclo || '—'}</Box>
-                  <Box component="td" sx={{ color: INK, fontSize: 13, py: 1.5, px: 2.5, borderBottom: `1px solid ${BORDER}`, fontWeight: 600 }}>{p.monto != null ? fmtMoney(p.monto) : '—'}</Box>
-                </Box>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Box>
-    </Box>
-  );
-}
-
 /* ─────────────────────────── MODAL ─────────────────────────── */
 export function ConfigModal({ open, onClose }) {
   const [tab, setTab] = useState(0);
@@ -1753,8 +1568,7 @@ export function ConfigModal({ open, onClose }) {
     ...(puedeConfigurar && POINT_HABILITADO ? [{ label: 'Cobros', render: () => <TabCobros /> }] : []),
     ...(puedeConfigurar ? [{ label: 'Facturación', render: () => <TabFacturacion /> }] : []),
     { label: 'Seguridad', render: () => <TabSeguridad /> },
-    ...(puedeConfigurar ? [{ label: 'Plan', render: () => <TabPlan onClose={onClose} /> }] : []),
-  ], [checkPermisos, onClose, puedeConfigurar]);
+  ], [checkPermisos, puedeConfigurar]);
 
   const tabActual = tabs[tab] ?? tabs[0];
 

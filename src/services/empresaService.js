@@ -20,11 +20,6 @@ export const empresaService = {
     return res.data.empresa;
   },
 
-  async getPagos() {
-    const res = await api.get('empresa/pagos');
-    return res.data.data ?? [];
-  },
-
   async getCatalogoConfig() {
     const res = await api.get('empresa/catalogo');
     return res.data.data;

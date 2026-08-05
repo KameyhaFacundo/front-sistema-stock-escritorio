@@ -1,8 +1,7 @@
-import { useContext, useState, useMemo, useEffect, Suspense } from 'react';
+import { useContext, useState, useEffect, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Chip, CircularProgress, IconButton, Badge, Popover,
-  Button,
 } from '@mui/material';
 import CloseIcon                 from '@mui/icons-material/Close';
 import NotificationsIcon         from '@mui/icons-material/Notifications';
@@ -10,7 +9,6 @@ import WarningAmberIcon          from '@mui/icons-material/WarningAmber';
 import CheckCircleOutlineIcon    from '@mui/icons-material/CheckCircleOutline';
 import HandshakeIcon             from '@mui/icons-material/Handshake';
 import BusinessIcon              from '@mui/icons-material/Business';
-import LockIcon                  from '@mui/icons-material/Lock';
 import MenuIcon                  from '@mui/icons-material/Menu';
 import { AuthContext } from '../auth/AuthContextBase';
 import { ConfigModal } from './ConfigModal';
@@ -21,7 +19,6 @@ import CommandPalette  from '../components/shared/CommandPalette';
 import ConfirmDialog   from '../components/shared/ConfirmDialog';
 import AsistenteIA     from '../components/shared/AsistenteIA';
 import useNotificaciones from '../hooks/useNotificaciones';
-import usePlan from '../hooks/usePlan';
 import {
   BG, CARD, BORDER, INK, MUTED, P, HOVER, DROPDOWN,
   SUCCESS, ERROR, WARNING, ERROR_BG,
@@ -49,8 +46,6 @@ export default function DefaultLayout() {
   const [openPalette,     setOpenPalette]     = useState(false);
   const [alertasAnchor,   setAlertasAnchor]   = useState(null);
   const [confirmarLogout, setConfirmarLogout] = useState(false);
-
-  const { tieneFacturacion, tieneEtiquetas } = usePlan();
 
   useEffect(() => {
     recargarPermisos();
@@ -84,15 +79,6 @@ export default function DefaultLayout() {
     return () => window.removeEventListener('keydown', handler);
   }, [navigate]);
 
-  const trialDaysLeft = useMemo(() => {
-    const ends = user?.empresa?.trial_ends_at;
-    if (!ends || user?.empresa?.plan !== 'free') return null;
-    return Math.ceil((new Date(ends) - new Date()) / (1000 * 60 * 60 * 24));
-  }, [user?.empresa?.trial_ends_at, user?.empresa?.plan]);
-
-  const saldoFacturas = tieneFacturacion ? (user?.empresa?.facturas_disponibles ?? null) : null;
-  const facturasBajo = saldoFacturas !== null && saldoFacturas <= 20;
-
   const hayAlertasNuevas = (alertas?.total || 0) > (parseInt(localStorage.getItem('alertas_vistas') || '0', 10));
 
   const handleOpenAlertas = (e) => setAlertasAnchor(e.currentTarget);
@@ -119,9 +105,6 @@ export default function DefaultLayout() {
         onOpenAlertas={handleOpenAlertas}
         onConfirmLogout={() => setConfirmarLogout(true)}
         stockBajoCount={stockBajoCount}
-        trialDaysLeft={trialDaysLeft}
-        facturasBajo={facturasBajo}
-        saldoFacturas={saldoFacturas}
       />
 
       {/* ── CONTENIDO ── */}
@@ -149,33 +132,9 @@ export default function DefaultLayout() {
           </Box>
         </Box>
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          {trialDaysLeft !== null && trialDaysLeft <= 0 ? (
-            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, textAlign: 'center' }}>
-              <Box sx={{ width: 72, height: 72, borderRadius: '50%', bgcolor: `${ERROR}15`, border: `2px solid ${ERROR}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2.5 }}>
-                <LockIcon sx={{ color: ERROR, fontSize: 34 }} />
-              </Box>
-              <Typography sx={{ color: INK, fontWeight: 800, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', mb: 1 }}>
-                Tu prueba gratuita venció
-              </Typography>
-              <Typography sx={{ color: MUTED, fontSize: 15, maxWidth: 380, lineHeight: 1.7, mb: 3 }}>
-                Elegí un plan para seguir usando el sistema. Todos tus datos siguen guardados.
-              </Typography>
-              <Button component={Link} to="/planes" variant="contained"
-                sx={{ bgcolor: P, color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: 15, px: 4, py: 1.5, borderRadius: '12px', boxShadow: `0 2px 14px ${P}35`, '&:hover': { bgcolor: '#0891b2' } }}>
-                Ver planes →
-              </Button>
-              <Typography sx={{ color: MUTED, fontSize: 12, mt: 2 }}>
-                ¿Ya pagaste?{' '}
-                <Box component="span" onClick={() => window.location.reload()} sx={{ color: P, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
-                  Actualizá la página
-                </Box>
-              </Typography>
-            </Box>
-          ) : (
-            <Suspense fallback={<Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><CircularProgress size={24} sx={{ color: MUTED }} /></Box>}>
-              <Outlet />
-            </Suspense>
-          )}
+          <Suspense fallback={<Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><CircularProgress size={24} sx={{ color: MUTED }} /></Box>}>
+            <Outlet />
+          </Suspense>
         </Box>
       </Box>
 

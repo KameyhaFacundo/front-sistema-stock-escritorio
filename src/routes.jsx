@@ -14,10 +14,7 @@ import PrivateRoute from "./security/PrivateRoute";
 const Landing      = lazyWithRetry(() => import("./pages/Landing/Landing"));
 const Login        = lazyWithRetry(() => import("./pages/Login/Login"));
 const Onboarding   = lazyWithRetry(() => import("./pages/Onboarding/Onboarding"));
-const Planes       = lazyWithRetry(() => import("./pages/Planes/Planes"));
-const PagoExito    = lazyWithRetry(() => import("./pages/Pago/PagoExito"));
 const ConfirmarEmail = lazyWithRetry(() => import("./pages/ConfirmarEmail/ConfirmarEmail"));
-const PagoFallo    = lazyWithRetry(() => import("./pages/Pago/PagoFallo"));
 const Bienvenida   = lazyWithRetry(() => import("./pages/Bienvenida/Bienvenida"));
 const Dashboard    = lazyWithRetry(() => import("./pages/Dashboard/Dashboard"));
 const Home         = lazyWithRetry(() => import("./pages/Home/Home"));
@@ -30,7 +27,6 @@ const Usuarios     = lazyWithRetry(() => import("./pages/Usuarios/Usuarios"));
 const Caja         = lazyWithRetry(() => import("./pages/Caja/Caja"));
 const Facturas     = lazyWithRetry(() => import("./pages/Facturas/Facturas"));
 const NotFound     = lazyWithRetry(() => import("./pages/NotFound/NotFound"));
-const SuperAdmin   = lazyWithRetry(() => import("./pages/SuperAdmin/SuperAdmin"));
 const CatalogoPublico = lazyWithRetry(() => import("./pages/Catalogo/CatalogoPublico"));
 const OAuthCallback  = lazyWithRetry(() => import("./pages/Login/OAuthCallback"));
 const Etiquetas      = lazyWithRetry(() => import("./pages/Etiquetas/Etiquetas"));
@@ -45,9 +41,6 @@ export const router = createBrowserRouter(
       <Route path="/reset-password" element={<Login />} />
       <Route path="/confirmar-email" element={<ConfirmarEmail />} />
       <Route path="/onboarding"  element={<Onboarding />} />
-      <Route path="/planes"      element={<Planes />} />
-      <Route path="/pago/exito"  element={<PagoExito />} />
-      <Route path="/pago/fallo"  element={<PagoFallo />} />
       <Route path="/bienvenida"  element={<Bienvenida />} />
       <Route path="/catalogo/:slug" element={<CatalogoPublico />} />
       <Route path="/oauth-callback" element={<OAuthCallback />} />
@@ -69,7 +62,6 @@ export const router = createBrowserRouter(
           <Route path="/usuarios"     element={<PrivateRoute allowedPermissions="verUsuarios"><Usuarios /></PrivateRoute>} />
           <Route path="/caja"        element={<PrivateRoute allowedPermissions="verCaja"><Caja /></PrivateRoute>} />
           <Route path="/facturas"    element={<PrivateRoute allowedPermissions="verVentas"><Facturas /></PrivateRoute>} />
-          <Route path="/super-admin"  element={<SuperAdmin />} />
           <Route path="*"             element={<NotFound />} />
         </Route>
       </Route>

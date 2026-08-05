@@ -1,9 +1,7 @@
-import { useContext, useEffect, useRef, useState } from 'react';
-import { Box, Typography, Dialog, Button } from '@mui/material';
+import { useContext, useEffect, useRef } from 'react';
 import { AuthContext } from '../auth/AuthContextBase';
 import { useToast } from '../context/ToastContext';
 import { DEMO_MODE } from '../auth/demoMode';
-import { CARD, INK, MUTED, P, P_HOVER, modalPaperSx } from '../theme/tokens';
 import { http } from '../api/client';
 
 export const AxiosInterceptor = () => {
@@ -12,7 +10,6 @@ export const AxiosInterceptor = () => {
   const logoutRef     = useRef(logout);
   const toastRef      = useRef(toast);
   const pendingLogout = useRef(false);
-  const [trialExpired, setTrialExpired] = useState(false);
 
   useEffect(() => { logoutRef.current = logout; }, [logout]);
   useEffect(() => { toastRef.current  = toast;  }, [toast]);
@@ -57,18 +54,8 @@ export const AxiosInterceptor = () => {
           return Promise.reject(error);
         }
 
-        const { status, data } = error.response;
+        const { status } = error.response;
         const url = error.config?.url ?? '';
-
-        if (status === 403 && data?.trial_expired) {
-          // En /planes el usuario ya está donde tiene que estar para elegir un
-          // plan — no lo tapamos con el modal aunque otras cargas de fondo
-          // (dashboard, caja, productos) sigan devolviendo el mismo 403.
-          if (!window.location.pathname.startsWith('/planes')) {
-            setTrialExpired(true);
-          }
-          return Promise.reject(error);
-        }
 
         if (status === 401) {
           // Login, register y logout se dejan pasar para que su propio catch maneje el error
@@ -94,27 +81,5 @@ export const AxiosInterceptor = () => {
     };
   }, []);
 
-  if (!trialExpired) return null;
-
-  return (
-    <Dialog open disableEscapeKeyDown onClose={() => {}} maxWidth="xs" fullWidth PaperProps={{ sx: modalPaperSx }}>
-      <Box sx={{ p: { xs: 1.75, sm: 3 }, textAlign: 'center' }}>
-        <Typography sx={{ color: INK, fontWeight: 700, fontSize: 19, mb: 1 }}>
-          Tu período de prueba terminó
-        </Typography>
-        <Typography sx={{ color: MUTED, fontSize: 14, mb: 3 }}>
-          Elegí un plan para seguir usando el sistema. Tus datos siguen guardados y van a estar disponibles apenas actives un plan.
-        </Typography>
-        <Button fullWidth variant="contained"
-          onClick={() => { window.location.href = '/planes'; }}
-          sx={{ bgcolor: P, textTransform: 'none', fontWeight: 700, fontSize: 14, py: 1.25, borderRadius: '8px', mb: 1.5, '&:hover': { bgcolor: P_HOVER } }}>
-          Ver planes
-        </Button>
-        <Button fullWidth onClick={() => logoutRef.current()}
-          sx={{ color: MUTED, textTransform: 'none', fontWeight: 600, fontSize: 13, '&:hover': { bgcolor: CARD, color: INK } }}>
-          Cerrar sesión
-        </Button>
-      </Box>
-    </Dialog>
-  );
+  return null;
 };

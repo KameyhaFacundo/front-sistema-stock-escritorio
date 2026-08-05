@@ -17,10 +17,7 @@ import LockOpenIcon              from '@mui/icons-material/LockOpen';
 import KeyboardArrowUpIcon       from '@mui/icons-material/KeyboardArrowUp';
 import WbSunnyOutlinedIcon       from '@mui/icons-material/WbSunnyOutlined';
 import DarkModeOutlinedIcon      from '@mui/icons-material/DarkModeOutlined';
-import RocketLaunchIcon          from '@mui/icons-material/RocketLaunch';
 import NotificationsIcon         from '@mui/icons-material/Notifications';
-import WarningAmberIcon          from '@mui/icons-material/WarningAmber';
-import AdminPanelSettingsIcon    from '@mui/icons-material/AdminPanelSettings';
 import StorefrontIcon            from '@mui/icons-material/Storefront';
 import ReceiptLongIcon           from '@mui/icons-material/ReceiptLong';
 import LocalPrintshopIcon       from '@mui/icons-material/LocalPrintshop';
@@ -47,7 +44,7 @@ import { SIDEBAR_WIDTH, SIDEBAR_WIDTH_COLLAPSED } from './sidebarConstants';
 const W = SIDEBAR_WIDTH;
 const W_COLLAPSED = SIDEBAR_WIDTH_COLLAPSED;
 
-const buildMenuSections = (isSuperAdmin) => [
+const buildMenuSections = () => [
   {
     title: 'GENERAL',
     items: [
@@ -74,92 +71,7 @@ const buildMenuSections = (isSuperAdmin) => [
       { name: 'Caja',        icon: LockOpenIcon, path: '/caja',        permiso: 'verCaja' },
     ],
   },
-  ...(isSuperAdmin ? [{
-    title: 'SISTEMA',
-    items: [
-      { name: 'Super Admin', icon: AdminPanelSettingsIcon, path: '/super-admin' },
-    ],
-  }] : []),
 ];
-
-function SidebarTrialBanner({ trialDaysLeft }) {
-  const expired  = trialDaysLeft !== null && trialDaysLeft <= 0;
-  const urgent   = trialDaysLeft !== null && trialDaysLeft > 0 && trialDaysLeft <= 3;
-  const accent   = expired ? ERROR : urgent ? WARNING : P;
-  return (
-    <Box
-      component={Link}
-      to="/planes"
-      sx={{
-        mx: 1.5, mb: 1, p: 1.25,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        bgcolor: `${accent}15`, border: `1px solid ${accent}40`,
-        borderRadius: '8px', textDecoration: 'none', cursor: 'pointer',
-        '&:hover': { bgcolor: `${accent}25`, borderColor: `${accent}70` },
-        transition: 'all 0.15s',
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        {expired
-          ? <WarningAmberIcon sx={{ color: ERROR, fontSize: 14 }} />
-          : <RocketLaunchIcon sx={{ color: accent, fontSize: 14 }} />
-        }
-        <Box>
-          {trialDaysLeft === null && (
-            <Typography sx={{ color: P, fontSize: 12.5, fontWeight: 700 }}>Ver planes</Typography>
-          )}
-          {expired && (
-            <>
-              <Typography sx={{ color: ERROR, fontSize: 12, fontWeight: 700, lineHeight: 1.2 }}>Prueba vencida</Typography>
-              <Typography sx={{ color: ERROR, fontSize: 10.5, opacity: 0.8 }}>Actualizá tu plan →</Typography>
-            </>
-          )}
-          {!expired && trialDaysLeft !== null && (
-            <>
-              <Typography sx={{ color: accent, fontSize: 11.5, fontWeight: 700, lineHeight: 1.2 }}>
-                {trialDaysLeft === 1 ? '1 día restante' : `${trialDaysLeft} días restantes`}
-              </Typography>
-              <Typography sx={{ color: MUTED, fontSize: 10.5 }}>Prueba gratis · Ver planes</Typography>
-            </>
-          )}
-        </Box>
-      </Box>
-      {trialDaysLeft === null && (
-        <Typography sx={{ color: P, fontSize: 11, opacity: 0.7 }}>→</Typography>
-      )}
-    </Box>
-  );
-}
-
-function FacturasBanner({ saldoFacturas }) {
-  if (saldoFacturas === null || saldoFacturas > 20) return null;
-  const sinSaldo = saldoFacturas === 0;
-  const accent = sinSaldo ? ERROR : WARNING;
-  return (
-    <Box
-      component={Link}
-      to="/planes"
-      sx={{
-        mx: 1.5, mb: 1, p: 1.25,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        bgcolor: `${accent}15`, border: `1px solid ${accent}40`,
-        borderRadius: '8px', textDecoration: 'none', cursor: 'pointer',
-        '&:hover': { bgcolor: `${accent}25`, borderColor: `${accent}70` },
-        transition: 'all 0.15s',
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <ReceiptLongIcon sx={{ color: accent, fontSize: 14 }} />
-        <Box>
-          <Typography sx={{ color: accent, fontSize: 11.5, fontWeight: 700, lineHeight: 1.2 }}>
-            {sinSaldo ? 'Sin facturas disponibles' : `Quedan ${saldoFacturas} facturas`}
-          </Typography>
-          <Typography sx={{ color: MUTED, fontSize: 10.5 }}>Comprá un pack →</Typography>
-        </Box>
-      </Box>
-    </Box>
-  );
-}
 
 function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed }) {
   const Icon = item.icon;
@@ -249,7 +161,7 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
     : content;
 }
 
-export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onToggleCollapsed, onOpenConfig, onOpenAlertas, onConfirmLogout, stockBajoCount, trialDaysLeft, facturasBajo, saldoFacturas }) {
+export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onToggleCollapsed, onOpenConfig, onOpenAlertas, onConfirmLogout, stockBajoCount }) {
   const { user, switchSucursal } = useContext(AuthContext);
   const toast = useToast();
   const { mode, toggle } = useAppTheme();
@@ -271,10 +183,10 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
   const { data: sucursales = [] } = useSucursales({ enabled: checkPermisos('list-sucursales') });
 
   const menuSections = useMemo(() =>
-    buildMenuSections(user?.is_super_admin)
+    buildMenuSections()
       .map(section => ({ ...section, items: section.items.filter(item => checkPermisos(item.permiso) && (!item.planFeature || planFeatures[item.planFeature])) }))
       .filter(section => section.items.length > 0),
-  [user?.is_super_admin, checkPermisos, planFeatures]);
+  [checkPermisos, planFeatures]);
 
   const hayAlertasNuevas = (alertas?.total || 0) > alertasVistas;
 
@@ -290,7 +202,6 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
     else if (path === '/clientes') load(import('../pages/Clientes/Clientes'));
     else if (path === '/usuarios') load(import('../pages/Usuarios/Usuarios'));
     else if (path === '/caja') load(import('../pages/Caja/Caja'));
-    else if (path === '/super-admin') load(import('../pages/SuperAdmin/SuperAdmin'));
   };
 
   const handleCambiarSucursal = async (idSucursal) => {
@@ -494,12 +405,6 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
           </Box>
         ))}
       </Box>
-
-      {/* Trial / Ver planes */}
-      {!collapsed && <SidebarTrialBanner trialDaysLeft={trialDaysLeft} />}
-
-      {/* Facturas bajas/agotadas */}
-      {!collapsed && facturasBajo && <FacturasBanner saldoFacturas={saldoFacturas} />}
 
       {/* Usuario */}
       <Divider sx={{ borderColor: BORDER }} />

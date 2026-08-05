@@ -5,7 +5,6 @@ import { router } from './routes'
 import { AxiosInterceptor } from './interceptors/Axios.interceptor'
 import useTokenExpirationCheck from './hooks/useTokenExpirationCheck'
 import ErrorBoundary from './components/shared/ErrorBoundary'
-import ImpersonationBanner from './components/shared/ImpersonationBanner'
 import { APP_NAME, LOGO_URL_DARK } from './config/brand'
 
 function Loading() {
@@ -41,7 +40,6 @@ function App() {
   return (
     <ErrorBoundary>
       <AxiosInterceptor />
-      <ImpersonationBanner />
       <Suspense fallback={<Loading />}>
         <RouterProvider router={router} />
       </Suspense>
