@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
-import { loginApi, registerApi, forgotPasswordApi, resetPasswordApi, verificar2faApi } from "../../auth/authServiceApi";
+import { loginApi, forgotPasswordApi, resetPasswordApi, verificar2faApi } from "../../auth/authServiceApi";
 import { AuthContext } from "../../auth/AuthContextBase";
 import {
   Box, Typography, TextField, Button, InputAdornment,
@@ -81,27 +81,6 @@ function Label({ children }) {
     <Typography component="label" sx={{ color: INK2, fontSize: 13, fontWeight: 600, mb: 0.75, display: 'block' }}>
       {children}
     </Typography>
-  );
-}
-
-/* ── Tab switcher ── */
-function TabBar({ value, onChange }) {
-  return (
-    <Box sx={{ display: 'flex', bgcolor: HOVER, borderRadius: '12px', p: '4px', mb: 3.5, '@media (max-height: 800px)': { mb: 2 } }}>
-      {[{ id: 'login', label: 'Iniciar sesión' }, { id: 'register', label: 'Crear cuenta' }].map(t => (
-        <Box key={t.id} onClick={() => onChange(t.id)}
-          sx={{
-            flex: 1, py: '9px', textAlign: 'center', borderRadius: '9px', cursor: 'pointer',
-            bgcolor: value === t.id ? CARD : 'transparent',
-            boxShadow: value === t.id ? '0 1px 6px rgba(0,0,0,0.09)' : 'none',
-            transition: 'all 0.2s',
-          }}>
-          <Typography sx={{ fontSize: 13.5, fontWeight: value === t.id ? 700 : 500, color: value === t.id ? INK : MUTED, transition: 'all 0.2s', userSelect: 'none' }}>
-            {t.label}
-          </Typography>
-        </Box>
-      ))}
-    </Box>
   );
 }
 
@@ -303,112 +282,6 @@ function ViewLogin({ onForgot, onRequiere2fa }) {
           </Box>
         </Button>
       </Stack>
-    </Box>
-  );
-}
-
-/* ══════════════════════════════
-   VISTA REGISTRO
-══════════════════════════════ */
-function ViewRegister({ defaultNombre = '', defaultEmail = '', negocio = '', onboarding = null }) {
-  const { control, handleSubmit, getValues, formState: { errors } } = useForm({ mode: 'onTouched' });
-  const [showPass,    setShowPass]    = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [error,   setError]   = useState('');
-  const [loading, setLoading] = useState(false);
-  const { setToken, setUser, setMyPermisos } = useContext(AuthContext);
-  const navigate = useNavigate();
-
-  const onSubmit = async (data) => {
-    setLoading(true); setError('');
-    try {
-      const res = await registerApi(data.nombre, data.email, data.password, onboarding || { negocio });
-      guardarSesion(res, { setToken, setUser, setMyPermisos });
-      navigate('/bienvenida');
-    } catch (e) {
-      setError(e.response?.data?.message || e.response?.data?.errors?.email?.[0] || 'Error al crear la cuenta. Intentá de nuevo.');
-    } finally { setLoading(false); }
-  };
-
-  return (
-    <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
-      {error && <Alert severity="error" sx={{ mb: 2.5, fontSize: 13, borderRadius: '10px' }}>{error}</Alert>}
-      <Stack spacing={2}>
-        <Box>
-          <Label>Nombre completo</Label>
-          <Controller name="nombre" control={control} defaultValue={defaultNombre}
-            rules={{ required: 'El nombre es obligatorio', minLength: { value: 2, message: 'Mínimo 2 caracteres' } }}
-            render={({ field }) => (
-              <TextField {...field} placeholder="Tu nombre y apellido" fullWidth autoFocus
-                error={!!errors.nombre} helperText={errors.nombre?.message}
-                InputLabelProps={{ shrink: false }} label="" sx={inputSx} />
-            )} />
-        </Box>
-
-        <Box>
-          <Label>Correo electrónico</Label>
-          <Controller name="email" control={control} defaultValue={defaultEmail}
-            rules={{ required: 'El correo es obligatorio', pattern: { value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, message: 'Correo inválido' } }}
-            render={({ field }) => (
-              <TextField {...field} type="email" placeholder="nombre@empresa.com" fullWidth
-                autoComplete="email" error={!!errors.email} helperText={errors.email?.message}
-                InputLabelProps={{ shrink: false }} label="" sx={inputSx} />
-            )} />
-        </Box>
-
-        <Box>
-          <Label>Contraseña</Label>
-          <Controller name="password" control={control} defaultValue=""
-            rules={{ required: 'La contraseña es obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } }}
-            render={({ field }) => (
-              <TextField {...field} type={showPass ? 'text' : 'password'} placeholder="Mínimo 6 caracteres"
-                fullWidth autoComplete="new-password" error={!!errors.password} helperText={errors.password?.message}
-                InputLabelProps={{ shrink: false }} label="" sx={inputSx}
-                InputProps={{ endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPass(v => !v)} edge="end" size="small" tabIndex={-1}
-                      sx={{ color: MUTED, mr: 0.25, '&:hover': { color: INK2, bgcolor: 'transparent' } }}>
-                      {showPass ? <VisibilityOffIcon sx={{ fontSize: 18 }} /> : <VisibilityIcon sx={{ fontSize: 18 }} />}
-                    </IconButton>
-                  </InputAdornment>
-                )}} />
-            )} />
-        </Box>
-
-        <Box>
-          <Label>Confirmar contraseña</Label>
-          <Controller name="confirm" control={control} defaultValue=""
-            rules={{ required: 'Confirmá tu contraseña', validate: v => v === getValues('password') || 'Las contraseñas no coinciden' }}
-            render={({ field }) => (
-              <TextField {...field} type={showConfirm ? 'text' : 'password'} placeholder="Repetí tu contraseña"
-                fullWidth autoComplete="new-password" error={!!errors.confirm} helperText={errors.confirm?.message}
-                InputLabelProps={{ shrink: false }} label="" sx={inputSx}
-                InputProps={{ endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowConfirm(v => !v)} edge="end" size="small" tabIndex={-1}
-                      sx={{ color: MUTED, mr: 0.25, '&:hover': { color: INK2, bgcolor: 'transparent' } }}>
-                      {showConfirm ? <VisibilityOffIcon sx={{ fontSize: 18 }} /> : <VisibilityIcon sx={{ fontSize: 18 }} />}
-                    </IconButton>
-                  </InputAdornment>
-                )}} />
-            )} />
-        </Box>
-
-        <Button type="submit" variant="contained" fullWidth disabled={loading}
-          sx={{ py: 1.45, bgcolor: PRIMARY_COLOR, fontSize: 15, fontWeight: 700, borderRadius: '10px', textTransform: 'none',
-            boxShadow: `0 2px 14px ${PRIMARY_COLOR}35`,
-            '&:hover': { bgcolor: PRIMARY_HOVER, boxShadow: `0 4px 22px ${PRIMARY_COLOR}50` },
-            '&.Mui-disabled': { bgcolor: PRIMARY_COLOR, opacity: 0.45, color: '#fff' } }}>
-          {loading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Crear cuenta gratis →'}
-        </Button>
-      </Stack>
-
-      <Typography sx={{ color: MUTED, fontSize: 12, textAlign: 'center', mt: 2.5, lineHeight: 1.65 }}>
-        Al registrarte aceptás los{' '}
-        <Box component="span" sx={{ color: INK2, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>Términos de uso</Box>
-        {' '}y la{' '}
-        <Box component="span" sx={{ color: INK2, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>Política de privacidad</Box>.
-      </Typography>
     </Box>
   );
 }
@@ -730,30 +603,20 @@ export default function Login() {
   const location            = useLocation();
   const { mode, toggle }    = useAppTheme();
   const logoSrc             = useLogo();
-  const onboarding           = location.state?.onboarding || null;
   const searchParams = new URLSearchParams(location.search);
   const resetToken  = searchParams.get('token');
   const resetEmail  = searchParams.get('email');
 
   const googleError     = searchParams.get('error');
   const pending2faToken = searchParams.get('pending_2fa');
-  const googleName      = searchParams.get('google_name');
-  const googleEmail     = searchParams.get('google_email');
-  const urlView         = searchParams.get('view');
 
-  const initialTab = (location.state?.view === 'register' || urlView === 'register')
-    ? 'register'
-    : 'login';
   const initialView = pending2faToken ? '2fa' : (resetToken ? 'reset' : 'main');
 
-  const [tab,  setTab]  = useState(initialTab);
   const [view, setView] = useState(initialView);
   const [pendingToken, setPendingToken] = useState(pending2faToken || null);
   const oauthError = googleError || null;
 
   if (token) return <Navigate to="/dashboard" />;
-
-  const handleTabChange = (newTab) => { setTab(newTab); setView('main'); };
 
   return (
     <>
@@ -843,14 +706,12 @@ export default function Login() {
                         '@media (max-height: 800px)': { height: 36, mb: 1 },
                       }} />
                     <Typography sx={{ color: INK, fontWeight: 800, fontSize: 22, letterSpacing: '-0.025em', mb: 0.5 }}>
-                      {tab === 'login' ? 'Bienvenido' : 'Empezá gratis hoy'}
+                      Bienvenido
                     </Typography>
                     <Typography sx={{ color: MUTED, fontSize: 13.5 }}>
-                      {tab === 'login' ? 'Accedé a tu panel de control.' : '7 días de prueba · Sin tarjeta de crédito.'}
+                      Accedé a tu panel de control.
                     </Typography>
                   </Box>
-
-                  <TabBar value={tab} onChange={handleTabChange} />
 
                   {oauthError && (
                     <Alert severity="error" sx={{ mb: 2.5, fontSize: 13, borderRadius: '10px' }}>
@@ -861,11 +722,8 @@ export default function Login() {
                     </Alert>
                   )}
 
-                  <Box key={tab} sx={{ animation: `${slideLeft} 0.25s ease` }}>
-                    {tab === 'login'
-                      ? <ViewLogin onForgot={() => setView('forgot')} onRequiere2fa={(token) => { setPendingToken(token); setView('2fa'); }} />
-                      : <ViewRegister defaultNombre={googleName || onboarding?.nombre || ''} defaultEmail={googleEmail || onboarding?.email || ''} negocio={onboarding?.negocio || ''} onboarding={onboarding} />
-                    }
+                  <Box sx={{ animation: `${slideLeft} 0.25s ease` }}>
+                    <ViewLogin onForgot={() => setView('forgot')} onRequiere2fa={(token) => { setPendingToken(token); setView('2fa'); }} />
                   </Box>
                 </>
               )}

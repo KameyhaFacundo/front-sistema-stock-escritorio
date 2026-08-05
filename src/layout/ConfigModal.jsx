@@ -245,7 +245,7 @@ function TabPerfil() {
 /* ─────────────────────────── TAB NEGOCIO ─────────────────────────── */
 // Mismos íconos/colores que ya usa Caja.jsx para estos StatCards — así lo que
 // se tilda acá se reconoce de un vistazo en el resumen real de la caja.
-// Mismos códigos que el selector de rubro del Onboarding (Onboarding.jsx) —
+// Mismos códigos de rubro que usa el resto del sistema —
 // tiene que ser el valor exacto que el resto del sistema compara contra
 // empresa.tipo (esIndumentaria/esFerreteria en Productos.jsx, categorías
 // precargadas en el registro), no una etiqueta de texto libre.

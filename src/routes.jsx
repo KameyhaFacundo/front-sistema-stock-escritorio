@@ -2,6 +2,7 @@ import {
   createBrowserRouter,
   createRoutesFromElements,
   Route,
+  Navigate,
   Outlet,
 } from "react-router-dom";
 import DefaultLayout from "./layout/DefaultLayout";
@@ -11,11 +12,8 @@ import CoreDataProviders from "./context/CoreDataProviders";
 import RouteErrorElement from "./components/shared/RouteErrorElement";
 import PrivateRoute from "./security/PrivateRoute";
 
-const Landing      = lazyWithRetry(() => import("./pages/Landing/Landing"));
 const Login        = lazyWithRetry(() => import("./pages/Login/Login"));
-const Onboarding   = lazyWithRetry(() => import("./pages/Onboarding/Onboarding"));
 const ConfirmarEmail = lazyWithRetry(() => import("./pages/ConfirmarEmail/ConfirmarEmail"));
-const Bienvenida   = lazyWithRetry(() => import("./pages/Bienvenida/Bienvenida"));
 const Dashboard    = lazyWithRetry(() => import("./pages/Dashboard/Dashboard"));
 const Home         = lazyWithRetry(() => import("./pages/Home/Home"));
 const Compras      = lazyWithRetry(() => import("./pages/Compras/Compras"));
@@ -36,12 +34,10 @@ const Terminos     = lazyWithRetry(() => import("./pages/Legal/Terminos"));
 export const router = createBrowserRouter(
   createRoutesFromElements(
     <Route errorElement={<RouteErrorElement />}>
-      <Route path="/"            element={<Landing />} />
+      <Route path="/"            element={<Navigate to="/signin" replace />} />
       <Route path="/signin"      element={<Login />} />
       <Route path="/reset-password" element={<Login />} />
       <Route path="/confirmar-email" element={<ConfirmarEmail />} />
-      <Route path="/onboarding"  element={<Onboarding />} />
-      <Route path="/bienvenida"  element={<Bienvenida />} />
       <Route path="/catalogo/:slug" element={<CatalogoPublico />} />
       <Route path="/oauth-callback" element={<OAuthCallback />} />
       <Route path="/privacidad"  element={<Privacidad />} />
