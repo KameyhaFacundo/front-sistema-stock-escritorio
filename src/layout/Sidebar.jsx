@@ -39,6 +39,7 @@ import {
 } from '../theme/tokens';
 import { APP_NAME, APP_VERSION } from '../config/brand';
 import useLogo from '../hooks/useLogo';
+import useAppUpdateStatus from '../hooks/useAppUpdateStatus';
 import { useSucursales } from '../hooks/queries/useSucursalesQueries';
 import { SIDEBAR_WIDTH, SIDEBAR_WIDTH_COLLAPSED } from './sidebarConstants';
 
@@ -168,6 +169,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
   const toast = useToast();
   const { mode, toggle } = useAppTheme();
   const logoSrc = useLogo();
+  const updateDisponible = useAppUpdateStatus();
   const { caja } = useCaja();
   const { alertas } = useApp();
   const location = useLocation();
@@ -476,10 +478,23 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
         </MenuItem>
       </Menu>
 
-      {!collapsed && (
-        <Typography sx={{ textAlign: 'center', color: MUTED, fontSize: 10, py: 0.5, opacity: 0.5 }}>
-          v{APP_VERSION}
-        </Typography>
+      {collapsed ? (
+        updateDisponible && (
+          <Tooltip title="Hay una actualización lista para instalar" placement="right">
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
+              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: WARNING }} />
+            </Box>
+          </Tooltip>
+        )
+      ) : (
+        <Tooltip title={updateDisponible ? 'Hay una actualización lista — se te va a volver a preguntar cuándo instalarla la próxima vez que abras el programa' : ''} placement="top">
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, py: 0.5 }}>
+            {updateDisponible && <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: WARNING, flexShrink: 0 }} />}
+            <Typography sx={{ color: updateDisponible ? WARNING : MUTED, fontSize: 10, opacity: updateDisponible ? 0.9 : 0.5 }}>
+              v{APP_VERSION}{updateDisponible ? ' · actualización lista' : ''}
+            </Typography>
+          </Box>
+        </Tooltip>
       )}
     </Box>
   );

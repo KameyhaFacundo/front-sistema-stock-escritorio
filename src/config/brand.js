@@ -8,7 +8,11 @@ export const APP_TAGLINE   = import.meta.env.VITE_APP_TAGLINE   || 'Sistema de g
 export const COMPANY_NAME  = import.meta.env.VITE_COMPANY_NAME  || 'Mi Negocio';
 export const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || '';
 
-export const APP_VERSION = '1.0.0';
+// En el build de escritorio, escritorio-launcher/scripts/build-resources.js
+// manda su propio package.json.version acá — así el "v0.1.2" del pie del
+// sidebar es siempre el mismo número que el instalador/actualizador, no un
+// valor fijo suelto en el código.
+export const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0';
 
 // Logo completo (isotipo + wordmark). El wordmark oscuro se pierde sobre
 // fondos oscuros, así que hay una variante clara para modo oscuro — usar el
