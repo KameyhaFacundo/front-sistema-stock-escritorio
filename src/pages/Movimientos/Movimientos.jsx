@@ -28,6 +28,7 @@ import AyudaButton     from '../../components/shared/AyudaButton';
 import { registerTour } from '../../utils/tour';
 import { useProductos } from '../../context/ProductosContextBase';
 import useBusquedaProductos from '../../hooks/useBusquedaProductos';
+import useDropdownKeyboardNav from '../../hooks/useDropdownKeyboardNav';
 import { useMovimientos, useTransferirStock } from '../../hooks/queries/useMovimientosQueries';
 import { useSucursales } from '../../hooks/queries/useSucursalesQueries';
 import useHasPermiso from '../../hooks/useHasPermiso';
@@ -351,12 +352,7 @@ function ModalMovimiento({ open, onClose, sucursales }) {
     setTimeout(() => { cantidadRef.current?.focus(); cantidadRef.current?.select(); }, 50);
   };
 
-  const handleSearchEnter = (e) => {
-    if (e.key !== 'Enter') return;
-    if (filtrados.length !== 1) return;
-    e.preventDefault();
-    seleccionarProducto(filtrados[0]);
-  };
+  const { highlightIdx: searchHighlightIdx, onKeyDown: handleSearchEnter, highlightedRef } = useDropdownKeyboardNav(filtrados, seleccionarProducto);
 
   const handleCantidadEnter = (e) => {
     if (e.key !== 'Enter') return;
@@ -491,13 +487,16 @@ function ModalMovimiento({ open, onClose, sucursales }) {
               bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, borderRadius: '10px',
               overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', maxHeight: 260, overflowY: 'auto',
             }}>
-              {filtrados.map(p => (
+              {filtrados.map((p, i) => (
                 <Box key={p.id}
+                  ref={i === searchHighlightIdx ? highlightedRef : undefined}
                   onClick={() => seleccionarProducto(p)}
                   sx={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     px: 2, py: 1.5, cursor: 'pointer',
                     borderBottom: `1px solid ${BORDER}`, '&:last-child': { borderBottom: 'none' },
+                    bgcolor: i === searchHighlightIdx ? `${P}22` : 'transparent',
+                    boxShadow: i === searchHighlightIdx ? `inset 0 0 0 1px ${P}` : 'none',
                     '&:hover': { bgcolor: HOVER },
                   }}>
                   <Box>
@@ -937,12 +936,7 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
     setTimeout(() => searchRef.current?.focus(), 50);
   };
 
-  const handleSearchEnter = (e) => {
-    if (e.key !== 'Enter') return;
-    if (filtrados.length !== 1) return;
-    e.preventDefault();
-    agregarProducto(filtrados[0]);
-  };
+  const { highlightIdx: searchHighlightIdx, onKeyDown: handleSearchEnter, highlightedRef } = useDropdownKeyboardNav(filtrados, agregarProducto);
 
   const quitarLinea = (id) => setLineas(ls => ls.filter(l => l.id !== id));
   const setCantidadLinea = (id, v) => setLineas(ls => ls.map(l => l.id === id ? { ...l, cantidad: v } : l));
@@ -1056,13 +1050,16 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
               bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, borderRadius: '10px',
               overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', maxHeight: 220, overflowY: 'auto',
             }}>
-              {filtrados.slice(0, 20).map(p => (
+              {filtrados.slice(0, 20).map((p, i) => (
                 <Box key={p.id}
+                  ref={i === searchHighlightIdx ? highlightedRef : undefined}
                   onClick={() => agregarProducto(p)}
                   sx={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     px: 2, py: 1.25, cursor: 'pointer',
                     borderBottom: `1px solid ${BORDER}`, '&:last-child': { borderBottom: 'none' },
+                    bgcolor: i === searchHighlightIdx ? `${P}22` : 'transparent',
+                    boxShadow: i === searchHighlightIdx ? `inset 0 0 0 1px ${P}` : 'none',
                     '&:hover': { bgcolor: HOVER },
                   }}>
                   <Typography sx={{ color: INK, fontSize: 13.5 }}>{p.nombre}</Typography>

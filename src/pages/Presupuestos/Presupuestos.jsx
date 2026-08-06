@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, TextField, InputAdornment, IconButton, Tooltip,
   Dialog, DialogContent, Chip, Button, MenuItem, Select, FormControl, InputLabel,
@@ -30,10 +31,11 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../auth/AuthContextBase';
 import useHasPermiso from '../../hooks/useHasPermiso';
 import useBusquedaProductos from '../../hooks/useBusquedaProductos';
+import useDropdownKeyboardNav from '../../hooks/useDropdownKeyboardNav';
 import { clientesService } from '../../services/clientesService';
 import { COMPANY_NAME } from '../../config/brand';
 import {
-  usePresupuestos, usePresupuesto, useCrearPresupuesto, useEliminarPresupuesto, useConvertirPresupuesto,
+  usePresupuestos, usePresupuesto, useCrearPresupuesto, useEliminarPresupuesto,
 } from '../../hooks/queries/usePresupuestosQueries';
 
 const ESTADO_LABELS = { vigente: 'Vigente', convertido: 'Convertido', vencido: 'Vencido', cancelado: 'Cancelado' };
@@ -43,7 +45,6 @@ const ESTADO_COLORS = {
   vencido:    { bg: ERROR_BG,   fg: ERROR,   border: `${ERROR}55` },
   cancelado:  { bg: `${MUTED}18`, fg: MUTED, border: `${MUTED}40` },
 };
-const METODO_LABELS = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', fiado: 'Fiado' };
 
 function generarPdfPresupuesto(presupuesto, empresa) {
   const doc   = new jsPDF();
@@ -137,9 +138,7 @@ function ModalNuevoPresupuesto({ open, onClose }) {
     setSearch(''); setShowDropdown(false);
   };
 
-  const handleSearchKeyDown = (e) => {
-    if (e.key === 'Enter' && filtrados.length > 0) agregarLinea(filtrados[0]);
-  };
+  const { highlightIdx: searchHighlightIdx, onKeyDown: handleSearchKeyDown, highlightedRef } = useDropdownKeyboardNav(filtrados, agregarLinea);
 
   const quitarLinea = (idProducto) => setLineas(ls => ls.filter(l => l.id_producto !== idProducto));
   const actualizarLinea = (idProducto, campo, valor) =>
@@ -203,9 +202,10 @@ function ModalNuevoPresupuesto({ open, onClose }) {
             InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: MUTED, fontSize: 18 }} /></InputAdornment> }} />
           {showDropdown && filtrados.length > 0 && (
             <Box sx={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, mt: 0.5, bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, borderRadius: '10px', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', maxHeight: 240, overflowY: 'auto' }}>
-              {filtrados.map(p => (
+              {filtrados.map((p, i) => (
                 <Box key={p.id} onClick={() => agregarLinea(p)}
-                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1.25, cursor: 'pointer', borderBottom: `1px solid ${BORDER}`, '&:last-child': { borderBottom: 'none' }, '&:hover': { bgcolor: HOVER } }}>
+                  ref={i === searchHighlightIdx ? highlightedRef : undefined}
+                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1.25, cursor: 'pointer', borderBottom: `1px solid ${BORDER}`, '&:last-child': { borderBottom: 'none' }, bgcolor: i === searchHighlightIdx ? `${P}22` : 'transparent', boxShadow: i === searchHighlightIdx ? `inset 0 0 0 1px ${P}` : 'none', '&:hover': { bgcolor: HOVER } }}>
                   <Box>
                     <Typography sx={{ color: INK, fontSize: 13.5 }}>{p.nombre}</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 11.5 }}>{p.codigo}</Typography>
@@ -261,28 +261,23 @@ function ModalNuevoPresupuesto({ open, onClose }) {
 /* ── Modal: detalle / convertir ── */
 function ModalDetallePresupuesto({ id, onClose }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { checkPermisos } = useHasPermiso();
   const { data: presupuesto, isLoading } = usePresupuesto(id);
-  const convertirPresupuesto = useConvertirPresupuesto();
   const eliminarPresupuesto = useEliminarPresupuesto();
-  const [metodoPago, setMetodoPago] = useState('efectivo');
-  const [confirmarConvertir, setConfirmarConvertir] = useState(false);
   const [confirmarEliminar, setConfirmarEliminar] = useState(false);
 
   if (!id) return null;
   const puedeGestionar = checkPermisos('gestionarPresupuestos');
 
-  const handleConvertir = async () => {
-    try {
-      await convertirPresupuesto.mutateAsync({ id: presupuesto.id, metodoPago });
-      toast('Presupuesto convertido en venta', 'success');
-      setConfirmarConvertir(false);
-      onClose();
-    } catch (e) {
-      toast(e.response?.data?.message || 'No se pudo convertir el presupuesto', 'error');
-      setConfirmarConvertir(false);
-    }
+  // En vez de crear la venta directo por API, manda al POS con el carrito
+  // ya armado (mismos productos y precios cotizados) y el cliente elegido —
+  // así el cajero ve la venta antes de confirmarla, en vez de que quede
+  // registrada sin que nadie la haya revisado.
+  const handleIrAPos = () => {
+    navigate('/pos', { state: { presupuestoParaCargar: { id: presupuesto.id, id_cliente: presupuesto.id_cliente, lineas: presupuesto.lineas } } });
+    onClose();
   };
 
   const handleEliminar = async () => {
@@ -345,16 +340,7 @@ function ModalDetallePresupuesto({ id, onClose }) {
 
         {presupuesto.estado === 'vigente' && puedeGestionar && (
           <>
-            <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
-              <FormControl size="small" sx={{ flex: 1 }}>
-                <InputLabel id="metodo-pago-label" sx={{ bgcolor: CARD, px: 0.5 }}>Método de pago</InputLabel>
-                <Select labelId="metodo-pago-label" value={metodoPago} onChange={e => setMetodoPago(e.target.value)}
-                  sx={{ bgcolor: CARD, color: INK, fontSize: 13, borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: BORDER } }}>
-                  {Object.entries(METODO_LABELS).map(([k, label]) => <MenuItem key={k} value={k}>{label}</MenuItem>)}
-                </Select>
-              </FormControl>
-            </Box>
-            <Button fullWidth startIcon={<ShoppingCartCheckoutIcon sx={{ fontSize: 16 }} />} onClick={() => setConfirmarConvertir(true)}
+            <Button fullWidth startIcon={<ShoppingCartCheckoutIcon sx={{ fontSize: 16 }} />} onClick={handleIrAPos}
               sx={{ bgcolor: P, color: '#fff', textTransform: 'none', fontWeight: 700, borderRadius: '10px', py: 1.25, mb: 1, '&:hover': { bgcolor: P_HOVER } }}>
               Convertir en venta
             </Button>
@@ -365,10 +351,6 @@ function ModalDetallePresupuesto({ id, onClose }) {
           </>
         )}
 
-        <ConfirmDialog open={confirmarConvertir} onClose={() => setConfirmarConvertir(false)} onConfirm={handleConvertir}
-          title="¿Convertir este presupuesto en venta?"
-          message="Se va a registrar como una venta real: descuenta el stock y queda en la caja abierta. Necesitás tener la caja abierta para hacer esto."
-          confirmLabel="Convertir" />
         <ConfirmDialog open={confirmarEliminar} onClose={() => setConfirmarEliminar(false)} onConfirm={handleEliminar}
           title="¿Eliminar este presupuesto?"
           message="No se puede deshacer. El cliente ya no lo va a poder ver ni convertir."

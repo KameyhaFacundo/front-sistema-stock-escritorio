@@ -801,7 +801,11 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                         onCrear={(nombre) => setNuevoProd({ active: true, idx, nombre })}
                         onEnterKeyDown={async (e, query) => {
                           if (e.key !== 'Enter') return;
-                          if (l.id_producto) { e.preventDefault(); addLineaAndFocus(); return; }
+                          // Enter con el producto ya elegido pasa a Cantidad de esa
+                          // misma línea (no a la línea siguiente) — recién el Enter
+                          // en Cantidad agrega una línea nueva y vuelve al buscador.
+                          const irACantidad = () => setTimeout(() => { cantRefs.current[idx]?.focus(); cantRefs.current[idx]?.select(); }, 50);
+                          if (l.id_producto) { e.preventDefault(); irACantidad(); return; }
                           const val = query.trim();
                           if (!val) return;
                           // Match exacto contra el backend, no un array local — se
@@ -814,6 +818,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                               setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: exacto.id, productoData: exacto, precio_compra: exacto.costo > 0 ? String(exacto.costo) : ls[idx].precio_compra, precio_venta: String(exacto.precioFinal ?? exacto.precio ?? '') }; return { ...f, lineas: ls }; });
                               setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
                               sugerirCostoDeHistorial(idx, exacto.id, form.id_proveedor);
+                              irACantidad();
                             }
                           } catch { /* sin match — deja que el usuario elija del desplegable */ }
                         }}

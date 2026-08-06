@@ -27,3 +27,16 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Builds por cliente (ver clients/README.md) — el .env y los logos de cada
+# cliente real no se suben, solo la plantilla y el README quedan en git.
+# !clients/_template/** va al final del archivo (no acá) porque tiene que
+# ganarle también a la regla ".env" de más arriba, no solo a "clients/*".
+clients/*
+!clients/README.md
+
+# Reafirmado al final: tiene que ganarle a la regla ".env" de más arriba
+# (git usa la última regla que matchea), si no clients/_template/.env
+# quedaría igual ignorado pese al !clients/_template/ de arriba.
+!clients/_template/
+!clients/_template/**

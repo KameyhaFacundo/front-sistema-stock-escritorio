@@ -10,12 +10,13 @@ export const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || '';
 
 export const APP_VERSION = '1.0.0';
 
-// Logo completo (isotipo + wordmark "Kamex"). El wordmark es oscuro y se
-// pierde sobre fondos oscuros, así que hay una variante con wordmark claro
-// para modo oscuro — usar el hook useLogo() en vez de importar estas
-// constantes directamente en componentes.
-export const LOGO_URL      = '/img/kamex_negro.png';
-export const LOGO_URL_DARK = '/img/kamex_blanco.png';
+// Logo completo (isotipo + wordmark). El wordmark oscuro se pierde sobre
+// fondos oscuros, así que hay una variante clara para modo oscuro — usar el
+// hook useLogo() en vez de importar estas constantes directamente en
+// componentes. El archivo real tiene que existir en public/ (ver
+// clients/README.md para el flujo de armar el build de un cliente puntual).
+export const LOGO_URL      = import.meta.env.VITE_LOGO_URL      || '/img/kamex_negro.png';
+export const LOGO_URL_DARK = import.meta.env.VITE_LOGO_URL_DARK || '/img/kamex_blanco.png';
 
 // Primary brand color and its hover/active shade.
 // Must be a valid CSS hex color string (e.g. #5c6ef8).

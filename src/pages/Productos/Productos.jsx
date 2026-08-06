@@ -3103,9 +3103,12 @@ export default function Productos() {
   // "ELECTRICIDAD") y se corre al lado de Estado — antes competía 1fr contra
   // Producto, que es el que de verdad necesita el espacio (nombres largos,
   // hoy truncados con "...").
+  // Precio/Proveedor pasan a ancho fijo (su contenido es corto y siempre
+  // sobraba espacio) para que Producto, el único que sigue en 1fr, se quede
+  // con todo el espacio flexible que liberan.
   const COLS = mostrarStockTotal
-    ? '44px 80px minmax(0, 1fr) 90px 130px 100px 100px minmax(0, 1fr) minmax(0, 1fr) 130px 112px'
-    : '44px 80px minmax(0, 1fr) 90px 130px 100px minmax(0, 1fr) minmax(0, 1fr) 130px 112px';
+    ? '44px 80px minmax(0, 1fr) 90px 130px 100px 100px 130px 170px 130px 112px'
+    : '44px 80px minmax(0, 1fr) 90px 130px 100px 130px 170px 130px 112px';
 
   const swSx = {
     '& .MuiSwitch-switchBase.Mui-checked': { color: P },
@@ -3535,8 +3538,8 @@ export default function Productos() {
             )}
             <ColSortHeader col="precioFinal" label="Precio"    sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
             <Typography sx={colTh}>Proveedor</Typography>
-            <Typography sx={colTh}>Últ. modificación</Typography>
-            <Typography data-tour="prod-acciones" sx={{ ...colTh, textAlign: 'right' }}>Acciones</Typography>
+            <Typography sx={{ ...colTh, textAlign: 'center' }}>Últ. modificación</Typography>
+            <Typography data-tour="prod-acciones" sx={{ ...colTh, textAlign: 'center' }}>Acciones</Typography>
           </Box>
 
           {paged.length === 0 ? (
@@ -3634,10 +3637,10 @@ export default function Productos() {
             <Typography sx={{ color: p.proveedor === 'Sin proveedor' ? MUTED : INK2, fontSize: 14 }}>
               {p.proveedor}
             </Typography>
-            <Typography sx={{ color: p.ultimaModificacionPrecio ? INK2 : MUTED, fontSize: 13 }}>
+            <Typography sx={{ color: p.ultimaModificacionPrecio ? INK2 : MUTED, fontSize: 13, textAlign: 'center' }}>
               {p.ultimaModificacionPrecio ? fmtDate(p.ultimaModificacionPrecio) : 'Sin cambios'}
             </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }} onClick={e => e.stopPropagation()}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }} onClick={e => e.stopPropagation()}>
               <Tooltip title="Ver detalle">
                 <IconButton size="small" onClick={() => setProductoDetalle(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: `${P}14` }, borderRadius: '6px' }}>
                   <VisibilityIcon sx={{ fontSize: 16 }} />

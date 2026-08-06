@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useContext, Suspense } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../auth/AuthContextBase';
 import {
   Box, Typography, TextField, Button, InputAdornment,
@@ -56,6 +56,7 @@ import { useToast } from '../../context/ToastContext';
 import { fmtMoney, toLocalDateStr } from '../../utils/format';
 import { productosService } from '../../services/productosService';
 import useBusquedaProductos from '../../hooks/useBusquedaProductos';
+import useDropdownKeyboardNav from '../../hooks/useDropdownKeyboardNav';
 import { emitirFactura, mapFactura } from '../../services/arcaService';
 import { useFactura } from '../../hooks/queries/useFacturasQueries';
 import { carritosVaciadosService } from '../../services/carritosVaciadosService';
@@ -280,6 +281,8 @@ function Home() {
   const { registrarVenta, confirmarVentaPoint } = useVentas();
   const { caja } = useCaja();
   const toast = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { checkPermisos } = useHasPermiso();
   const { tieneFacturacion } = usePlan();
   const puedeAplicarDescuento = checkPermisos('aplicarDescuento');
@@ -373,6 +376,44 @@ function Home() {
   const [cart, setCart]       = useState(() => leerCarritoDraft());
   const online = useOnlineStatus();
   useEffect(() => { guardarCarritoDraft(cart); }, [cart]);
+  // Si el carrito viene de un presupuesto, se manda junto con la venta al
+  // confirmar (ver handleConfirmarVenta) para que el backend lo marque como
+  // convertido — se limpia solo al cobrar o al vaciar el carrito a mano.
+  const [presupuestoIdCargado, setPresupuestoIdCargado] = useState(null);
+
+  // Presupuestos.jsx manda acá con state.presupuestoParaCargar al tocar
+  // "Convertir en venta" — arma el carrito con las líneas cotizadas (mismo
+  // precio, no el actual) y precarga el cliente, para que el cajero vea y
+  // confirme la venta desde el POS en vez de crearla directo por API.
+  // Se limpia el state de navegación al toque para que un F5 no lo repita.
+  useEffect(() => {
+    const datos = location.state?.presupuestoParaCargar;
+    if (!datos) return;
+    navigate(location.pathname, { replace: true, state: null });
+
+    (async () => {
+      const lineas = datos.lineas || [];
+      const productos = await Promise.all(lineas.map(l => productosService.getById(l.id_producto).catch(() => null)));
+      const nuevoCart = [];
+      let saltados = 0;
+      lineas.forEach((l, i) => {
+        const p = productos[i];
+        if (!p || p.stock === 0) { saltados++; return; }
+        nuevoCart.push({
+          id: p.id, codigo: p.codigo, nombre: p.nombre, categoria: p.categoria,
+          stock: p.stock, precio: l.precio_venta, cantidad: Math.min(l.cantidad, p.stock),
+          unidadMedida: p.unidadMedida || 'unidad',
+        });
+      });
+      setCart(nuevoCart);
+      setPresupuestoIdCargado(datos.id);
+      if (datos.id_cliente) setClienteId(datos.id_cliente);
+      toast(saltados > 0
+        ? `Presupuesto #${datos.id} cargado — ${saltados} producto${saltados > 1 ? 's' : ''} sin stock se omitieron`
+        : `Presupuesto #${datos.id} cargado en el carrito`, saltados > 0 ? 'info' : 'success');
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const searchRef = useRef(null);
   // Foco de la cantidad de cada línea del carrito, por id de producto — al
   // agregar uno (click, Enter o escáner, todos pasan por addProductToCart)
@@ -718,14 +759,19 @@ function Home() {
   const { resultados: resultadosPrecio } = useBusquedaProductos(precioSearch, { perPage: 20 });
   const precioResults = useMemo(() => resultadosPrecio.map(aProductoPos), [resultadosPrecio]);
 
+  // Flecha arriba/abajo navega los resultados, Enter agrega el resaltado
+  // (arranca en el primero) — si todavía no hay resultados (típico de un
+  // lector de código de barras, que tipea más rápido que el debounce),
+  // Enter cae al fallback contra el backend de abajo.
+  const { highlightIdx: searchHighlightIdx, onKeyDown: handleDropdownNav, highlightedRef: highlightedItemRef } = useDropdownKeyboardNav(filteredProducts, intentarAgregar);
+
   const handleSearchKeyDown = async (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { handleDropdownNav(e); return; }
     if (e.key !== 'Enter') return;
-    if (filteredProducts.length === 1) { intentarAgregar(filteredProducts[0]); return; }
+    if (filteredProducts.length) { handleDropdownNav(e); return; }
     const q = search.trim();
     if (!q) return;
     const qLower = q.toLowerCase();
-    const exactoLocal = filteredProducts.find(p => p.nombre.toLowerCase() === qLower || p.codigo.toLowerCase() === qLower || (p.codigoBarras || '').toLowerCase() === qLower);
-    if (exactoLocal) { intentarAgregar(exactoLocal); return; }
     // El debounce de la búsqueda puede no haber traído resultados todavía
     // (típico de un lector de código de barras, que tipea rápido y termina
     // con Enter) — resuelve directo contra el backend por código exacto en
@@ -762,6 +808,7 @@ function Home() {
       total: subtotal,
     }).catch(() => { /* no debe bloquear al cajero por un problema de red */ });
     setCart([]);
+    setPresupuestoIdCargado(null);
   };
 
   const handleConfirmarVenta = async () => {
@@ -792,6 +839,7 @@ function Home() {
         metodo,
         cliente: clienteNombre,
         id_cliente: clienteId,
+        id_presupuesto: presupuestoIdCargado,
         items: cart.map(i => ({
           id: i.id, codigo: i.codigo, nombre: i.nombre,
           precio: i.precio, cantidad: i.cantidad, categoria: i.categoria,
@@ -839,6 +887,7 @@ function Home() {
         })),
       });
       setCart([]);
+      setPresupuestoIdCargado(null);
       clearAjuste();
       setPagosAplicados([]);
       setMontoActual('');
@@ -1183,14 +1232,16 @@ function Home() {
                         whileTap={{ scale: 0.98 }}
                       >
                         <Box
+                          ref={idx === searchHighlightIdx ? highlightedItemRef : undefined}
                           onClick={() => intentarAgregar(product)}
                           sx={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                             p: 1.5, mb: 0.75,
                             borderRadius: '10px',
                             cursor: product.stock === 0 ? 'not-allowed' : 'pointer',
-                            bgcolor: HOVER,
-                            border: '1px solid transparent',
+                            bgcolor: idx === searchHighlightIdx ? `${PRIMARY}22` : HOVER,
+                            border: '1px solid', borderColor: idx === searchHighlightIdx ? PRIMARY : 'transparent',
+                            boxShadow: idx === searchHighlightIdx ? `0 0 0 1px ${PRIMARY}55` : 'none',
                             opacity: product.stock === 0 ? 0.45 : 1,
                             transition: 'all 0.15s',
                             '&:hover': { bgcolor: `${PRIMARY}0c`, borderColor: product.stock === 0 ? 'transparent' : `${PRIMARY}30`, transform: 'translateX(2px)' },

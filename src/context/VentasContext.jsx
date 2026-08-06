@@ -31,6 +31,7 @@ export function VentasProvider({ children, onError, onRecargarFiados }) {
       metodo_pago: ventaLocal.metodo,
       estado: 'confirmada',
       id_cliente: ventaLocal.id_cliente ?? null,
+      id_presupuesto: ventaLocal.id_presupuesto ?? undefined,
       // Los ítems "manual-*" (monto libre, sin producto real) van sin id_producto
       // pero con su nombre — antes se filtraban acá y la venta quedaba registrada
       // por menos de lo que en realidad se cobró (el total del ticket sí los suma).
