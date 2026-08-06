@@ -204,14 +204,26 @@ async function generarTicketHtml(data, empresa, factura) {
 }
 
 /**
- * Abre una ventana nueva con el ticket ya armado y dispara el diálogo de
- * impresión del navegador — mismo flujo que front-comercial (generar HTML +
- * window.open), pero usando el visor nativo del navegador en vez de qz-tray
- * (acá no hay impresora térmica conectada vía ese puente).
+ * Si la app de escritorio tiene una impresora del sistema disponible, imprime
+ * directo y en silencio (sin diálogo) vía el puente de Electron
+ * (electron/preload.js + main.js). Si no hay impresora, o estamos en
+ * `pnpm dev`/demo mode (window.electronAPI no existe ahí), cae al flujo de
+ * siempre: abre una ventana con el ticket armado y dispara el diálogo de
+ * impresión del navegador — mismo enfoque que front-comercial.
  */
 export async function imprimirTicket(data, empresa, factura) {
   if (!data) return;
   const html = await generarTicketHtml(data, empresa, factura);
+
+  if (window.electronAPI?.imprimirTicket) {
+    try {
+      const { printed } = await window.electronAPI.imprimirTicket(html);
+      if (printed) return;
+    } catch {
+      // Sigue al flujo de ventana de abajo — no hay impresora o falló, el
+      // usuario igual necesita ver el ticket.
+    }
+  }
 
   const win = window.open('', '_blank', 'width=420,height=640');
   if (!win) throw new Error('No se pudo abrir la ventana de impresión — habilitá las ventanas emergentes para este sitio.');

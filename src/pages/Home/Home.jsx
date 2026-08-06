@@ -35,24 +35,27 @@ import CameraAltIcon        from '@mui/icons-material/CameraAlt';
 import ShoppingBagIcon      from '@mui/icons-material/ShoppingBag';
 import ReplayIcon           from '@mui/icons-material/Replay';
 import KeyboardIcon         from '@mui/icons-material/Keyboard';
+import CalculateIcon        from '@mui/icons-material/Calculate';
 
 import lazyWithRetry from '../../utils/lazyWithRetry';
 const BarcodeScanner = lazyWithRetry(() => import('../../components/shared/BarcodeScanner'));
 import { clientesService } from '../../services/clientesService';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import AyudaButton from '../../components/shared/AyudaButton';
+import CampoPrecio from '../../components/shared/CampoPrecio';
 import { imprimirTicket } from '../../utils/imprimirTicket';
 import { BG, CARD, BORDER, INK, INK2, MUTED, P as PRIMARY, P_HOVER, INPUT, HOVER, DROPDOWN, MODAL, modalPaperSx,
-         SUCCESS, SUCCESS_BG, SUCCESS_BORDER, ERROR, ERROR_BG, ERROR_BORDER, MONEY, PURPLE, ORANGE } from '../../theme/tokens';
+         SUCCESS, SUCCESS_BG, SUCCESS_BORDER, ERROR, ERROR_BG, ERROR_BORDER, MONEY, PURPLE, ORANGE, GOLD } from '../../theme/tokens';
 import { APP_NAME, POINT_HABILITADO } from '../../config/brand';
 import useHasPermiso from '../../hooks/useHasPermiso';
 import usePlan from '../../hooks/usePlan';
 import { registerTour } from '../../utils/tour';
-import { useProductos } from '../../context/ProductosContextBase';
 import { useVentas } from '../../context/VentasContextBase';
 import { useCaja } from '../../context/CajaContextBase';
 import { useToast } from '../../context/ToastContext';
-import { fmtMoney } from '../../utils/format';
+import { fmtMoney, toLocalDateStr } from '../../utils/format';
+import { productosService } from '../../services/productosService';
+import useBusquedaProductos from '../../hooks/useBusquedaProductos';
 import { emitirFactura, mapFactura } from '../../services/arcaService';
 import { useFactura } from '../../hooks/queries/useFacturasQueries';
 import { carritosVaciadosService } from '../../services/carritosVaciadosService';
@@ -65,6 +68,26 @@ import HandshakeIcon  from '@mui/icons-material/Handshake';
 // Fuera del componente — las funciones impuras no se analizan como render
 function generarTicketId() {
   return `${Date.now().toString(36)}-${Math.floor(Math.random() * 9999)}`.toUpperCase();
+}
+
+// Adapta el resultado de productosService.getAll()/mapProducto() a la forma
+// "liviana" que usa el carrito/búsqueda del POS — antes lo armaba un useMemo
+// sobre TODO el catálogo cargado en memoria (PRODUCTOS_POS); ahora cada
+// resultado de búsqueda/escaneo pasa por acá, uno por uno, según llega del
+// backend (ver useBusquedaProductos y los onScan/handleSearchKeyDown más abajo).
+function aProductoPos(p) {
+  return {
+    id: p.id, codigo: p.codigo, codigoBarras: p.codigoBarras, nombre: p.nombre,
+    categoria: p.categoria, stock: p.stock, precio: p.precioFinal,
+    unidadMedida: p.unidadMedida,
+    // Solo indumentaria tiene esto — un producto con variantes no se agrega
+    // directo al carrito, primero hay que elegir el talle (ver intentarAgregar).
+    tieneVariantes: p.tieneVariantes,
+    variantes: (p.variantes ?? []).map(v => ({
+      id: v.id, codigo: v.codigo, codigoBarras: v.codigoBarras, talle: v.talle, ordenTalle: v.ordenTalle,
+      stock: v.stock, precio: p.precioFinal, categoria: p.categoria, unidadMedida: p.unidadMedida,
+    })),
+  };
 }
 
 // Los ítems "manual-*" (monto libre, sin producto real) van sin id_producto
@@ -103,6 +126,10 @@ const inputSx = {
   },
   '& .MuiInputBase-input': { py: '13px' },
   '& .MuiInputBase-input::placeholder': { color: MUTED, opacity: 1 },
+  '& input[type=number]': { MozAppearance: 'textfield' },
+  '& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button': {
+    WebkitAppearance: 'none', margin: 0,
+  },
 };
 
 const outlinedBtn = {
@@ -216,9 +243,39 @@ function ModalSeleccionTalle({ producto, onClose, onAgregar }) {
   );
 }
 
+// Input de cantidad de una línea del carrito — antes era un <input type="number">
+// controlado directo por item.cantidad: si lo seleccionabas y borrabas para
+// tipear un valor nuevo, el string vacío no parseaba a número, el estado no
+// cambiaba, y React volvía a pintar el último valor válido en cada tecla — no
+// dejaba borrar. Este buffer de texto local desacopla lo que se ve mientras
+// se tipea de cuándo se confirma un número válido (mismo criterio que
+// CampoPrecio para el precio unitario).
+function CampoCantidadCarrito({ item, onCommit, style }) {
+  const fraccionable = esUnidadFraccionable(item.unidadMedida);
+  const inputRef = useRef(null);
+  const [texto, setTexto] = useState(String(item.cantidad));
+
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) setTexto(String(item.cantidad));
+  }, [item.cantidad]);
+
+  const handleChange = (e) => {
+    const raw = e.target.value;
+    setTexto(raw);
+    const n = fraccionable ? parseFloat(raw.replace(',', '.')) : parseInt(raw, 10);
+    if (!isNaN(n)) onCommit(raw);
+  };
+
+  return (
+    <Box component="input" ref={inputRef} type="text" inputMode="decimal"
+      value={texto} onChange={handleChange}
+      onBlur={() => setTexto(String(item.cantidad))}
+      style={style} />
+  );
+}
+
 function Home() {
   const { user } = useContext(AuthContext);
-  const { productos } = useProductos();
   const { registrarVenta, confirmarVentaPoint } = useVentas();
   const { caja } = useCaja();
   const toast = useToast();
@@ -228,20 +285,6 @@ function Home() {
   const isMobile = useIsMobile();
   const [mobileTab, setMobileTab] = useState(0);
   const [atajosAnchor, setAtajosAnchor] = useState(null);
-
-  const PRODUCTOS_POS = useMemo(() =>
-    productos.map(p => ({
-      id: p.id, codigo: p.codigo, nombre: p.nombre,
-      categoria: p.categoria, stock: p.stock, precio: p.precioFinal,
-      unidadMedida: p.unidadMedida,
-      // Solo indumentaria tiene esto — un producto con variantes no se agrega
-      // directo al carrito, primero hay que elegir el talle (ver intentarAgregar).
-      tieneVariantes: p.tieneVariantes,
-      variantes: (p.variantes ?? []).map(v => ({
-        id: v.id, codigo: v.codigo, talle: v.talle, ordenTalle: v.ordenTalle,
-        stock: v.stock, precio: p.precioFinal, categoria: p.categoria, unidadMedida: p.unidadMedida,
-      })),
-    })), [productos]);
 
   // ── Clientes desde API ─────────────────────────────────────────────
   const [clientesOpts, setClientesOpts] = useState([]);
@@ -555,6 +598,19 @@ function Home() {
     }));
   };
 
+  // Cargar la cantidad a partir de lo que el cliente quiere gastar (típico en
+  // nafta: "dame $500 de nafta") en vez de que el cajero calcule los litros/kg
+  // a mano — solo tiene sentido para productos fraccionables (kg/metro/litro).
+  const [montoCalcularId, setMontoCalcularId] = useState(null);
+  const [montoCalcularValor, setMontoCalcularValor] = useState('');
+  const itemCalculando = cart.find(i => i.id === montoCalcularId) || null;
+  const handleCalcularCantidadPorMonto = () => {
+    const monto = parseFloat(String(montoCalcularValor).replace(',', '.'));
+    if (!itemCalculando || isNaN(monto) || monto <= 0 || !itemCalculando.precio) return;
+    updateCantidad(itemCalculando.id, round2(monto / itemCalculando.precio));
+    setMontoCalcularId(null); setMontoCalcularValor('');
+  };
+
   const addProductToCart = (product) => {
     if (product.stock === 0) { playBeep('error'); toast(`Sin stock: ${product.nombre}`, 'error'); return; }
     setCart(c => {
@@ -606,16 +662,25 @@ function Home() {
     addProductToCart(product);
   };
 
-  const handleRepetirVenta = () => {
+  // Cada producto se re-busca por id contra el backend (no contra un array
+  // local capado) — así el precio/stock que trae es el actual, y funciona
+  // sin importar si el producto quedaría "afuera" de una lista corta.
+  const handleRepetirVenta = async () => {
     if (!ultimaVenta) return;
     let agregados = 0;
+    const noManuales = ultimaVenta.items.filter(item => !String(item.id).startsWith('manual-'));
+    const encontrados = await Promise.all(noManuales.map(item =>
+      productosService.getById(item.id).then(aProductoPos).catch(() => null)
+    ));
+
     ultimaVenta.items.forEach(item => {
       if (String(item.id).startsWith('manual-')) {
         setCart(c => [...c, { ...item, id: `manual-${Date.now()}-${Math.random()}` }]);
         agregados++;
         return;
       }
-      const producto = PRODUCTOS_POS.find(p => p.id === item.id);
+      const idx = noManuales.indexOf(item);
+      const producto = encontrados[idx];
       if (!producto || producto.stock === 0) return;
       agregados++;
       setCart(c => {
@@ -632,22 +697,36 @@ function Home() {
     else toast('Se repitió la última venta', 'success');
   };
 
-  const filteredProducts = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return !q ? [] : PRODUCTOS_POS.filter(p => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q));
-  }, [search, PRODUCTOS_POS]);
+  // Búsqueda contra el backend (search.trim() debounced), no contra un
+  // array local — con miles de productos, un array cargado una sola vez
+  // nunca tiene todo el catálogo (ver useBusquedaProductos).
+  const { resultados: resultadosSearch } = useBusquedaProductos(search, { perPage: 20 });
+  const filteredProducts = useMemo(() => resultadosSearch.map(aProductoPos), [resultadosSearch]);
 
-  const precioResults = useMemo(() => {
-    const q = precioSearch.trim().toLowerCase();
-    return !q ? [] : PRODUCTOS_POS.filter(p => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q));
-  }, [precioSearch, PRODUCTOS_POS]);
+  const { resultados: resultadosPrecio } = useBusquedaProductos(precioSearch, { perPage: 20 });
+  const precioResults = useMemo(() => resultadosPrecio.map(aProductoPos), [resultadosPrecio]);
 
-  const handleSearchKeyDown = (e) => {
+  const handleSearchKeyDown = async (e) => {
     if (e.key !== 'Enter') return;
     if (filteredProducts.length === 1) { intentarAgregar(filteredProducts[0]); return; }
-    const q = search.trim().toLowerCase();
-    const exact = PRODUCTOS_POS.find(p => p.nombre.toLowerCase() === q || p.codigo.toLowerCase() === q);
-    if (exact) intentarAgregar(exact);
+    const q = search.trim();
+    if (!q) return;
+    const qLower = q.toLowerCase();
+    const exactoLocal = filteredProducts.find(p => p.nombre.toLowerCase() === qLower || p.codigo.toLowerCase() === qLower || (p.codigoBarras || '').toLowerCase() === qLower);
+    if (exactoLocal) { intentarAgregar(exactoLocal); return; }
+    // El debounce de la búsqueda puede no haber traído resultados todavía
+    // (típico de un lector de código de barras, que tipea rápido y termina
+    // con Enter) — resuelve directo contra el backend por código exacto en
+    // vez de esperar. codigo_exacto ya chequea código Y código de barras.
+    try {
+      const porCodigo = await productosService.getAll({ codigo_exacto: q });
+      if (porCodigo.length) { intentarAgregar(aProductoPos(porCodigo[0])); return; }
+    } catch { /* sigue al fallback por nombre */ }
+    try {
+      const porNombre = await productosService.getAll({ search: q, per_page: 5 });
+      const exacto = porNombre.find(p => p.nombre.toLowerCase() === qLower);
+      if (exacto) intentarAgregar(aProductoPos(exacto));
+    } catch { /* no se encontró nada, no hacemos más */ }
   };
 
   // ── Handlers ───────────────────────────────────────────────────────
@@ -691,7 +770,12 @@ function Home() {
       const ventaGuardada = await registrarVenta({
         id: ahora.getTime(),
         ticketId: id,
-        fecha: ahora.toISOString(),
+        // ahora.toISOString() da la fecha en UTC, no local — en Argentina
+        // (UTC-3) cualquier venta hecha entre las 21:00 y medianoche queda
+        // fechada "mañana" y desaparece de los reportes de "hoy" hasta que
+        // el calendario alcanza esa fecha. toLocalDateStr() usa el calendario
+        // local, igual que "hora" (más abajo) ya lo hacía.
+        fecha: toLocalDateStr(ahora),
         hora:  ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
         metodo,
         cliente: clienteNombre,
@@ -707,13 +791,18 @@ function Home() {
         pagos: variosPagos ? pagosAplicados : [{ metodo, monto: ventaTotal }],
       });
 
-      toast(`Venta #${id} registrada por ${fmtMoney(ventaTotal)}`, 'success');
+      // El código interno (id, ej. "MSGL50HT-6790") sigue viajando al backend
+      // como numero_ticket para relacionar el movimiento de stock — pero de
+      // cara al usuario (toast, modal "venta realizada", ticket impreso) se
+      // muestra el id real de la venta, mucho más legible que el timestamp.
+      const numeroVisible = ventaGuardada?.id ?? id;
+      toast(`Venta #${numeroVisible} registrada por ${fmtMoney(ventaTotal)}`, 'success');
       setLastTotal(ventaTotal);
-      setTicketId(id);
+      setTicketId(numeroVisible);
       setPuntosCanjear('');
       setFacturaData(null); // venta nueva — la factura de la venta anterior no le pertenece
       setLastVentaData({
-        ticketId: id,
+        ticketId: numeroVisible,
         // id real de la venta en el backend — sin esto, emitirFactura() no
         // podía vincular la factura a la venta (siempre mandaba id_venta: null).
         idVentaReal: ventaGuardada?.id ?? null,
@@ -769,7 +858,7 @@ function Home() {
       const intentoId = await mercadopagoService.crearIntento({
         numero_ticket: generarTicketId(),
         id_cliente: clienteId,
-        fecha: ahora.toISOString(),
+        fecha: toLocalDateStr(ahora), // fecha local, no UTC — ver comentario en handleConfirmarVenta
         hora: ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
         lineas: cartALineas(cart),
       });
@@ -801,7 +890,7 @@ function Home() {
       const { intentoId, qrData } = await mercadopagoService.crearIntentoQr({
         numero_ticket: generarTicketId(),
         id_cliente: clienteId,
-        fecha: ahora.toISOString(),
+        fecha: toLocalDateStr(ahora), // fecha local, no UTC — ver comentario en handleConfirmarVenta
         hora: ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
         lineas: cartALineas(cart),
       });
@@ -865,13 +954,13 @@ function Home() {
           const saved = await confirmarVentaPoint(idVenta);
           const fechaObj = saved.fecha ? new Date(`${saved.fecha}T00:00:00`) : new Date();
 
-          toast(`Venta #${saved.ticketId} registrada por ${fmtMoney(saved.total)}`, 'success');
+          toast(`Venta #${saved.id} registrada por ${fmtMoney(saved.total)}`, 'success');
           playBeep('ok');
           setLastTotal(saved.total);
-          setTicketId(saved.ticketId);
+          setTicketId(saved.id);
           setFacturaData(null); // venta nueva — la factura de la venta anterior no le pertenece
           setLastVentaData({
-            ticketId: saved.ticketId,
+            ticketId: saved.id,
             idVentaReal: saved.id ?? null,
             fecha: fechaObj.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
             hora: saved.hora,
@@ -1186,7 +1275,7 @@ function Home() {
                     es una tarjeta de 2 líneas, no una fila de columnas */}
                 {!isMobile && (
                   <Box sx={{
-                    display: 'grid', gridTemplateColumns: '28px 1fr 90px 96px 60px 84px 32px', gap: 1, alignItems: 'center',
+                    display: 'grid', gridTemplateColumns: '28px 1fr 90px 120px 60px 84px 32px', gap: 1, alignItems: 'center',
                     px: 2.5, py: 0.75, flexShrink: 0,
                   }}>
                     <Box />
@@ -1254,12 +1343,9 @@ function Home() {
                                 sx={{ color: MUTED, p: '4px', '&:hover': { color: INK, bgcolor: HOVER }, borderRadius: '6px' }}>
                                 <RemoveCircleOutlineIcon sx={{ fontSize: 18 }} />
                               </IconButton>
-                              <Box component="input" type="number" value={item.cantidad}
-                                step={esFraccionable(item) ? 0.01 : 1}
-                                onChange={e => updateCantidad(item.id, e.target.value)}
-                                onWheel={e => e.target.blur()}
+                              <CampoCantidadCarrito item={item} onCommit={valor => updateCantidad(item.id, valor)}
                                 style={{
-                                  width: esFraccionable(item) ? 42 : 26, background: 'none', border: 'none', outline: 'none',
+                                  width: 42, background: 'none', border: 'none', outline: 'none',
                                   color: 'var(--ink)', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', textAlign: 'center',
                                 }} />
                               {esFraccionable(item) && (
@@ -1269,6 +1355,14 @@ function Home() {
                                 sx={{ color: PRIMARY, p: '4px', '&:hover': { bgcolor: `${PRIMARY}16` }, borderRadius: '6px' }}>
                                 <AddCircleOutlineIcon sx={{ fontSize: 18 }} />
                               </IconButton>
+                              {esFraccionable(item) && (
+                                <Tooltip title="Cargar por monto ($)">
+                                  <IconButton size="small" onClick={() => { setMontoCalcularId(item.id); setMontoCalcularValor(''); }}
+                                    sx={{ color: MUTED, p: '4px', '&:hover': { color: PRIMARY, bgcolor: `${PRIMARY}16` }, borderRadius: '6px' }}>
+                                    <CalculateIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                             </Box>
                             <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700 }}>
                               {fmtMoney(item.precio * item.cantidad)}
@@ -1278,7 +1372,7 @@ function Home() {
                       ) : (
                       <Box sx={{
                         display: 'grid',
-                        gridTemplateColumns: '28px 1fr 90px 96px 60px 84px 32px',
+                        gridTemplateColumns: '28px 1fr 90px 120px 60px 84px 32px',
                         gap: 1, alignItems: 'center',
                         bgcolor: idx % 2 === 0 ? HOVER : 'transparent',
                         borderRadius: '10px', p: 1,
@@ -1327,32 +1421,38 @@ function Home() {
                           />
                         </Box>
 
-                        {/* Cantidad */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.25 }}>
+                        {/* Cantidad — alineado a la izquierda (no centrado) y con el input
+                            a ancho fijo, para que el botón "-" y el número arranquen
+                            siempre en el mismo lugar entre filas — antes, centrar el
+                            grupo entero hacía que la fila se corriera según si el
+                            producto tenía o no la unidad/calculadora extra al final. */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 0.25 }}>
                           <IconButton size="small" onClick={() => removeQty(item.id)}
                             sx={{ color: MUTED, p: '4px', '&:hover': { color: INK, bgcolor: HOVER }, borderRadius: '6px' }}>
                             <RemoveCircleOutlineIcon sx={{ fontSize: 18 }} />
                           </IconButton>
-                          <Box
-                            component="input"
-                            type="number"
-                            value={item.cantidad}
-                            step={esFraccionable(item) ? 0.01 : 1}
-                            onChange={e => updateCantidad(item.id, e.target.value)}
-                            onWheel={e => e.target.blur()}
+                          <CampoCantidadCarrito item={item} onCommit={valor => updateCantidad(item.id, valor)}
                             style={{
-                              width: esFraccionable(item) ? 42 : 28, background: 'none', border: 'none', outline: 'none',
+                              width: 32, background: 'none', border: 'none', outline: 'none',
                               color: 'var(--ink)', fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
                               textAlign: 'center',
                             }}
                           />
-                          {esFraccionable(item) && (
-                            <Typography sx={{ color: MUTED, fontSize: 11 }}>{abrevUnidad(item.unidadMedida)}</Typography>
-                          )}
                           <IconButton size="small" onClick={() => addQty(item.id)}
                             sx={{ color: PRIMARY, p: '4px', '&:hover': { bgcolor: `${PRIMARY}16` }, borderRadius: '6px' }}>
                             <AddCircleOutlineIcon sx={{ fontSize: 18 }} />
                           </IconButton>
+                          {esFraccionable(item) && (
+                            <Typography sx={{ color: MUTED, fontSize: 11, flexShrink: 0 }}>{abrevUnidad(item.unidadMedida)}</Typography>
+                          )}
+                          {esFraccionable(item) && (
+                            <Tooltip title="Cargar por monto ($)">
+                              <IconButton size="small" onClick={() => { setMontoCalcularId(item.id); setMontoCalcularValor(''); }}
+                                sx={{ color: MUTED, p: '4px', '&:hover': { color: PRIMARY, bgcolor: `${PRIMARY}16` }, borderRadius: '6px' }}>
+                                <CalculateIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </Box>
 
                         {/* Stock disponible */}
@@ -1391,20 +1491,20 @@ function Home() {
 
         {/* Columna derecha — checkout completo, siempre visible */}
         {(!isMobile || mobileTab === 1) && (
-        <Box sx={{ flex: 1, minWidth: { xs: 0, md: 380 }, maxWidth: { md: 420 }, display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 }, overflowY: 'auto', p: { xs: 2, md: 0 }, pb: { md: 2 } }}
+        <Box sx={{ flex: 1, minWidth: { xs: 0, md: 380 }, maxWidth: { md: 420 }, display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 1.25 }, overflowY: 'auto', p: { xs: 2, md: 0 }, pb: { md: 1.5 } }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') { e.preventDefault(); ejecutarConfirmarVenta(); }
           }}>
 
           {/* Cliente */}
-          <Box data-tour="pos-cliente" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', p: 2.5, flexShrink: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Box sx={{ width: 32, height: 32, borderRadius: '8px', bgcolor: `${PRIMARY}14`, border: `1px solid ${PRIMARY}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <PersonOutlineIcon sx={{ color: PRIMARY, fontSize: 16 }} />
+          <Box data-tour="pos-cliente" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', p: 1.75, flexShrink: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+              <Box sx={{ width: 28, height: 28, borderRadius: '8px', bgcolor: `${PRIMARY}14`, border: `1px solid ${PRIMARY}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <PersonOutlineIcon sx={{ color: PRIMARY, fontSize: 15 }} />
               </Box>
               <Box>
-                <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14 }}>Cliente</Typography>
-                <Typography sx={{ color: MUTED, fontSize: 11.5 }}>Seleccioná para la venta</Typography>
+                <Typography sx={{ color: INK, fontWeight: 700, fontSize: 13.5 }}>Cliente</Typography>
+                <Typography sx={{ color: MUTED, fontSize: 11 }}>Seleccioná para la venta</Typography>
               </Box>
             </Box>
             {!nuevoCliente.active ? (
@@ -1477,7 +1577,7 @@ function Home() {
           </Box>
 
           {/* Métodos de Pago */}
-          <Box data-tour="pos-pago" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', p: 2.5, display: 'flex', flexDirection: 'column', gap: 1.5, flexShrink: 0 }}>
+          <Box data-tour="pos-pago" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', p: 1.75, display: 'flex', flexDirection: 'column', gap: 1.25, flexShrink: 0 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box>
                 <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14 }}>Métodos de Pago</Typography>
@@ -1494,7 +1594,7 @@ function Home() {
               {[
                 { key: 'efectivo',      label: 'Efectivo',       Icon: LocalAtmIcon,    color: MONEY },
                 {
-                  key: 'tarjeta', label: 'Tarjeta', Icon: CreditCardIcon, color: '#2563eb',
+                  key: 'tarjeta', label: 'Tarjeta', Icon: CreditCardIcon, color: GOLD,
                   badge: 'manual', badgeColor: MUTED,
                   nota: 'Registro manual: no verifica el cobro con el banco.',
                 },
@@ -1518,7 +1618,7 @@ function Home() {
                 // con VITE_POINT_HABILITADO (ver src/config/brand.js o .env); para
                 // reactivarlo, poner esa variable en "true" en el .env de este build.
                 ...(POINT_HABILITADO ? [{
-                  key: 'point', label: 'Point', Icon: PointOfSaleIcon, color: '#2563eb',
+                  key: 'point', label: 'Point', Icon: PointOfSaleIcon, color: GOLD,
                   disponible: pointDisponible,
                   motivo: !mpConectado ? 'Conectá tu cuenta de Mercado Pago en Configuración → Cobros'
                     : !mpDeviceId ? 'Elegí un dispositivo Point en Configuración → Cobros'
@@ -1539,7 +1639,7 @@ function Home() {
                       if (opt.key === 'point' || (opt.key === 'qr' && qrDisponible)) { setVariosPagos(false); setPagosAplicados([]); }
                     }}
                     sx={{
-                      py: 1.25, flexDirection: 'column', gap: 0.5, textTransform: 'none', borderRadius: '10px',
+                      py: 0.875, flexDirection: 'column', gap: 0.375, textTransform: 'none', borderRadius: '10px',
                       border: `1px solid ${isActive ? opt.color + '60' : BORDER}`,
                       bgcolor: isActive ? activeBg : 'transparent',
                       color: isActive ? INK : INK2,
@@ -1565,8 +1665,8 @@ function Home() {
               })}
             </Box>
 
-            <Box sx={{ bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '10px', p: 1.5 }}>
-              <Typography sx={{ color: INK, fontWeight: 600, fontSize: 13, mb: 1 }}>
+            <Box sx={{ bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '10px', p: 1.25 }}>
+              <Typography sx={{ color: INK, fontWeight: 600, fontSize: 12.5, mb: 0.75 }}>
                 Monto para {METODO_LABELS[metodoPago]}
               </Typography>
 
@@ -1608,12 +1708,11 @@ function Home() {
                 <>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <Typography sx={{ color: MUTED, fontSize: 12.5, flexShrink: 0 }}>Recibido:</Typography>
-                    <TextField size="small" fullWidth type="number"
+                    <CampoPrecio size="small" fullWidth
                       disabled={procesando}
                       placeholder={String(total)}
                       value={efectivoRecibido}
                       onChange={e => setEfectivoRecibido(e.target.value)}
-                      onWheel={e => e.target.blur()}
                       InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: MUTED }}>$</InputAdornment> }}
                       sx={{ '& .MuiOutlinedInput-root': { bgcolor: MODAL, color: INK, '& fieldset': { borderColor: BORDER }, '&.Mui-focused fieldset': { borderColor: PRIMARY } }, '& .MuiInputBase-input::placeholder': { color: MUTED, opacity: 1 } }}
                     />
@@ -1720,11 +1819,11 @@ function Home() {
           )}
 
           {/* Resumen */}
-          <Box sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', p: 2.5, flexShrink: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+          <Box sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', p: 1.75, flexShrink: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <ReceiptIcon sx={{ color: PRIMARY, fontSize: 16 }} />
-                <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14 }}>Resumen</Typography>
+                <Typography sx={{ color: INK, fontWeight: 700, fontSize: 13.5 }}>Resumen</Typography>
               </Box>
               <Chip label={`${totalQty} items`} size="small"
                 sx={{ bgcolor: HOVER, color: INK2, fontSize: 11, fontWeight: 600, border: `1px solid ${BORDER}` }} />
@@ -1753,14 +1852,14 @@ function Home() {
               </Box>
             )}
 
-            <Divider sx={{ borderColor: BORDER, my: 1.25 }} />
+            <Divider sx={{ borderColor: BORDER, my: 1 }} />
             <Box sx={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              px: 2, py: 1.5, borderRadius: '10px',
+              px: 1.75, py: 1.1, borderRadius: '10px',
               bgcolor: `${PRIMARY}0c`, border: `1px solid ${PRIMARY}18`,
             }}>
-              <Typography sx={{ color: INK, fontSize: 16, fontWeight: 700 }}>Total</Typography>
-              <Typography sx={{ color: PRIMARY, fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>
+              <Typography sx={{ color: INK, fontSize: 15, fontWeight: 700 }}>Total</Typography>
+              <Typography sx={{ color: PRIMARY, fontSize: 20, fontWeight: 800, letterSpacing: '-0.02em' }}>
                 {fmtMoney(total)}
               </Typography>
             </Box>
@@ -1770,7 +1869,7 @@ function Home() {
           <Box sx={{ flexShrink: 0 }}>
             {!caja.abierta && (
               <Typography component={Link} to="/caja"
-                sx={{ display: 'block', color: ORANGE, fontSize: 12.5, fontWeight: 600, textAlign: 'center', mb: 1, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                sx={{ display: 'block', color: ORANGE, fontSize: 12, fontWeight: 600, textAlign: 'center', mb: 0.75, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
                 Abrí la caja antes de vender →
               </Typography>
             )}
@@ -1783,7 +1882,7 @@ function Home() {
                   disabled={cart.length === 0 || !caja.abierta || confirmarVentaDisabled}
                   onClick={ejecutarConfirmarVenta}
                   sx={{
-                    py: 1.75, fontSize: 16, fontWeight: 700,
+                    py: 1.25, fontSize: 15, fontWeight: 700,
                     textTransform: 'none', borderRadius: '12px',
                     background: `linear-gradient(135deg, ${PRIMARY}, ${P_HOVER})`,
                     boxShadow: cart.length > 0 && caja.abierta ? `0 4px 24px ${PRIMARY}45` : 'none',
@@ -1879,16 +1978,53 @@ function Home() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Modal: Cargar cantidad por monto (ej. "$500 de nafta") ── */}
+      <Dialog open={!!montoCalcularId} onClose={() => setMontoCalcularId(null)}
+        PaperProps={{ sx: { ...modalPaperSx, minWidth: { xs: 'auto', sm: 380 } } }}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 1.5, sm: 3 }, py: { xs: 1.5, sm: 2 }, color: INK, fontWeight: 700, fontSize: 18 }}>
+          Cargar por monto
+          <IconButton onClick={() => setMontoCalcularId(null)} sx={{ color: MUTED, p: 0.5 }}><CloseIcon /></IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ px: { xs: 1.5, sm: 3 }, pb: { xs: 1.75, sm: 3 }, pt: 0 }}>
+          <Typography sx={{ color: MUTED, fontSize: 13.5, mb: 3 }}>
+            Ingresá cuánto quiere gastar el cliente en &quot;{itemCalculando?.nombre}&quot; y calculamos solo la cantidad en {itemCalculando ? abrevUnidad(itemCalculando.unidadMedida) : ''}.
+          </Typography>
+          <Box sx={{ mb: 3 }}>
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Monto</Typography>
+            <TextField fullWidth placeholder="0.00" value={montoCalcularValor} autoFocus
+              onChange={e => setMontoCalcularValor(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCalcularCantidadPorMonto()}
+              sx={inputSx}
+              InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: MUTED }}>$</InputAdornment> }} />
+            {itemCalculando && !isNaN(parseFloat(String(montoCalcularValor).replace(',', '.'))) && itemCalculando.precio > 0 && (
+              <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 1 }}>
+                = {round2(parseFloat(String(montoCalcularValor).replace(',', '.')) / itemCalculando.precio)} {abrevUnidad(itemCalculando.unidadMedida)}
+              </Typography>
+            )}
+          </Box>
+          <DialogActions sx={{ px: 0, pb: 0, justifyContent: 'flex-end', gap: 1.5 }}>
+            <Button onClick={() => setMontoCalcularId(null)} sx={{ ...outlinedBtn, border: `1px solid ${BORDER}`, px: 2.5, py: 1.25, borderRadius: '8px' }}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCalcularCantidadPorMonto} variant="contained"
+              disabled={!montoCalcularValor || Number(montoCalcularValor) <= 0}
+              sx={{ bgcolor: PRIMARY, textTransform: 'none', px: 3, py: 1.25, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { bgcolor: PRIMARY, opacity: 0.4, color: '#fff' } }}>
+              Calcular
+            </Button>
+          </DialogActions>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Modal: Cobrando con Point ── */}
       <Dialog open={pointEstado === 'esperando'} disableEscapeKeyDown onClose={() => {}} maxWidth="xs" fullWidth
         PaperProps={{ sx: { bgcolor: CARD, backgroundImage: 'none', border: `1px solid ${BORDER}`, borderRadius: '16px' } }}>
         <Box sx={{ px: { xs: 1.75, sm: 3 }, py: { xs: 2.25, sm: 4 }, textAlign: 'center' }}>
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2.5 }}>
             <Box sx={{
-              width: 64, height: 64, borderRadius: '50%', bgcolor: 'rgba(37,99,235,0.15)',
-              border: '1px solid rgba(37,99,235,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 64, height: 64, borderRadius: '50%', bgcolor: 'rgba(212,160,23,0.15)',
+              border: '1px solid rgba(212,160,23,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <PointOfSaleIcon sx={{ color: '#2563eb', fontSize: 30 }} />
+              <PointOfSaleIcon sx={{ color: GOLD, fontSize: 30 }} />
             </Box>
           </Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: 17, mb: 0.75 }}>
@@ -2021,15 +2157,17 @@ function Home() {
           <BarcodeScanner
             open={openScanner}
             onClose={() => setOpenScanner(false)}
-            onScan={(code) => {
-              const found = PRODUCTOS_POS.find(p => p.codigo === code || p.nombre.toLowerCase() === code.toLowerCase());
-              if (found) {
-                intentarAgregar(found);
-              } else {
-                playBeep('error');
-                toast('No se encontró ningún producto con ese código', 'error');
-                setSearch(code);
-              }
+            onScan={async (code) => {
+              try {
+                const porCodigo = await productosService.getAll({ codigo_exacto: code });
+                if (porCodigo.length) { intentarAgregar(aProductoPos(porCodigo[0])); return; }
+                const porNombre = await productosService.getAll({ search: code, per_page: 5 });
+                const exacto = porNombre.find(p => p.nombre.toLowerCase() === code.toLowerCase());
+                if (exacto) { intentarAgregar(aProductoPos(exacto)); return; }
+              } catch { /* cae al mensaje de "no encontrado" de abajo */ }
+              playBeep('error');
+              toast('No se encontró ningún producto con ese código', 'error');
+              setSearch(code);
             }}
           />
         </Suspense>

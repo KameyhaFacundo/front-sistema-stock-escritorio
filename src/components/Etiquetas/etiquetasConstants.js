@@ -1,22 +1,29 @@
 export const CAMPOS_DEFAULT = [
-  { key: 'codigo', visible: true,  x: 0.02, y: 0.02, w: 0.46, h: 0.16, fontSize: 8,  bold: false, align: 'left',   color: '#94a3b8', bgColor: null },
-  { key: 'talle',  visible: true,  x: 0.52, y: 0.02, w: 0.46, h: 0.16, fontSize: 10, bold: true,  align: 'center', color: '#4f46e5', bgColor: null },
-  { key: 'nombre', visible: true,  x: 0.02, y: 0.20, w: 0.96, h: 0.38, fontSize: 10, bold: true,  align: 'center', color: '#0f172a', bgColor: null },
-  { key: 'precio', visible: true,  x: 0.00, y: 0.60, w: 1.00, h: 0.38, fontSize: 18, bold: true,  align: 'center', color: '#0f172a', bgColor: null },
+  { key: 'codigo',  visible: true,  x: 0.02, y: 0.02, w: 0.46, h: 0.16, fontSize: 8,  bold: false, align: 'left',   color: '#94a3b8', bgColor: null },
+  { key: 'nombre',  visible: true,  x: 0.02, y: 0.20, w: 0.96, h: 0.38, fontSize: 10, bold: true,  align: 'center', color: '#0f172a', bgColor: null },
+  { key: 'precio',  visible: true,  x: 0.00, y: 0.60, w: 1.00, h: 0.38, fontSize: 18, bold: true,  align: 'center', color: '#0f172a', bgColor: null },
+  // visible: false a propósito — "Talle" solo aplica a indumentaria y no a
+  // todos los rubros (ver esIndumentaria en Productos.jsx); "Código de
+  // barras" es opcional. Así las plantillas ya guardadas por el cliente no
+  // cambian solas; se agregan a mano desde el editor (ver migrarCampos()).
+  { key: 'talle',   visible: false, x: 0.52, y: 0.02, w: 0.46, h: 0.16, fontSize: 10, bold: true,  align: 'center', color: '#4f46e5', bgColor: null },
+  { key: 'barcode', visible: false, x: 0.02, y: 0.02, w: 0.96, h: 0.16, fontSize: 8,  bold: false, align: 'center', color: '#0f172a', bgColor: null },
 ];
 
 export const CAMPO_LABELS = {
-  codigo: 'Código',
-  talle:  'Talle',
-  nombre: 'Nombre',
-  precio: 'Precio',
+  codigo:  'Código',
+  talle:   'Talle',
+  nombre:  'Nombre',
+  precio:  'Precio',
+  barcode: 'Código de barras',
 };
 
 export const CAMPO_EJEMPLO = {
-  codigo: '#PROD-001',
-  talle:  'L',
-  nombre: 'PRODUCTO EJEMPLO',
-  precio: '$999,00',
+  codigo:  '#PROD-001',
+  talle:   'L',
+  nombre:  'PRODUCTO EJEMPLO',
+  precio:  '$999,00',
+  barcode: '2012345678905',
 };
 
 export const migrarCampos = (campos) => {

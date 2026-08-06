@@ -11,9 +11,11 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { BORDER, INK, INK2, MUTED, P, HOVER, modalPaperSx } from '../../theme/tokens';
 import { leerExcelCompra } from '../../utils/excelImport';
 import { matchProducto, precioVentaSugerido } from './comprasMatching';
+import { productosService } from '../../services/productosService';
 import { toLocalDateStr } from '../../utils/format';
+import { esFraccionable, abrevUnidad } from '../../utils/unidadMedida';
 
-export default function ImportarExcelModal({ open, onClose, onConfirm, proveedores, productos }) {
+export default function ImportarExcelModal({ open, onClose, onConfirm, proveedores }) {
   const fileRef = useRef(null);
   const [idProveedor, setIdProveedor] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,9 +37,25 @@ export default function ImportarExcelModal({ open, onClose, onConfirm, proveedor
         setError('No se encontraron productos en el archivo. Revisá que tenga columnas de nombre, cantidad y precio.');
         return;
       }
+      // Match contra el catálogo completo del backend, no un array local — se
+      // pide de a lotes chicos en paralelo (un puñado de candidatos por
+      // nombre único) y se aplica encima la misma lógica difusa de siempre.
+      const nombresUnicos = [...new Set(filas.map(f => f.nombre))];
+      const candidatosPorNombre = new Map();
+      const LOTE = 8;
+      for (let i = 0; i < nombresUnicos.length; i += LOTE) {
+        const lote = nombresUnicos.slice(i, i + LOTE);
+        await Promise.all(lote.map(async (nombre) => {
+          try {
+            candidatosPorNombre.set(nombre, await productosService.getAll({ search: nombre, per_page: 5 }));
+          } catch {
+            candidatosPorNombre.set(nombre, []);
+          }
+        }));
+      }
       setLineas(filas.map(f => ({
         nombre_original: f.nombre,
-        producto_match:  matchProducto(f.nombre, productos),
+        producto_match:  matchProducto(f.nombre, candidatosPorNombre.get(f.nombre) || []),
         cantidad:        f.cantidad,
         precio_compra:   f.precio ?? '',
       })));
@@ -163,7 +181,9 @@ export default function ImportarExcelModal({ open, onClose, onConfirm, proveedor
                     </Box>
                   </Box>
                   <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                    <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600 }}>x{l.cantidad}</Typography>
+                    <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600 }}>
+                      x{l.cantidad}{l.producto_match && esFraccionable(l.producto_match.unidadMedida) ? ` ${abrevUnidad(l.producto_match.unidadMedida)}` : ''}
+                    </Typography>
                     <Typography sx={{ color: MUTED, fontSize: 12 }}>${Number(l.precio_compra || 0).toLocaleString('es-AR')}</Typography>
                   </Box>
                 </Box>

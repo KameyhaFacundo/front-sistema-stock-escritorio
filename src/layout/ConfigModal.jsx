@@ -15,11 +15,12 @@ import WarningAmberIcon     from '@mui/icons-material/WarningAmber';
 import ReceiptLongIcon      from '@mui/icons-material/ReceiptLong';
 import CheckCircleIcon      from '@mui/icons-material/CheckCircle';
 import PointOfSaleIcon      from '@mui/icons-material/PointOfSale';
-import StorefrontIcon       from '@mui/icons-material/Storefront';
-import AddIcon              from '@mui/icons-material/Add';
-import EditIcon             from '@mui/icons-material/Edit';
-import DeleteIcon           from '@mui/icons-material/Delete';
-import SaveIcon             from '@mui/icons-material/Save';
+// Solo usados por TabCatalogo/TabSucursales, comentadas junto con ellas más abajo.
+// import StorefrontIcon       from '@mui/icons-material/Storefront';
+// import AddIcon              from '@mui/icons-material/Add';
+// import EditIcon             from '@mui/icons-material/Edit';
+// import DeleteIcon           from '@mui/icons-material/Delete';
+// import SaveIcon             from '@mui/icons-material/Save';
 import CameraAltIcon        from '@mui/icons-material/CameraAlt';
 import UploadFileIcon       from '@mui/icons-material/UploadFile';
 import CreditCardIcon       from '@mui/icons-material/CreditCard';
@@ -27,6 +28,7 @@ import SwapHorizIcon        from '@mui/icons-material/SwapHoriz';
 import QrCode2Icon          from '@mui/icons-material/QrCode2';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import WhatsAppIcon         from '@mui/icons-material/WhatsApp';
+// import WifiIcon             from '@mui/icons-material/Wifi'; // Solo usado por "Conectar otra caja", comentado más abajo.
 import {
   CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, HOVER, INPUT, TABLE_HEADER, DROPDOWN,
   ERROR, ERROR_BG, ERROR_BORDER, SUCCESS, SUCCESS_BG, WARNING, ORANGE, modalPaperSx,
@@ -35,11 +37,13 @@ import QRCode from 'qrcode';
 import { COMPANY_NAME, POINT_HABILITADO } from '../config/brand';
 import { mercadopagoService } from '../services/mercadopagoService';
 import { empresaService } from '../services/empresaService';
+// import { sistemaService } from '../services/sistemaService'; // Solo usado por "Conectar otra caja", comentado más abajo.
 import { usuariosService } from '../services/usuariosService';
 import { getEstadoArca } from '../services/arcaService';
 import { twoFactorService } from '../services/twoFactorService';
-import { useSucursales, useCrearSucursal, useActualizarSucursal, useEliminarSucursal } from '../hooks/queries/useSucursalesQueries';
-import ConfirmDialog from '../components/shared/ConfirmDialog';
+// Solo usados por TabSucursales, comentada más abajo.
+// import { useSucursales, useCrearSucursal, useActualizarSucursal, useEliminarSucursal } from '../hooks/queries/useSucursalesQueries';
+// import ConfirmDialog from '../components/shared/ConfirmDialog';
 import { WA_NUMBER } from '../components/shared/SoporteWidget';
 import { useToast } from '../context/ToastContext';
 import { AuthContext } from '../auth/AuthContextBase';
@@ -57,6 +61,10 @@ const fieldSx = {
   },
   '& .MuiInputBase-input': { py: '11px', px: '14px' },
   '& .MuiInputBase-input::placeholder': { color: MUTED, opacity: 1 },
+  '& input[type=number]': { MozAppearance: 'textfield' },
+  '& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button': {
+    WebkitAppearance: 'none', margin: 0,
+  },
 };
 
 const selectSx = {
@@ -291,6 +299,11 @@ function TabNegocio() {
   const [saving, setSaving] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [subiendoLogo, setSubiendoLogo] = useState(false);
+  // Estado de "Conectar otra caja" — comentado junto con el botón/modal más
+  // abajo, descomentar los tres si se reactiva.
+  // const [lanModal, setLanModal] = useState(false);
+  // const [lanInfo, setLanInfo] = useState(null);
+  // const [lanLoading, setLanLoading] = useState(false);
   const logoUrl = user?.empresa?.logo_url || null;
   const fileRef = useRef(null);
 
@@ -309,6 +322,19 @@ function TabNegocio() {
       setDescargando(false);
     }
   };
+
+  // const abrirConectarCaja = async () => {
+  //   setLanModal(true);
+  //   setLanLoading(true);
+  //   try {
+  //     const info = await sistemaService.getLanIp();
+  //     setLanInfo(info);
+  //   } catch {
+  //     setLanInfo(null);
+  //   } finally {
+  //     setLanLoading(false);
+  //   }
+  // };
 
   const ultimoBackup = localStorage.getItem('ultimo_backup');
   const backupTooltip = ultimoBackup
@@ -640,6 +666,67 @@ function TabNegocio() {
         </Tooltip>
       </Box>
 
+      {/* "Conectar otra caja" comentado a pedido — no hace falta multi-caja por
+          ahora. Ojo: esto solo oculta el atajo de la UI, NO cierra el acceso
+          por red — el backend sigue escuchando en toda la red local
+          (--host=0.0.0.0 en escritorio-launcher/electron/backend.js) esté o
+          no este botón visible. Para reactivar el botón, descomentar este
+          bloque + el <Dialog> de abajo + el estado/handler (lanModal,
+          lanInfo, lanLoading, abrirConectarCaja) más arriba en este archivo.
+      <Box sx={{ ...card, p: 2.5, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>Conectar otra caja</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 0.25 }}>
+            Mostrá la dirección de red para abrir el sistema desde otra computadora, en el mismo local.
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          onClick={abrirConectarCaja}
+          startIcon={<WifiIcon sx={{ fontSize: 16 }} />}
+          sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '8px', whiteSpace: 'nowrap', '&:hover': { bgcolor: HOVER } }}
+        >
+          Conectar otra caja
+        </Button>
+      </Box>
+
+      <Dialog open={lanModal} onClose={() => setLanModal(false)} maxWidth="xs" fullWidth PaperProps={{ sx: modalPaperSx }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 3, pt: 3 }}>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 17 }}>Conectar otra caja</Typography>
+          <IconButton size="small" onClick={() => setLanModal(false)} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        <DialogContent sx={{ px: 3, pt: 1.5, pb: 3 }}>
+          {lanLoading ? (
+            <Typography sx={{ color: MUTED, fontSize: 13, textAlign: 'center', py: 3 }}>Buscando la dirección de red...</Typography>
+          ) : lanInfo?.ip ? (
+            <>
+              <Typography sx={{ color: INK2, fontSize: 13.5, mb: 2, lineHeight: 1.6 }}>
+                Para conectar otra caja a este sistema, abrí un navegador ahí (no hace falta instalar nada) y entrá a:
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <TextField fullWidth value={`http://${lanInfo.ip}:${lanInfo.puerto}`} InputProps={{ readOnly: true }} sx={fieldSx} />
+                <Tooltip title="Copiar">
+                  <IconButton onClick={() => { navigator.clipboard.writeText(`http://${lanInfo.ip}:${lanInfo.puerto}`); toast('Dirección copiada', 'success'); }}
+                    sx={{ bgcolor: INPUT, border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, '&:hover': { color: INK, bgcolor: BORDER } }}>
+                    <ContentCopyIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              <Typography sx={{ color: MUTED, fontSize: 12, mt: 2, lineHeight: 1.6 }}>
+                Las dos computadoras tienen que estar en la misma red (mismo WiFi o cable). Esta PC tiene que quedar prendida y con el sistema abierto — si lo cerrás, la otra caja se queda sin conexión.
+              </Typography>
+            </>
+          ) : (
+            <Typography sx={{ color: ERROR, fontSize: 13.5, textAlign: 'center', py: 2 }}>
+              No se pudo detectar la dirección de red. Revisá que esta PC esté conectada por WiFi o cable.
+            </Typography>
+          )}
+        </DialogContent>
+      </Dialog>
+      */}
+
       {/* Zona peligrosa */}
       <Box sx={{ border: `1px solid ${ERROR_BORDER}`, borderRadius: '12px', p: 2.5, bgcolor: ERROR_BG }}>
         <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -678,6 +765,10 @@ function TabNegocio() {
 }
 
 /* ─────────────────────────── TAB CATÁLOGO ─────────────────────────── */
+// Catálogo online desactivado por ahora a pedido — comentado, no borrado.
+// Para reactivarlo: descomentar esta función y su línea en el array `tabs`
+// más abajo (buscar "Catálogo online desactivado" en este mismo archivo).
+/*
 function TabCatalogo() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -792,8 +883,11 @@ function TabCatalogo() {
     </Box>
   );
 }
+*/
 
 /* ─────────────────────────── TAB SUCURSALES ─────────────────────────── */
+// Comentada junto con su entrada en `tabs` más arriba — ver esa nota.
+/*
 const emptySucursal = { nombre: '', direccion: '', telefono: '' };
 
 function TabSucursales() {
@@ -1007,6 +1101,7 @@ function TabSucursales() {
     </Box>
   );
 }
+*/
 
 /* ─────────────────────────── TAB COBROS ─────────────────────────── */
 function TabCobros() {
@@ -1561,14 +1656,22 @@ export function ConfigModal({ open, onClose }) {
   const tabs = useMemo(() => [
     { label: 'Mi perfil', render: () => <TabPerfil /> },
     ...(puedeConfigurar ? [{ label: 'Negocio', render: () => <TabNegocio /> }] : []),
-    ...(puedeConfigurar ? [{ label: 'Catálogo', render: () => <TabCatalogo /> }] : []),
-    ...(checkPermisos('list-sucursales') ? [{ label: 'Sucursales', render: () => <TabSucursales /> }] : []),
+    // Catálogo online desactivado por ahora a pedido — comentado, no borrado:
+    // descomentar esta línea alcanza para reactivarlo (TabCatalogo, CatalogoController
+    // y la ruta pública /catalogo/:slug siguen intactos, solo queda sin acceso desde acá).
+    // ...(puedeConfigurar ? [{ label: 'Catálogo', render: () => <TabCatalogo /> }] : []),
+    // Gestión de sucursales desactivada por ahora a pedido — comentado, no
+    // borrado. El negocio sigue operando con la única sucursal ("Casa
+    // Central") creada al instalar; el resto del sistema (stock, turnos,
+    // ventas) ya sabe trabajar con multi-sucursal si esto se reactiva —
+    // descomentar esta línea y la función TabSucursales más abajo alcanza.
+    // ...(checkPermisos('list-sucursales') ? [{ label: 'Sucursales', render: () => <TabSucursales /> }] : []),
     // Cobros es enteramente sobre conectar Mercado Pago para Point — con Point
     // deshabilitado (VITE_POINT_HABILITADO=false) no tiene sentido mostrarla.
     ...(puedeConfigurar && POINT_HABILITADO ? [{ label: 'Cobros', render: () => <TabCobros /> }] : []),
     ...(puedeConfigurar ? [{ label: 'Facturación', render: () => <TabFacturacion /> }] : []),
     { label: 'Seguridad', render: () => <TabSeguridad /> },
-  ], [checkPermisos, puedeConfigurar]);
+  ], [puedeConfigurar]);
 
   const tabActual = tabs[tab] ?? tabs[0];
 

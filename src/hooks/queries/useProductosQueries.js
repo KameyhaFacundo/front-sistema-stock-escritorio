@@ -13,12 +13,20 @@ export const PRODUCTOS_KEYS = {
   historialPrecios: (id) => [...PRODUCTOS_KEYS.all, 'historialPrecios', id],
 };
 
-export function useProductos(params = {}, options = {}) {
+// Tabla principal de Productos.jsx — a diferencia de productosService.getAll()
+// (usado por useBusquedaProductos para autocompletes/top-N), esto conserva
+// total/currentPage/lastPage para paginar de verdad contra el backend en vez
+// de cortar un array local capado a 500. Comparte el mismo namespace de
+// queryKey (PRODUCTOS_KEYS.list) que crearProducto/actualizarProducto/
+// eliminarProducto, así que sus invalidateQueries(PRODUCTOS_KEYS.lists())
+// también refrescan esto.
+export function useProductosPaginado(params = {}, options = {}) {
   return useQuery({
     queryKey: PRODUCTOS_KEYS.list(params),
-    queryFn: () => productosService.getAll(params),
+    queryFn: () => productosService.getAllPaginado(params),
     enabled: !DEMO_MODE && (options.enabled ?? true),
-    initialData: DEMO_MODE ? DEMO_PRODUCTOS : undefined,
+    initialData: DEMO_MODE ? { items: DEMO_PRODUCTOS, total: DEMO_PRODUCTOS.length, currentPage: 1, lastPage: 1 } : undefined,
+    placeholderData: (prev) => prev,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });

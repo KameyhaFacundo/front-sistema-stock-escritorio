@@ -11,6 +11,7 @@ export function mapCompra(c) {
     estado:       c.estado || 'pendiente',
     metodo_pago:  c.metodo_pago || 'efectivo',
     usuario:      c.usuario?.des_usu || null,
+    comprobanteUrl: c.comprobante_url || null,
     anuladoPor:      c.usuario_anulacion?.des_usu || null,
     fechaAnulacion:  c.fecha_anulacion || null,
     lineas:       (c.lineas || []).map(l => {
@@ -25,12 +26,16 @@ export function mapCompra(c) {
         id:            l.id_linea,
         id_producto:   l.id_producto,
         nombre:        l.producto?.producto || 'Producto',
-        cantidad:      l.cantidad,
+        unidadMedida:  l.producto?.unidad_medida || 'unidad',
+        // El backend castea 'cantidad' como decimal:2, que Laravel serializa
+        // como STRING ("1.00") — sin este parseFloat, sumar cantidades con "+"
+        // concatena texto en vez de sumar números (ver mismo fix en mapVenta()).
+        cantidad:      parseFloat(l.cantidad ?? 0),
         precio_compra: parseFloat(l.precio_compra ?? 0),
         precio_venta:  l.precio_venta != null ? parseFloat(l.precio_venta) : null,
-        subtotal:      parseFloat(l.precio_compra ?? 0) * l.cantidad,
+        subtotal:      parseFloat(l.precio_compra ?? 0) * parseFloat(l.cantidad ?? 0),
         cantidadDevuelta,
-        disponibleDevolver: Math.max(0, l.cantidad - cantidadDevuelta),
+        disponibleDevolver: Math.max(0, parseFloat(l.cantidad ?? 0) - cantidadDevuelta),
       };
     }),
   };
@@ -65,6 +70,20 @@ export const comprasService = {
 
   async delete(id) {
     await api.delete(`compras/${id}`);
+  },
+
+  async subirComprobante(id, file) {
+    const formData = new FormData();
+    formData.append('comprobante', file);
+    const res = await api.post(`compras/${id}/comprobante`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return mapCompra(res.data.data);
+  },
+
+  async eliminarComprobante(id) {
+    const res = await api.delete(`compras/${id}/comprobante`);
+    return mapCompra(res.data.data);
   },
 
   // Devolución parcial de mercadería al proveedor — una o varias líneas, cada

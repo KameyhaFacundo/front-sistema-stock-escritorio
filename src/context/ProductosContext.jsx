@@ -1,7 +1,6 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useProductos as useProductosQuery,
   useCrearProducto,
   useActualizarProducto,
   useEliminarProducto,
@@ -13,21 +12,24 @@ import { ProductosCtx } from './ProductosContextBase';
 import { productosService } from '../services/productosService';
 import { toLocalDateStr, nowHora } from '../utils/format';
 
+// Ya no carga el catálogo entero acá (era un array de hasta 500 productos en
+// memoria, ver el bug de "aparece 500 productos si hay 6000") — cada pantalla
+// pide lo que necesita contra el backend (useProductosPaginado, useBusquedaProductos).
+// Este contexto solo expone las mutaciones, que ninguna pantalla necesita
+// resolver por sí misma.
 export function ProductosProvider({ children, onError }) {
   const queryClient = useQueryClient();
-  const { data: productos = [], isLoading, isError, error, refetch } = useProductosQuery();
   const crearProductoMutation = useCrearProducto();
   const actualizarProductoMutation = useActualizarProducto();
   const eliminarProductoMutation = useEliminarProducto();
   const crearMovimientoMutation = useCrearMovimiento();
 
-  useEffect(() => {
-    if (isError) onError?.('No se pudieron cargar los productos', error);
-  }, [isError, error, onError]);
-
+  // Reemplaza al refetch() de una única query {} — invalida CUALQUIER
+  // combinación de params cacheada (la tabla de Productos, los buscadores del
+  // POS, etc.), no solo una lista fija que ya no se pide de entrada acá.
   const recargarProductos = useCallback(() => {
-    refetch();
-  }, [refetch]);
+    queryClient.invalidateQueries({ queryKey: PRODUCTOS_KEYS.lists() });
+  }, [queryClient]);
 
   const crearProducto = useCallback(async (data) => {
     if (DEMO_MODE) {
@@ -100,8 +102,6 @@ export function ProductosProvider({ children, onError }) {
 
   return (
     <ProductosCtx.Provider value={{
-      productos,
-      isLoading,
       recargarProductos,
       crearProducto,
       eliminarProducto,

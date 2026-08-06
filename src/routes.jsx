@@ -17,6 +17,7 @@ const ConfirmarEmail = lazyWithRetry(() => import("./pages/ConfirmarEmail/Confir
 const Dashboard    = lazyWithRetry(() => import("./pages/Dashboard/Dashboard"));
 const Home         = lazyWithRetry(() => import("./pages/Home/Home"));
 const Compras      = lazyWithRetry(() => import("./pages/Compras/Compras"));
+const Presupuestos = lazyWithRetry(() => import("./pages/Presupuestos/Presupuestos"));
 const Proveedores  = lazyWithRetry(() => import("./pages/Proveedores/Proveedores"));
 const Clientes     = lazyWithRetry(() => import("./pages/Clientes/Clientes"));
 const Productos    = lazyWithRetry(() => import("./pages/Productos/Productos"));
@@ -52,6 +53,7 @@ export const router = createBrowserRouter(
             <Route path="/movimientos"  element={<PrivateRoute allowedPermissions="verMovimientos"><Movimientos /></PrivateRoute>} />
             <Route path="/etiquetas"    element={<PrivateRoute allowedPermissions="verEtiquetas"><Etiquetas /></PrivateRoute>} />
             <Route path="/compras"      element={<PrivateRoute allowedPermissions="verCompras"><Compras /></PrivateRoute>} />
+            <Route path="/presupuestos" element={<PrivateRoute allowedPermissions="verPresupuestos"><Presupuestos /></PrivateRoute>} />
           </Route>
           <Route path="/proveedores"  element={<PrivateRoute allowedPermissions="verProveedores"><Proveedores /></PrivateRoute>} />
           <Route path="/clientes"     element={<PrivateRoute allowedPermissions="verClientes"><Clientes /></PrivateRoute>} />

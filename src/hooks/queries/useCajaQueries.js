@@ -53,7 +53,7 @@ export function useCerrarCaja() {
 export function useAgregarMovimientoCaja() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ tipo, monto, motivo }) => cajaService.agregarMovimiento(tipo, monto, motivo),
+    mutationFn: ({ tipo, monto, motivo, metodo }) => cajaService.agregarMovimiento(tipo, monto, motivo, metodo),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: CAJA_KEYS.turnoActivo() });
       queryClient.invalidateQueries({ queryKey: CAJA_KEYS.historial({}) });

@@ -9,15 +9,17 @@ import TrendingDownIcon   from '@mui/icons-material/TrendingDown';
 import SwapVertIcon       from '@mui/icons-material/SwapVert';
 import PeopleIcon         from '@mui/icons-material/People';
 import PersonIcon                from '@mui/icons-material/Person';
-import { useProductos } from '../../hooks/queries/useProductosQueries';
+import DescriptionIcon           from '@mui/icons-material/Description';
+import useBusquedaProductos from '../../hooks/useBusquedaProductos';
 import useHasPermiso from '../../hooks/useHasPermiso';
 import { fmtMoney } from '../../utils/format';
 import { BORDER, INK, MUTED, P, HOVER, MODAL, DROPDOWN, SUCCESS, ERROR } from '../../theme/tokens';
 
 const PAGES = [
-  { label: 'Dashboard',         icon: DashboardIcon,    path: '/dashboard',    group: 'Páginas', permiso: 'verDashboard' },
+  { label: 'Reportes',          icon: DashboardIcon,    path: '/dashboard',    group: 'Páginas', permiso: 'verDashboard' },
   { label: 'Punto de Venta',    icon: StorefrontIcon,   path: '/pos',          group: 'Páginas', permiso: 'verPOS' },
   { label: 'Compras',           icon: TrendingDownIcon, path: '/compras',      group: 'Páginas', permiso: 'verCompras' },
+  { label: 'Presupuestos',      icon: DescriptionIcon,  path: '/presupuestos', group: 'Páginas', permiso: 'verPresupuestos' },
   { label: 'Productos',         icon: InventoryIcon,    path: '/productos',    group: 'Páginas', permiso: 'verProductos' },
   { label: 'Movimientos',       icon: SwapVertIcon,     path: '/movimientos',  group: 'Páginas', permiso: 'verMovimientos' },
   { label: 'Clientes',          icon: PeopleIcon,       path: '/clientes',     group: 'Páginas', permiso: 'verClientes' },
@@ -28,8 +30,8 @@ const PAGES = [
 const CommandPalette = memo(function CommandPalette({ open, onClose }) {
   const navigate = useNavigate();
   const { checkPermisos } = useHasPermiso();
-  const { data: productos = [] } = useProductos({}, { enabled: open });
   const [query, setQuery] = useState('');
+  const { resultados: productos } = useBusquedaProductos(query, { perPage: 5, enabled: open });
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef(null);
 
@@ -39,14 +41,9 @@ const CommandPalette = memo(function CommandPalette({ open, onClose }) {
     if (open) { startTransition(() => { setQuery(''); setActiveIdx(0); }); setTimeout(() => inputRef.current?.focus(), 60); }
   }, [open]);
 
-  const prodResults = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    return productos
-      .filter(p => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q))
-      .slice(0, 5)
-      .map(p => ({ label: p.nombre, sub: p.codigo, right: fmtMoney(p.precioFinal), stock: p.stock, alerta: p.alerta, group: 'Productos', isProduct: true }));
-  }, [query, productos]);
+  const prodResults = useMemo(() => productos
+    .map(p => ({ label: p.nombre, sub: p.codigo, right: fmtMoney(p.precioFinal), stock: p.stock, alerta: p.alerta, group: 'Productos', isProduct: true })),
+  [productos]);
 
   const pageResults = useMemo(() => {
     const q = query.trim().toLowerCase();

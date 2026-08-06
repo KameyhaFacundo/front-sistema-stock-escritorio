@@ -78,14 +78,14 @@ describe('mapProducto', () => {
       producto: 'Combo',
       es_combo: true,
       componentes: [
-        { id_producto: 2, cantidad: 1, producto: { producto: 'Item A', codigo: 'A-1' } },
-        { id_producto: 3, cantidad: 2, producto: { producto: 'Item B', codigo: 'B-2' } },
+        { id_producto: 2, cantidad: 1, producto: { producto: 'Item A', codigo: 'A-1', costo: '100.00', precio: '150.00' } },
+        { id_producto: 3, cantidad: 2, producto: { producto: 'Item B', codigo: 'B-2', costo: '50.00', precio: '80.00' } },
       ],
     };
     const result = mapProducto(raw);
     expect(result.esCombo).toBe(true);
     expect(result.componentes).toHaveLength(2);
-    expect(result.componentes[0]).toEqual({ id_producto: 2, cantidad: 1, nombre: 'Item A', codigo: 'A-1' });
+    expect(result.componentes[0]).toEqual({ id_producto: 2, cantidad: 1, nombre: 'Item A', codigo: 'A-1', costo: 100, precioFinal: 150 });
   });
 
   it('mapea variantes de talle', () => {
@@ -103,7 +103,7 @@ describe('mapProducto', () => {
     expect(result.tieneVariantes).toBe(true);
     expect(result.variantes).toHaveLength(1);
     expect(result.variantes[0]).toEqual({
-      id: 10, codigo: 'REM-S', idTalle: 1, talle: 'S', ordenTalle: 1,
+      id: 10, codigo: 'REM-S', codigoBarras: '', idTalle: 1, talle: 'S', ordenTalle: 1,
       cantidadCurva: '20', stock: 5, alerta: 2,
     });
   });

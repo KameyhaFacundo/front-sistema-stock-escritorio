@@ -20,6 +20,7 @@ import DarkModeOutlinedIcon      from '@mui/icons-material/DarkModeOutlined';
 import NotificationsIcon         from '@mui/icons-material/Notifications';
 import StorefrontIcon            from '@mui/icons-material/Storefront';
 import ReceiptLongIcon           from '@mui/icons-material/ReceiptLong';
+import DescriptionIcon           from '@mui/icons-material/Description';
 import LocalPrintshopIcon       from '@mui/icons-material/LocalPrintshop';
 import ExpandMoreIcon            from '@mui/icons-material/ExpandMore';
 import CheckIcon                 from '@mui/icons-material/Check';
@@ -48,9 +49,10 @@ const buildMenuSections = () => [
   {
     title: 'GENERAL',
     items: [
-      { name: 'Dashboard',      icon: GridViewIcon,     path: '/dashboard', permiso: 'verDashboard' },
+      { name: 'Reportes',       icon: GridViewIcon,     path: '/dashboard', permiso: 'verDashboard' },
       { name: 'Punto de Venta', icon: PointOfSaleIcon,  path: '/pos',     permiso: 'verPOS' },
       { name: 'Compras',        icon: ShoppingCartIcon, path: '/compras', permiso: 'verCompras' },
+      { name: 'Presupuestos',   icon: DescriptionIcon,  path: '/presupuestos', permiso: 'verPresupuestos' },
       { name: 'Facturas',       icon: ReceiptLongIcon,  path: '/facturas', permiso: 'verVentas', planFeature: 'facturacion' },
     ],
   },
@@ -195,6 +197,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
     if (path === '/dashboard') load(import('../pages/Dashboard/Dashboard'));
     else if (path === '/pos') load(import('../pages/Home/Home'));
     else if (path === '/compras') load(import('../pages/Compras/Compras'));
+    else if (path === '/presupuestos') load(import('../pages/Presupuestos/Presupuestos'));
     else if (path === '/productos') load(import('../pages/Productos/Productos'));
     else if (path === '/movimientos') load(import('../pages/Movimientos/Movimientos'));
     else if (path === '/etiquetas') load(import('../pages/Etiquetas/Etiquetas'));

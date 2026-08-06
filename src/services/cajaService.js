@@ -25,6 +25,7 @@ export function mapTurno(t) {
     movimientosDetalle: (t.movimientos || []).map(m => ({
       id:    m.id,
       tipo:  m.tipo,
+      metodo: m.metodo || 'efectivo',
       monto: parseFloat(m.monto),
       motivo: m.motivo || '',
       hora:  m.hora,
@@ -55,8 +56,8 @@ export const cajaService = {
     return mapTurno(res.data.data);
   },
 
-  async agregarMovimiento(tipo, monto, motivo = '') {
-    const res = await api.post('caja/movimiento', { tipo, monto, motivo });
+  async agregarMovimiento(tipo, monto, motivo = '', metodo = 'efectivo') {
+    const res = await api.post('caja/movimiento', { tipo, monto, motivo, metodo });
     return mapTurno(res.data.data.turno);
   },
 };

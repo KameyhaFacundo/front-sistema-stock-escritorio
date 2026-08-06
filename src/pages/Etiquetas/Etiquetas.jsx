@@ -204,6 +204,7 @@ export default function Etiquetas() {
       id:      prod.id,
       nombre:  prod.nombre,
       codigo:  prod.codigo || `PROD-${prod.id}`,
+      codigoBarras: prod.codigoBarras || '',
       precio:  prod.precioFinal || 0,
       talle:   prod.talle || '',
     };

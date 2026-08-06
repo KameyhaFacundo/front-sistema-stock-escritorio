@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, useCallback, useContext } from 'react';
+import { useState, useMemo, useEffect, useCallback, useContext, useRef } from 'react';
 import {
   Box, Typography, TextField, Button, InputAdornment, IconButton,
-  Dialog, DialogContent, Chip, Collapse, Tooltip, Select, MenuItem, FormControl,
+  Dialog, DialogTitle, DialogContent, Chip, Collapse, Tooltip, Select, MenuItem, FormControl, LinearProgress,
 } from '@mui/material';
 import SearchIcon         from '@mui/icons-material/Search';
 import AddIcon            from '@mui/icons-material/Add';
@@ -21,6 +21,10 @@ import EventIcon          from '@mui/icons-material/Event';
 import NotesIcon          from '@mui/icons-material/Notes';
 import DeleteIcon         from '@mui/icons-material/Delete';
 import EditIcon           from '@mui/icons-material/Edit';
+import FileUploadIcon     from '@mui/icons-material/FileUpload';
+import FileDownloadIcon   from '@mui/icons-material/FileDownload';
+import WarningAmberIcon   from '@mui/icons-material/WarningAmber';
+import CheckCircleIcon    from '@mui/icons-material/CheckCircle';
 import jsPDF              from 'jspdf';
 import autoTable          from 'jspdf-autotable';
 
@@ -33,6 +37,8 @@ import { BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, HOVER, INPUT, TABLE_HEA
 import { useIsMobile } from '../../utils/responsive';
 import { useToast }    from '../../context/ToastContext';
 import { fmtMoney, fmtDate, toLocalDateStr } from '../../utils/format';
+import { exportarExcel } from '../../utils/excelExport';
+import { leerFilasArchivo, indiceEncabezado } from '../../utils/excelImport';
 import TablePagination from '../../components/shared/TablePagination';
 import ConfirmDialog   from '../../components/shared/ConfirmDialog';
 import PaymentModal    from '../../components/shared/PaymentModal';
@@ -41,6 +47,23 @@ import { registerTour } from '../../utils/tour';
 import { clientesService }          from '../../services/clientesService';
 import { deudasClientesService }    from '../../services/deudasClientesService';
 import DEUDA_COLORS from '../../constants/deudaStatus';
+
+/* ── Exportar / Importar Excel ── */
+function exportarCSVClientes(rows) {
+  exportarExcel({
+    filename: 'clientes.xlsx',
+    sheetName: 'Clientes',
+    subtitle: `Listado de clientes · ${new Date().toLocaleDateString('es-AR')}`,
+    columns: [
+      { header: 'Nombre',    width: 30 },
+      { header: 'CUIT',      width: 16 },
+      { header: 'Teléfono',  width: 16 },
+      { header: 'Email',     width: 26 },
+      { header: 'Dirección', width: 30 },
+    ],
+    rows: rows.map(c => [c.nombre, c.cuit || '', c.telefono || '', c.email || '', c.direccion || '']),
+  });
+}
 
 const labelSx = { color: MUTED, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.75 };
 
@@ -111,7 +134,7 @@ function generarPdfDeudas(cliente, deudas, empresa) {
     doc.setFontSize(10);
     doc.setFont(undefined, 'bold');
     doc.setTextColor(...PDF_INK);
-    let subtitulo = `Venta ${d.numero}   ·   ${fmtDate(d.fecha)}`;
+    let subtitulo = `Venta #${d.id}   ·   ${fmtDate(d.fecha)}`;
     if (d.vendedor) subtitulo += `   ·   Vendedor: ${d.vendedor}`;
     doc.text(subtitulo, 14, y);
 
@@ -177,7 +200,7 @@ function abrirWhatsApp(cliente, deudas) {
       .map(l => `   - ${l.nombre} x${l.cantidad}  $${l.precio.toLocaleString('es-AR')} c/u = *$${l.subtotal.toLocaleString('es-AR')}*`)
       .join('\n');
     return [
-      `*Venta ${d.numero}* - ${fmtDate(d.fecha)}`,
+      `*Venta #${d.id}* - ${fmtDate(d.fecha)}`,
       items || '   (sin detalle de productos)',
       `   Saldo pendiente: *$${d.saldo.toLocaleString('es-AR')}*`,
     ].join('\n');
@@ -539,9 +562,22 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
     }
   };
 
+  // El historial de "ya saldadas" se cachea en `historial` (no null) una vez
+  // que se abrió una vez — sin esto, pagar una deuda la sacaba de la lista de
+  // pendientes pero nunca aparecía como saldada hasta recargar la página
+  // entera (que remonta el componente y vuelve a pedir todo de cero).
+  const refrescarHistorial = async () => {
+    if (historial === null) return;
+    try {
+      const { deudas: todas } = await deudasClientesService.getAll({ id_cliente: cliente.id, incluir_pagadas: 1 });
+      setHistorial(todas.filter(d => d.estado_pago === 'pagado'));
+    } catch { /* deja el historial como estaba, no es crítico */ }
+  };
+
   const handleCobrado = (actualizada) => {
     if (actualizada.estado_pago === 'pagado') {
       setDeudas(prev => prev.filter(d => d.id !== actualizada.id));
+      refrescarHistorial();
     } else {
       setDeudas(prev => prev.map(d => d.id === actualizada.id ? actualizada : d));
     }
@@ -784,7 +820,7 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
                   <Box key={d.id} sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px', p: 2, mb: 1.5 }}>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 1 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', minWidth: 0 }}>
-                        <Typography sx={{ color: P, fontSize: 13, fontWeight: 700, fontFamily: 'monospace' }}>#{d.numero}</Typography>
+                        <Typography sx={{ color: P, fontSize: 13, fontWeight: 700, fontFamily: 'monospace' }}>#{d.id}</Typography>
                         <Typography sx={{ color: INK2, fontSize: 13 }}>{fmtDate(d.fecha)}</Typography>
                         <Chip label={ec.label} size="small" sx={{ height: 18, fontSize: 11, fontWeight: 600, bgcolor: ec.bg, color: ec.fg, border: `1px solid ${ec.border}` }} />
                       </Box>
@@ -939,7 +975,7 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
                   <Box key={d.id} sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px', p: 2, mb: 1.5, opacity: 0.85 }}>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 1 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', minWidth: 0 }}>
-                        <Typography sx={{ color: P, fontSize: 13, fontWeight: 700, fontFamily: 'monospace' }}>#{d.numero}</Typography>
+                        <Typography sx={{ color: P, fontSize: 13, fontWeight: 700, fontFamily: 'monospace' }}>#{d.id}</Typography>
                         <Typography sx={{ color: INK2, fontSize: 13 }}>{fmtDate(d.fecha)}</Typography>
                         <Chip label="Saldada" size="small" sx={{ height: 18, fontSize: 11, fontWeight: 600, bgcolor: SUCCESS_BG, color: SUCCESS_LIGHT, border: `1px solid ${SUCCESS_BORDER}` }} />
                       </Box>
@@ -1036,7 +1072,7 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
         deuda={deudaCobrar}
         type="cobro"
         title="Registrar Cobro"
-        subtitle={deudaCobrar ? `Venta ${deudaCobrar.numero} — ${fmtDate(deudaCobrar.fecha)}` : ''}
+        subtitle={deudaCobrar ? `Venta #${deudaCobrar.id} — ${fmtDate(deudaCobrar.fecha)}` : ''}
         summaryLabels={{ total: 'Total', paid: 'Cobrado', pending: 'Saldo' }}
         serviceFn={(id, payload) => deudasClientesService.cobrar(id, payload)}
         onSuccess={handleCobrado}
@@ -1047,7 +1083,7 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
         open={openSaldarTodo}
         onClose={() => setOpenSaldarTodo(false)}
         deudas={deudas}
-        onSaldado={() => { setDeudas([]); onCobrar(); }}
+        onSaldado={() => { setDeudas([]); refrescarHistorial(); onCobrar(); }}
       />
     </>
   );
@@ -1067,6 +1103,28 @@ export default function Clientes() {
   const [pagina,       setPagina]       = useState(1);
   const [pageSize,          setPageSize]          = useState(10);
   const [eliminarPendiente, setEliminarPendiente] = useState(null);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importando,    setImportando]    = useState(false);
+  const [importProgreso, setImportProgreso] = useState({ hecho: 0, total: 0 });
+  const [importPagina,    setImportPagina]    = useState(1);
+  const [importPageSize,  setImportPageSize]  = useState(20);
+  const csvRef = useRef(null);
+
+  const handleEditarFilaImport = (idx, campo, valor) => {
+    setImportPreview(prev => {
+      const next = [...prev];
+      const fila = { ...next[idx], [campo]: valor };
+      if (campo === 'cuit') {
+        fila.cuitDuplicado = valor ? clientes.some(c => c.cuit && c.cuit === valor) : false;
+      }
+      next[idx] = fila;
+      return next;
+    });
+  };
+
+  const handleQuitarFilaImport = (idx) => {
+    setImportPreview(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const cargarDeudas = useCallback(async () => {
     try { setDeudaResumen(await deudasClientesService.resumen()); } catch { setDeudaResumen([]); }
@@ -1127,6 +1185,74 @@ export default function Clientes() {
     }
   };
 
+  // Solo parsea el archivo y arma la vista previa — la creación real pasa
+  // recién en confirmarImportacion(), cuando el usuario revisó la lista y
+  // confirma (mismo criterio que la importación de Productos/Proveedores).
+  const handleImportarCSV = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    let lines;
+    try {
+      lines = await leerFilasArchivo(file);
+    } catch {
+      toast('No se pudo leer el archivo. Asegurate de que sea un .csv o .xlsx válido.', 'error');
+      return;
+    }
+    if (lines.length < 2) { toast('El archivo está vacío o no tiene datos', 'warning'); return; }
+    const inicio = indiceEncabezado(lines);
+    const header = lines[inicio].map(c => String(c || '').replace(/^"|"$/g, '').toLowerCase().trim());
+    const findCol = (...terms) => header.findIndex(c => terms.some(t => c.includes(t)));
+    const colNombre = findCol('nombre', 'persona', 'razon', 'razón') !== -1 ? findCol('nombre', 'persona', 'razon', 'razón') : 0;
+    const colCuit     = findCol('cuit');
+    const colTelefono = findCol('telefono', 'teléfono', 'tel');
+    const colEmail    = findCol('email', 'correo', 'mail');
+    const colDireccion = findCol('direccion', 'dirección');
+
+    const filas = [];
+    for (let i = inicio + 1; i < lines.length; i++) {
+      const cols = lines[i];
+      const nombre = cols[colNombre];
+      if (!nombre) continue;
+      const cuit = colCuit >= 0 ? (cols[colCuit] || '') : '';
+      filas.push({
+        nombre,
+        cuit,
+        telefono:  colTelefono >= 0 ? (cols[colTelefono] || '') : '',
+        email:     colEmail >= 0 ? (cols[colEmail] || '') : '',
+        direccion: colDireccion >= 0 ? (cols[colDireccion] || '') : '',
+        cuitDuplicado: cuit ? clientes.some(c => c.cuit && c.cuit === cuit) : false,
+      });
+    }
+    if (!filas.length) { toast('No se encontraron clientes válidos en el archivo', 'warning'); return; }
+    setImportPagina(1);
+    setImportPreview(filas);
+  };
+
+  const confirmarImportacion = async () => {
+    if (!importPreview) return;
+    setImportando(true);
+    setImportProgreso({ hecho: 0, total: importPreview.length });
+    let ok = 0, fallas = 0;
+    for (const f of importPreview) {
+      try {
+        const nuevo = await clientesService.create({
+          persona: f.nombre,
+          cuit: f.cuit || undefined,
+          telefono: f.telefono || undefined,
+          email: f.email || undefined,
+          direccion: f.direccion || undefined,
+        });
+        setClientes(cs => [...cs, nuevo]);
+        ok++;
+      } catch { fallas++; }
+      setImportProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
+    }
+    setImportando(false);
+    setImportPreview(null);
+    toast(`${ok} cliente${ok !== 1 ? 's' : ''} importado${ok !== 1 ? 's' : ''}${fallas ? ` · ${fallas} fallaron` : ''}`, ok > 0 ? 'success' : 'error');
+  };
+
   return (
     <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
 
@@ -1142,6 +1268,20 @@ export default function Clientes() {
               <Typography sx={{ color: ERROR, fontWeight: 800, fontSize: 18 }}>{fmtMoney(totalDeuda)}</Typography>
             </Box>
           )}
+          <Tooltip title="Importar Excel o CSV">
+            <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />}
+              onClick={() => csvRef.current?.click()}
+              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar</Box>
+            </Button>
+          </Tooltip>
+          <Tooltip title="Exportar Excel">
+            <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
+              onClick={() => exportarCSVClientes(filtered)}
+              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
+            </Button>
+          </Tooltip>
           <Tooltip title="Nuevo Cliente">
             <Button data-tour="cli-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
               sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
@@ -1151,6 +1291,8 @@ export default function Clientes() {
           <AyudaButton />
         </Box>
       </Box>
+
+      <Box component="input" ref={csvRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleImportarCSV} sx={{ display: 'none' }} />
 
       <TextField data-tour="cli-buscar" fullWidth placeholder="Buscar por nombre, CUIT o email..."
         value={search} onChange={e => { setSearch(e.target.value); setPagina(1); }}
@@ -1236,6 +1378,130 @@ export default function Clientes() {
         title="¿Eliminar cliente?"
         message="Se eliminarán también sus deudas registradas. Esta acción no se puede deshacer."
       />
+
+      {importPreview && (() => {
+        const importCols = [
+          { key: 'nombre',    header: 'Nombre',    width: '1.4fr' },
+          { key: 'cuit',      header: 'CUIT',      width: '1fr' },
+          { key: 'telefono',  header: 'Teléfono',  width: '1fr' },
+          { key: 'email',     header: 'Email',     width: '1.2fr' },
+          { key: 'direccion', header: 'Dirección', width: '1.2fr' },
+          { key: '_quitar',   header: '',          width: '36px' },
+        ];
+        const gridTemplate = importCols.map(c => c.width).join(' ');
+        const totalPages = Math.max(1, Math.ceil(importPreview.length / importPageSize));
+        const pagina = Math.min(importPagina, totalPages);
+        const inicioPag = (pagina - 1) * importPageSize;
+        const paginadas = importPreview.slice(inicioPag, inicioPag + importPageSize).map((f, i) => ({ ...f, _idx: inicioPag + i }));
+        const celdaSx = { '& .MuiInputBase-root': { fontSize: 12.5 }, '& .MuiInputBase-input': { py: '6px', px: '8px' } };
+
+        return (
+        <Dialog open onClose={() => !importando && setImportPreview(null)} maxWidth="lg" fullWidth
+          PaperProps={{ sx: { ...modalPaperSx, height: '88vh' } }}>
+          <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 700, fontSize: 17, color: INK }}>Confirmar importación</Typography>
+              <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 0.25 }}>
+                {importPreview.length} cliente{importPreview.length !== 1 ? 's' : ''} encontrado{importPreview.length !== 1 ? 's' : ''} en el archivo — revisá y corregí lo que haga falta antes de importar
+              </Typography>
+            </Box>
+            <IconButton size="small" onClick={() => setImportPreview(null)} disabled={importando} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent sx={{ pt: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: gridTemplate, minWidth: 640 }}>
+                <Box role="row" sx={{ display: 'contents' }}>
+                  {importCols.map(c => (
+                    <Box key={c.key} sx={{
+                      position: 'sticky', top: 0, zIndex: 1, bgcolor: TABLE_HEADER, borderBottom: `1px solid ${BORDER}`,
+                      px: 1, py: 1, display: 'flex', alignItems: 'center',
+                    }}>
+                      <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{c.header}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+                {paginadas.map((f) => {
+                  const rowBg = f.cuitDuplicado ? '#f59e0b12' : 'transparent';
+                  return (
+                    <Box key={f._idx} role="row" sx={{ display: 'contents' }}>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75, display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                        {f.cuitDuplicado
+                          ? <Tooltip title="Ya existe un cliente con ese CUIT"><WarningAmberIcon sx={{ color: '#f59e0b', fontSize: 14, flexShrink: 0 }} /></Tooltip>
+                          : <CheckCircleIcon sx={{ color: '#10b981', fontSize: 14, flexShrink: 0 }} />
+                        }
+                        <TextField fullWidth variant="standard" value={f.nombre} onChange={e => handleEditarFilaImport(f._idx, 'nombre', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" value={f.cuit} placeholder="Sin CUIT"
+                          onChange={e => handleEditarFilaImport(f._idx, 'cuit', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" value={f.telefono}
+                          onChange={e => handleEditarFilaImport(f._idx, 'telefono', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" value={f.email}
+                          onChange={e => handleEditarFilaImport(f._idx, 'email', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" value={f.direccion}
+                          onChange={e => handleEditarFilaImport(f._idx, 'direccion', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 0.5, py: 0.75, display: 'flex', justifyContent: 'center' }}>
+                        <Tooltip title="Quitar de la importación">
+                          <IconButton size="small" onClick={() => handleQuitarFilaImport(f._idx)} sx={{ color: MUTED, '&:hover': { color: '#ef4444' } }}>
+                            <CloseIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
+
+            {totalPages > 1 && (
+              <TablePagination pagina={pagina} totalPages={totalPages} pageSize={importPageSize} totalItems={importPreview.length} label="clientes"
+                onPageChange={setImportPagina} onPageSizeChange={(s) => { setImportPageSize(s); setImportPagina(1); }} />
+            )}
+
+            {importando ? (
+              <Box sx={{ mt: 2, flexShrink: 0 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+                  <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600 }}>Importando clientes…</Typography>
+                  <Typography sx={{ color: P, fontSize: 12.5, fontWeight: 700 }}>{importProgreso.hecho} / {importProgreso.total}</Typography>
+                </Box>
+                <LinearProgress variant="determinate"
+                  value={importProgreso.total ? (importProgreso.hecho / importProgreso.total) * 100 : 0}
+                  sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: P, borderRadius: 4 } }} />
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', gap: 1.5, mt: 2, flexShrink: 0 }}>
+                <Button onClick={() => setImportPreview(null)} sx={{
+                  flex: 1, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600, borderRadius: '8px', py: 1.25,
+                  '&:hover': { bgcolor: HOVER },
+                }}>
+                  Cancelar
+                </Button>
+                <Button onClick={confirmarImportacion} disabled={!importPreview.length} variant="contained" sx={{
+                  flex: 1, bgcolor: P, textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.25,
+                  '&:hover': { bgcolor: P_HOVER },
+                }}>
+                  {`Importar ${importPreview.length} cliente${importPreview.length !== 1 ? 's' : ''}`}
+                </Button>
+              </Box>
+            )}
+          </DialogContent>
+        </Dialog>
+        );
+      })()}
     </Box>
   );
 }

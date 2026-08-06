@@ -22,13 +22,17 @@ export function mapVenta(v) {
         // línea, no hay Producto del que leerlo.
         nombre:    l.producto?.producto || l.nombre || 'Producto',
         categoria: l.producto?.categoria?.categoria || 'Sin categoría',
-        cantidad:  l.cantidad,
+        // El backend castea 'cantidad' como decimal:2, que Laravel serializa como
+        // STRING ("1.00") — sin este parseFloat, sumar cantidades con "+" en
+        // pantallas como el Dashboard concatena texto en vez de sumar números
+        // (ej. "1.00" + "1.00" = "01.001.00" en vez de 2).
+        cantidad:  parseFloat(l.cantidad ?? 0),
         unidadMedida: l.producto?.unidad_medida || 'unidad',
         precio:    parseFloat(l.precio_venta ?? 0),
         costo:     parseFloat(l.producto?.costo ?? 0),
-        subtotal:  parseFloat(l.precio_venta ?? 0) * l.cantidad,
+        subtotal:  parseFloat(l.precio_venta ?? 0) * parseFloat(l.cantidad ?? 0),
         cantidadDevuelta,
-        disponibleDevolver: Math.max(0, l.cantidad - cantidadDevuelta),
+        disponibleDevolver: Math.max(0, parseFloat(l.cantidad ?? 0) - cantidadDevuelta),
       };
     }),
     total:      parseFloat(v.monto_total ?? 0),

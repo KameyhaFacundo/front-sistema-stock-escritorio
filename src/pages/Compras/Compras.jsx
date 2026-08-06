@@ -11,9 +11,11 @@ import CloseIcon        from '@mui/icons-material/Close';
 import AutoAwesomeIcon  from '@mui/icons-material/AutoAwesome';
 import CheckroomIcon    from '@mui/icons-material/Checkroom';
 import CameraAltIcon    from '@mui/icons-material/CameraAlt';
+import CalculateIcon    from '@mui/icons-material/Calculate';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ReceiptLongIcon  from '@mui/icons-material/ReceiptLong';
+import OpenInNewIcon    from '@mui/icons-material/OpenInNew';
 import BlockIcon        from '@mui/icons-material/Block';
 import VisibilityIcon   from '@mui/icons-material/Visibility';
 import EditIcon         from '@mui/icons-material/Edit';
@@ -32,6 +34,8 @@ import { useToast }   from '../../context/ToastContext';
 import { useAuth }    from '../../auth/AuthContextBase';
 import useHasPermiso  from '../../hooks/useHasPermiso';
 import { useProductos } from '../../context/ProductosContextBase';
+import { productosService } from '../../services/productosService';
+import useBusquedaProductos from '../../hooks/useBusquedaProductos';
 import { fmtMoney, fmtDate, toLocalDateStr } from '../../utils/format';
 import { exportarExcel } from '../../utils/excelExport';
 import { PRIMARY_COLOR, COMPANY_NAME } from '../../config/brand';
@@ -40,9 +44,10 @@ import autoTable from 'jspdf-autotable';
 import DataTable      from '../../components/shared/DataTable';
 import TablePagination from '../../components/shared/TablePagination';
 import AyudaButton     from '../../components/shared/AyudaButton';
+import CampoPrecio     from '../../components/shared/CampoPrecio';
 import { registerTour } from '../../utils/tour';
 import { useIsMobile } from '../../utils/responsive';
-import { esFraccionable, abrevUnidad } from '../../utils/unidadMedida';
+import { esFraccionable, abrevUnidad, UNIDAD_LABEL } from '../../utils/unidadMedida';
 import { comprasService }    from '../../services/comprasService';
 import { proveedoresService } from '../../services/proveedoresService';
 import { categoriasService } from '../../services/categoriasService';
@@ -69,36 +74,149 @@ function FieldLabel({ children, required }) {
   );
 }
 
-function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, productos, initialData, editId, crearProducto }) {
+// Visor del ticket adjunto en un modal in-app — antes era un <a target="_blank">
+// que en el empaquetado de escritorio abre el navegador del sistema en vez de
+// mostrarlo (setWindowOpenHandler de Electron externaliza cualquier http(s)://).
+function ModalVerComprobante({ open, onClose, url }) {
+  if (!url) return null;
+  const esPdf = /\.pdf(\?|$)/i.test(url);
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: modalPaperSx }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.5, py: 2, borderBottom: `1px solid ${BORDER}` }}>
+        <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>Ticket del proveedor</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Tooltip title="Abrir en el navegador">
+            <IconButton size="small" component="a" href={url} target="_blank" rel="noopener noreferrer"
+              sx={{ color: MUTED, '&:hover': { color: P } }}>
+              <OpenInNewIcon sx={{ fontSize: 17 }} />
+            </IconButton>
+          </Tooltip>
+          <IconButton size="small" onClick={onClose} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      </Box>
+      <Box sx={{ bgcolor: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        {esPdf
+          ? <Box component="iframe" src={url} sx={{ width: '100%', height: '75vh', border: 'none' }} />
+          : <Box component="img" src={url} alt="Ticket del proveedor" sx={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain' }} />
+        }
+      </Box>
+    </Dialog>
+  );
+}
+
+// Autocomplete de una línea de compra — busca contra el backend (no un array
+// local con todo el catálogo cargado en memoria) y expande productos con
+// variantes en una opción por talle, igual que hacía productosComprables
+// antes. El "__crear__" pseudo-resultado deja crear un producto nuevo desde
+// acá mismo cuando no existe todavía en el catálogo.
+function AutocompleteLineaProducto({ productoData, error, sx, autoFocus, onSeleccionar, onCrear, onEnterKeyDown, registrarInputRef }) {
+  const [query, setQuery] = useState(productoData?.nombre || '');
+  const { resultados } = useBusquedaProductos(query, { perPage: 20 });
+
+  const disponibles = useMemo(() => resultados
+    .filter(p => !p.esCombo)
+    .flatMap(p => p.tieneVariantes
+      ? p.variantes.map(v => ({ ...p, id: v.id, nombre: `${p.nombre} — Talle ${v.talle}`, codigo: v.codigo, codigoBarras: v.codigoBarras, talle: v.talle, tieneVariantes: false }))
+      : [p]),
+  [resultados]);
+
+  return (
+    <Autocomplete
+      options={disponibles}
+      value={productoData ?? null}
+      getOptionLabel={(opt) => opt.nombre || ''}
+      isOptionEqualToValue={(opt, val) => opt.id === val?.id}
+      inputValue={query}
+      onInputChange={(_, v) => setQuery(v)}
+      filterOptions={(options, { inputValue }) => {
+        const q = inputValue.trim().toLowerCase();
+        if (!q) return options;
+        const f = [...options];
+        if (!options.find(o => o.nombre.toLowerCase() === q)) f.push({ id: '__crear__', nombre: inputValue, _crear: true });
+        return f;
+      }}
+      onChange={(_, val) => {
+        if (!val) { onSeleccionar(null); setQuery(''); return; }
+        if (val._crear) { onCrear(val.nombre); return; }
+        onSeleccionar(val);
+        setQuery(val.nombre);
+      }}
+      renderOption={(props, opt) => <li {...props} key={props.key}>{opt._crear ? <Typography sx={{ color: P, fontWeight: 600, fontSize: 13 }}>+ Crear {opt.nombre}</Typography> : <Box><Typography sx={{ fontSize: 13, color: INK }}>{opt.nombre}</Typography>{opt.codigo && <Typography sx={{ fontSize: 11, color: MUTED }}>{opt.codigo}</Typography>}</Box>}</li>}
+      renderInput={(params) => (
+        <TextField {...params} autoFocus={autoFocus}
+          inputRef={registrarInputRef ? (el => { params.inputRef?.(el); registrarInputRef(el); }) : params.inputRef}
+          onKeyDown={onEnterKeyDown ? (e => onEnterKeyDown(e, query)) : params.inputProps?.onKeyDown}
+          placeholder="Buscar producto..." error={error}
+          sx={{ ...fieldSx, '& .MuiInputBase-root': { bgcolor: 'transparent', '& .MuiInputBase-input': { py: '7px', px: '10px', fontSize: 13, color: INK, '&::placeholder': { color: MUTED, opacity: 0.6 } } }, ...sx }} />
+      )}
+      slotProps={{ paper: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, '& .MuiAutocomplete-option': { color: INK, '&:hover, &[aria-selected=true]': { bgcolor: HOVER } } } } }}
+      noOptionsText={<Typography sx={{ color: MUTED, fontSize: 12 }}>Sin resultados</Typography>}
+      sx={{ width: '100%' }}
+    />
+  );
+}
+
+function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, initialData, editId, crearProducto }) {
   const toast = useToast();
   const isMobile = useIsMobile();
   const { tieneIA } = usePlan();
+  const { user } = useAuth();
+  // "Comprar por curva" es específico de indumentaria (compra por talles) —
+  // antes se mostraba/ocultaba mirando si ALGÚN producto del array local
+  // tenía variantes; con el catálogo completo ya no cargado en memoria, el
+  // rubro de la empresa es la señal correcta (el modal igual maneja el caso
+  // de cero productos con talles, mostrando su propio estado vacío).
+  const esIndumentaria = user?.empresa?.tipo === 'indument';
   const empty = { id_proveedor: '', lineas: [{ id_producto: '', cantidad: 1, precio_compra: '', precio_venta: '', margen: 10, fecha_vencimiento: '' }], fecha: toLocalDateStr(), estado: 'pendiente', metodo_pago: 'efectivo' };
   const [form,         setForm]         = useState(empty);
   const [errors,       setErrors]       = useState({});
   const [saving,       setSaving]       = useState(false);
   const [categorias,   setCategorias]   = useState([]);
   const [nuevoProd,       setNuevoProd]       = useState({ active: false, idx: null, nombre: '' });
+  // Ticket del proveedor — si ya existe la compra (edición) se sube al toque;
+  // si es alta nueva, se guarda el archivo acá y se sube recién después de
+  // crear la compra (todavía no hay id contra el cual subirlo).
+  const [comprobanteUrl,       setComprobanteUrl]       = useState(null);
+  const [comprobanteFile,      setComprobanteFile]      = useState(null);
+  const [subiendoComprobante,  setSubiendoComprobante]  = useState(false);
+  const [verTicketOpen,   setVerTicketOpen]   = useState(false);
   const [sugiriendoIdx,   setSugiriendoIdx]   = useState(null);
   const [scannerLineaIdx, setScannerLineaIdx] = useState(null);
   const [modalCurva,      setModalCurva]      = useState(false);
+  // "Cargar por monto total" — para productos fraccionables (kg/metro/litro)
+  // comprados en bulto: tipeás lo que pagaste en total y la cantidad de la
+  // línea, y calcula el costo por unidad solo (evita la división a mano).
+  const [calcularLineaIdx, setCalcularLineaIdx] = useState(null);
+  const [calcularTotal,    setCalcularTotal]    = useState('');
   const cantRefs = useRef({});
   const autoRefs = useRef({});
-  // Un combo no tiene stock propio (se calcula de sus componentes) — comprarle
-  // stock directo a uno quedaría cargado pero invisible para siempre. Mismo
-  // criterio que ComboComponentesEditor al armar un combo. Un producto CON
-  // variantes tampoco es comprable directo (rechazado por el backend) — en
-  // su lugar se listan sus variantes (talles) como opciones propias, cada una
-  // con el id real de esa variante, para poder cargarle stock puntual.
-  const productosComprables = useMemo(() => productos
-    .filter(p => !p.esCombo)
-    .flatMap(p => p.tieneVariantes
-      ? p.variantes.map(v => ({ ...p, id: v.id, nombre: `${p.nombre} — Talle ${v.talle}`, codigo: v.codigo, talle: v.talle, tieneVariantes: false }))
-      : [p]),
-  [productos]);
   // Solo ferretería puede tener productos en kg/metro/litro — para el resto
   // unidadMedida siempre es 'unidad' y esto no cambia el mínimo de 1 de hoy.
-  const unidadDeLinea = (l) => productosComprables.find(p => p.id === l.id_producto)?.unidadMedida || 'unidad';
+  // Cada línea guarda el producto completo elegido (productoData) en vez de
+  // resolverlo por id contra un array local — el catálogo entero ya no vive
+  // en memoria, así que el id solo no alcanza para saber su unidad/nombre.
+  const unidadDeLinea = (l) => l.productoData?.unidadMedida || 'unidad';
+
+  const setPrecioCompraLinea = (idx, valor) => {
+    setForm(f => {
+      const ls = [...f.lineas];
+      const p = Number(ls[idx].margen) || 0;
+      ls[idx] = { ...ls[idx], precio_compra: valor, precio_venta: valor ? String(Math.round(Number(valor) * (1 + p / 100) * 100) / 100) : '' };
+      return { ...f, lineas: ls };
+    });
+  };
+
+  const handleConfirmarCalculo = () => {
+    const idx = calcularLineaIdx;
+    const total = parseFloat(calcularTotal.replace(',', '.'));
+    const cantidad = Number(form.lineas[idx]?.cantidad) || 0;
+    if (idx == null || !total || !cantidad) { setCalcularLineaIdx(null); return; }
+    setPrecioCompraLinea(idx, String(Math.round((total / cantidad) * 100) / 100));
+    setCalcularLineaIdx(null);
+    setCalcularTotal('');
+  };
 
   /* ── Proveedor modal ── */
   const [proveedoresLocales, setProveedoresLocales] = useState([]);
@@ -117,28 +235,76 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
   // Pre-llena el formulario cuando vienen datos del escaner IA o edición
   useEffect(() => {
     if (initialData && open) {
-      setForm({
-        ...empty,
-        ...initialData,
-        lineas: initialData.lineas?.length
-          ? initialData.lineas.map(l => {
-              const costo = Number(l.precio_compra) || 0;
-              const venta = Number(l.precio_venta)  || 0;
-              const margen = costo && venta ? Math.round(((venta / costo) - 1) * 1000) / 10 : 10;
-              return {
-                id_producto:       l.id_producto,
-                cantidad:          l.cantidad,
-                precio_compra:     l.precio_compra || '',
-                precio_venta:      l.precio_venta  || '',
-                fecha_vencimiento: l.fecha_vencimiento || '',
-                margen,
-              };
-            })
-          : empty.lineas,
-      });
+      const lineasBase = initialData.lineas?.length
+        ? initialData.lineas.map(l => {
+            const costo = Number(l.precio_compra) || 0;
+            const venta = Number(l.precio_venta)  || 0;
+            const margen = costo && venta ? Math.round(((venta / costo) - 1) * 1000) / 10 : 10;
+            return {
+              id_producto:       l.id_producto,
+              productoData:      null,
+              cantidad:          l.cantidad,
+              precio_compra:     l.precio_compra || '',
+              precio_venta:      l.precio_venta  || '',
+              fecha_vencimiento: l.fecha_vencimiento || '',
+              margen,
+            };
+          })
+        : empty.lineas;
+      setForm({ ...empty, ...initialData, lineas: lineasBase });
+      setComprobanteUrl(initialData.comprobanteUrl || null);
+      setComprobanteFile(null);
+
+      // Hidrata cada línea con el producto completo (nombre/costo/precio/
+      // unidad) — initialData solo trae el id_producto (EscanearModal e
+      // ImportarExcelModal no cargan el objeto completo, y una compra en
+      // edición tampoco trae costo/precio de referencia para el Autocomplete).
+      const idsUnicos = [...new Set(lineasBase.map(l => l.id_producto).filter(Boolean))];
+      if (idsUnicos.length) {
+        Promise.all(idsUnicos.map(id => productosService.getById(id).catch(() => null))).then(resueltos => {
+          const porId = new Map(resueltos.filter(Boolean).map(p => [p.id, p]));
+          setForm(f => ({ ...f, lineas: f.lineas.map(l => (l.id_producto && porId.has(l.id_producto)) ? { ...l, productoData: porId.get(l.id_producto) } : l) }));
+        });
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData, open]);
+
+  const handleArchivoComprobante = async (file) => {
+    if (!file) return;
+    if (editId) {
+      setSubiendoComprobante(true);
+      try {
+        const updated = await comprasService.subirComprobante(editId, file);
+        setComprobanteUrl(updated.comprobanteUrl);
+        onUpdate?.(updated);
+        toast('Ticket adjuntado', 'success');
+      } catch {
+        toast('No se pudo subir el ticket', 'error');
+      } finally {
+        setSubiendoComprobante(false);
+      }
+    } else {
+      setComprobanteFile(file);
+    }
+  };
+
+  const handleEliminarComprobante = async () => {
+    if (editId && comprobanteUrl) {
+      setSubiendoComprobante(true);
+      try {
+        const updated = await comprasService.eliminarComprobante(editId);
+        setComprobanteUrl(null);
+        onUpdate?.(updated);
+      } catch {
+        toast('No se pudo quitar el ticket', 'error');
+      } finally {
+        setSubiendoComprobante(false);
+      }
+    } else {
+      setComprobanteFile(null);
+    }
+  };
 
   const setField = (k) => (e) => {
     setForm(f => ({ ...f, [k]: e.target?.value ?? e }));
@@ -201,12 +367,21 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
         onUpdate?.(updated);
         toast('Compra actualizada correctamente', 'success');
       } else {
-        const nueva = await comprasService.create(payload);
+        let nueva = await comprasService.create(payload);
+        if (comprobanteFile) {
+          try {
+            nueva = await comprasService.subirComprobante(nueva.id, comprobanteFile);
+          } catch {
+            toast('Compra creada, pero no se pudo subir el ticket', 'error');
+          }
+        }
         onCreate?.(nueva);
         toast('Compra registrada correctamente', 'success');
       }
       setForm(empty);
       setErrors({});
+      setComprobanteUrl(null);
+      setComprobanteFile(null);
       onClose();
     } catch (e) {
       toast(e.response?.data?.message || 'Error al procesar la compra', 'error');
@@ -216,7 +391,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
   };
 
   const resetNuevoProd = () => { setNuevoProd({ active: false, idx: null, nombre: '' }); };
-  const handleClose = () => { setForm(empty); setErrors({}); resetNuevoProd(); onClose(); };
+  const handleClose = () => { setForm(empty); setErrors({}); resetNuevoProd(); setComprobanteUrl(null); setComprobanteFile(null); onClose(); };
 
   // Agrega una línea por cada talle elegido en "Comprar por curva" — aprovecha
   // la última línea si está vacía en vez de dejarla suelta, mismo criterio
@@ -347,6 +522,37 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
           </Box>
         </Box>
 
+        {/* Ticket del proveedor — opcional, se puede subir ahora o más tarde
+            desde el detalle de la compra si todavía no lo tenés a mano. */}
+        <Box sx={{ mb: 2.5 }}>
+          <FieldLabel>Ticket del proveedor (opcional)</FieldLabel>
+          {comprobanteUrl || comprobanteFile ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${BORDER}`, borderRadius: '10px', px: 1.5, py: 1, bgcolor: CARD }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                <ReceiptLongIcon sx={{ fontSize: 18, color: P, flexShrink: 0 }} />
+                {comprobanteUrl ? (
+                  <Typography onClick={() => setVerTicketOpen(true)}
+                    sx={{ color: P, fontSize: 13, fontWeight: 600, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
+                    Ver ticket adjunto
+                  </Typography>
+                ) : (
+                  <Typography sx={{ color: INK2, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{comprobanteFile.name}</Typography>
+                )}
+              </Box>
+              <IconButton size="small" onClick={handleEliminarComprobante} disabled={subiendoComprobante}
+                sx={{ color: MUTED, flexShrink: 0, '&:hover': { color: ERROR, bgcolor: ERROR_BG } }}>
+                <CloseIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
+          ) : (
+            <Button component="label" fullWidth disabled={subiendoComprobante}
+              sx={{ py: 1.25, border: `1.5px dashed ${BORDER}`, borderRadius: '10px', color: INK2, textTransform: 'none', fontWeight: 600, fontSize: 13, '&:hover': { bgcolor: HOVER, borderColor: P } }}>
+              {subiendoComprobante ? 'Subiendo...' : 'Adjuntar foto o PDF del ticket'}
+              <input type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf" onChange={e => handleArchivoComprobante(e.target.files?.[0])} />
+            </Button>
+          )}
+        </Box>
+
         {/* Líneas de compra */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -362,7 +568,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
               sx={{ color: MUTED, textTransform: 'none', fontWeight: 600, fontSize: 12, borderRadius: '7px', minWidth: 0, px: 1.25, '&:hover': { color: ERROR, bgcolor: ERROR_BG } }}>
               Vaciar
             </Button>
-            {productos.some(p => p.tieneVariantes) && (
+            {esIndumentaria && (
               <Button data-tour="compras-modal-curva" size="small" startIcon={<CheckroomIcon sx={{ fontSize: 15 }} />} onClick={() => setModalCurva(true)}
                 sx={{ color: P, textTransform: 'none', fontWeight: 600, fontSize: 12, borderRadius: '7px', minWidth: 0, px: 1.25, '&:hover': { bgcolor: `${P}12` } }}>
                 Comprar por curva
@@ -398,18 +604,16 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
                   }}>
                     <Typography sx={{ color: P, fontSize: 10.5, fontWeight: 700 }}>{idx + 1}</Typography>
                   </Box>
-                  <Autocomplete
-                    options={productosComprables}
-                    value={productosComprables.find(p => p.id === l.id_producto) ?? null}
-                    getOptionLabel={(opt) => opt.nombre || ''}
-                    isOptionEqualToValue={(opt, val) => opt.id === val?.id}
-                    filterOptions={(options, { inputValue }) => { const q = inputValue.trim().toLowerCase(); const f = q ? options.filter(o => o.nombre.toLowerCase().includes(q) || (o.codigo || '').toLowerCase().includes(q)) : options; if (q && !options.find(o => o.nombre.toLowerCase() === q.toLowerCase())) f.push({ id: '__crear__', nombre: inputValue, _crear: true }); return f; }}
-                    onChange={(_, val) => { if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); return; } if (val._crear) { setNuevoProd({ active: true, idx, nombre: val.nombre }); } else { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; }); setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; }); } }}
-                    renderOption={(props, opt) => <li {...props} key={props.key}>{opt._crear ? <Typography sx={{ color: P, fontWeight: 600, fontSize: 13 }}>+ Crear {opt.nombre}</Typography> : <Box><Typography sx={{ fontSize: 13, color: INK }}>{opt.nombre}</Typography>{opt.codigo && <Typography sx={{ fontSize: 11, color: MUTED }}>{opt.codigo}</Typography>}</Box>}</li>}
-                    renderInput={(params) => <TextField {...params} placeholder="Buscar producto..." error={!!errors[`linea_${idx}_prod`]} sx={{ ...fieldSx, '& .MuiInputBase-root': { bgcolor: 'transparent', '& .MuiInputBase-input': { py: '7px', px: '10px', fontSize: 13, color: INK, '&::placeholder': { color: MUTED, opacity: 0.6 } } } }} />}
-                    slotProps={{ paper: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, '& .MuiAutocomplete-option': { color: INK, '&:hover, &[aria-selected=true]': { bgcolor: HOVER } } } } }}
-                    noOptionsText={<Typography sx={{ color: MUTED, fontSize: 12 }}>Sin resultados</Typography>}
+                  <AutocompleteLineaProducto
+                    productoData={l.productoData}
+                    error={!!errors[`linea_${idx}_prod`]}
                     sx={{ flex: 1, minWidth: 0 }}
+                    onSeleccionar={(val) => {
+                      if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); return; }
+                      setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
+                      setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
+                    }}
+                    onCrear={(nombre) => setNuevoProd({ active: true, idx, nombre })}
                   />
                   <Tooltip title="Escanear"><IconButton size="small" onClick={() => setScannerLineaIdx(idx)} sx={{ color: MUTED, flexShrink: 0, '&:hover': { color: P }, p: '4px' }}><CameraAltIcon sx={{ fontSize: 16 }} /></IconButton></Tooltip>
                   <Tooltip title="Quitar"><IconButton size="small" onClick={() => removeLinea(idx)} disabled={form.lineas.length === 1} sx={{ color: MUTED, flexShrink: 0, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px', p: '4px' }}><CloseIcon sx={{ fontSize: 16 }} /></IconButton></Tooltip>
@@ -426,8 +630,18 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
                       sx={{ ...numberFieldSx, width: '100%' }} />
                   </Box>
                   <Box>
-                    <FieldLabel>Costo</FieldLabel>
-                    <TextField fullWidth type="number" placeholder="0" value={l.precio_compra} onChange={e => { const c = e.target.value; setForm(f => { const ls = [...f.lineas]; const p = Number(ls[idx].margen) || 0; ls[idx] = { ...ls[idx], precio_compra: c, precio_venta: c ? String(Math.round(Number(c) * (1 + p / 100) * 100) / 100) : '' }; return { ...f, lineas: ls }; }); }} error={!!errors[`linea_${idx}_precio`]} sx={{ ...numberFieldSx, width: '100%' }} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <FieldLabel>Costo</FieldLabel>
+                      {esFraccionable(unidadDeLinea(l)) && (
+                        <Tooltip title="Cargar por monto total pagado">
+                          <IconButton size="small" onClick={() => { setCalcularLineaIdx(idx); setCalcularTotal(''); }}
+                            sx={{ color: MUTED, p: '2px', mb: '2px', '&:hover': { color: P } }}>
+                            <CalculateIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                    <CampoPrecio fullWidth placeholder="0" value={l.precio_compra} onChange={e => setPrecioCompraLinea(idx, e.target.value)} error={!!errors[`linea_${idx}_precio`]} sx={{ ...numberFieldSx, width: '100%' }} />
                   </Box>
                   <Box>
                     <FieldLabel>Margen %</FieldLabel>
@@ -436,11 +650,13 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
                   <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <FieldLabel>Venta</FieldLabel>
-                      <Tooltip title={tieneIA ? 'Sugerir precio de venta con IA' : 'Disponible en el plan IA'}>
-                        <span>
-                          <IconButton size="small" disabled={sugiriendoIdx === idx || !tieneIA} onClick={async () => { const p = productosComprables.find(pp => pp.id === l.id_producto); const n = p?.nombre || ''; const c = Number(l.precio_compra) || 0; if (!c || !n) return; setSugiriendoIdx(idx); try { const s = await iaService.sugerirPrecio(n, c); if (s) setForm(f => { const ls = [...f.lineas]; const bc = Number(ls[idx].precio_compra); ls[idx] = { ...ls[idx], precio_venta: String(s), margen: bc ? String(Math.round(((s / bc) - 1) * 1000) / 10) : '10' }; return { ...f, lineas: ls }; }); } catch { /* noop */ } finally { setSugiriendoIdx(null); } }} sx={{ color: P, p: '2px', mb: 0.5, '&:hover': { bgcolor: `${P}14` }, borderRadius: '6px' }}><AutoAwesomeIcon sx={{ fontSize: 13 }} /></IconButton>
-                        </span>
-                      </Tooltip>
+                      {tieneIA && (
+                        <Tooltip title="Sugerir precio de venta con IA">
+                          <span>
+                            <IconButton size="small" disabled={sugiriendoIdx === idx} onClick={async () => { const n = l.productoData?.nombre || ''; const c = Number(l.precio_compra) || 0; if (!c || !n) return; setSugiriendoIdx(idx); try { const s = await iaService.sugerirPrecio(n, c); if (s) setForm(f => { const ls = [...f.lineas]; const bc = Number(ls[idx].precio_compra); ls[idx] = { ...ls[idx], precio_venta: String(s), margen: bc ? String(Math.round(((s / bc) - 1) * 1000) / 10) : '10' }; return { ...f, lineas: ls }; }); } catch { /* noop */ } finally { setSugiriendoIdx(null); } }} sx={{ color: P, p: '2px', mb: 0.5, '&:hover': { bgcolor: `${P}14` }, borderRadius: '6px' }}><AutoAwesomeIcon sx={{ fontSize: 13 }} /></IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
                     </Box>
                     <TextField fullWidth type="number" placeholder="0" value={l.precio_venta} onChange={e => { const v = e.target.value; setForm(f => { const ls = [...f.lineas]; const c = Number(ls[idx].precio_compra); const m = c && v ? String(Math.round(((Number(v) / c) - 1) * 1000) / 10) : ls[idx].margen; ls[idx] = { ...ls[idx], precio_venta: v, margen: m }; return { ...f, lineas: ls }; }); }} sx={{ ...numberFieldSx, width: '100%' }} />
                   </Box>
@@ -505,18 +721,33 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
                     </TableCell>
 
                     <TableCell sx={{ ...rowTdSx, minWidth: 200 }}>
-                      <Autocomplete
-                        options={productosComprables}
-                        value={productosComprables.find(p => p.id === l.id_producto) ?? null}
-                        getOptionLabel={(opt) => opt.nombre || ''}
-                        isOptionEqualToValue={(opt, val) => opt.id === val?.id}
-                        filterOptions={(options, { inputValue }) => { const q = inputValue.trim().toLowerCase(); const f = q ? options.filter(o => o.nombre.toLowerCase().includes(q) || (o.codigo || '').toLowerCase().includes(q)) : options; if (q && !options.find(o => o.nombre.toLowerCase() === q.toLowerCase())) f.push({ id: '__crear__', nombre: inputValue, _crear: true }); return f; }}
-                        onChange={(_, val) => { if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); return; } if (val._crear) { setNuevoProd({ active: true, idx, nombre: val.nombre }); } else { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; }); setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; }); } }}
-                        renderOption={(props, opt) => <li {...props} key={props.key}>{opt._crear ? <Typography sx={{ color: P, fontWeight: 600, fontSize: 13 }}>+ Crear {opt.nombre}</Typography> : <Box><Typography sx={{ fontSize: 13, color: INK }}>{opt.nombre}</Typography>{opt.codigo && <Typography sx={{ fontSize: 11, color: MUTED }}>{opt.codigo}</Typography>}</Box>}</li>}
-                        renderInput={(params) => { const o = params.inputRef; params.inputProps.onKeyDown = e => { if (e.key !== 'Enter') return; if (l.id_producto) { e.preventDefault(); addLineaAndFocus(); return; } const val = e.target.value.trim(); if (!val) return; const exacto = productosComprables.find(p => p.nombre.toLowerCase() === val.toLowerCase()); if (exacto) { e.preventDefault(); setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: exacto.id, precio_compra: exacto.costo > 0 ? String(exacto.costo) : ls[idx].precio_compra, precio_venta: String(exacto.precioFinal ?? exacto.precio ?? '') }; return { ...f, lineas: ls }; }); setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; }); } }; return <TextField {...params} inputRef={el => { o?.(el); autoRefs.current[idx] = el; }} placeholder="Buscar producto..." error={!!errors[`linea_${idx}_prod`]} sx={{ ...fieldSx, '& .MuiInputBase-root': { bgcolor: 'transparent', '& .MuiInputBase-input': { py: '7px', px: '10px', fontSize: 13, color: INK, '&::placeholder': { color: MUTED, opacity: 0.6 } } } }} />; }}
-                        slotProps={{ paper: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, '& .MuiAutocomplete-option': { color: INK, '&:hover, &[aria-selected=true]': { bgcolor: HOVER } } } } }}
-                        noOptionsText={<Typography sx={{ color: MUTED, fontSize: 12 }}>Sin resultados</Typography>}
-                        sx={{ width: '100%' }}
+                      <AutocompleteLineaProducto
+                        productoData={l.productoData}
+                        error={!!errors[`linea_${idx}_prod`]}
+                        registrarInputRef={el => { autoRefs.current[idx] = el; }}
+                        onSeleccionar={(val) => {
+                          if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); return; }
+                          setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
+                          setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
+                        }}
+                        onCrear={(nombre) => setNuevoProd({ active: true, idx, nombre })}
+                        onEnterKeyDown={async (e, query) => {
+                          if (e.key !== 'Enter') return;
+                          if (l.id_producto) { e.preventDefault(); addLineaAndFocus(); return; }
+                          const val = query.trim();
+                          if (!val) return;
+                          // Match exacto contra el backend, no un array local — se
+                          // pide un puñado de candidatos por el texto tipeado.
+                          try {
+                            const candidatos = await productosService.getAll({ search: val, per_page: 5 });
+                            const exacto = candidatos.find(p => p.nombre.toLowerCase() === val.toLowerCase());
+                            if (exacto) {
+                              e.preventDefault();
+                              setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: exacto.id, productoData: exacto, precio_compra: exacto.costo > 0 ? String(exacto.costo) : ls[idx].precio_compra, precio_venta: String(exacto.precioFinal ?? exacto.precio ?? '') }; return { ...f, lineas: ls }; });
+                              setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
+                            }
+                          } catch { /* sin match — deja que el usuario elija del desplegable */ }
+                        }}
                       />
                     </TableCell>
 
@@ -530,11 +761,20 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
                         onKeyDown={e => { if (e.key === 'Enter' && l.id_producto) { e.preventDefault(); addLineaAndFocus(); } }}
                         onChange={e => setLinea(idx, 'cantidad', Math.max(1, Number(e.target.value) || 1))}
                         onWheel={e => e.target.blur()}
-                        sx={{ ...numberFieldSx, width: 76, '& .MuiInputBase-input': { ...numberFieldSx['& .MuiInputBase-input'], textAlign: 'center' } }} />
+                        InputProps={esFraccionable(unidadDeLinea(l)) ? { endAdornment: <InputAdornment position="end">{abrevUnidad(unidadDeLinea(l))}</InputAdornment> } : undefined}
+                        sx={{ ...numberFieldSx, width: esFraccionable(unidadDeLinea(l)) ? 96 : 76, '& .MuiInputBase-input': { ...numberFieldSx['& .MuiInputBase-input'], textAlign: 'center' } }} />
                     </TableCell>
 
                     <TableCell sx={rowTdSx} align="center">
-                      <TextField type="number" placeholder="0" value={l.precio_compra} onChange={e => { const c = e.target.value; setForm(f => { const ls = [...f.lineas]; const p = Number(ls[idx].margen) || 0; ls[idx] = { ...ls[idx], precio_compra: c, precio_venta: c ? String(Math.round(Number(c) * (1 + p / 100) * 100) / 100) : '' }; return { ...f, lineas: ls }; }); }} error={!!errors[`linea_${idx}_precio`]} sx={numberFieldSx} />
+                      <CampoPrecio placeholder="0" value={l.precio_compra} onChange={e => setPrecioCompraLinea(idx, e.target.value)} error={!!errors[`linea_${idx}_precio`]}
+                        InputProps={esFraccionable(unidadDeLinea(l)) ? { endAdornment: (
+                          <Tooltip title="Cargar por monto total pagado">
+                            <IconButton size="small" onClick={() => { setCalcularLineaIdx(idx); setCalcularTotal(''); }} sx={{ color: MUTED, p: '2px', '&:hover': { color: P } }}>
+                              <CalculateIcon sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Tooltip>
+                        ) } : undefined}
+                        sx={numberFieldSx} />
                     </TableCell>
 
                     <TableCell sx={rowTdSx} align="center">
@@ -542,11 +782,13 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
                     </TableCell>
 
                     <TableCell sx={rowTdSx} align="center">
-                      <Tooltip title={tieneIA ? 'Sugerir precio de venta con IA' : 'Disponible en el plan IA'}>
-                        <span>
-                          <IconButton size="small" disabled={sugiriendoIdx === idx || !tieneIA} onClick={async () => { const p = productosComprables.find(pp => pp.id === l.id_producto); const n = p?.nombre || ''; const c = Number(l.precio_compra) || 0; if (!c || !n) return; setSugiriendoIdx(idx); try { const s = await iaService.sugerirPrecio(n, c); if (s) setForm(f => { const ls = [...f.lineas]; const bc = Number(ls[idx].precio_compra); ls[idx] = { ...ls[idx], precio_venta: String(s), margen: bc ? String(Math.round(((s / bc) - 1) * 1000) / 10) : '10' }; return { ...f, lineas: ls }; }); } catch { /* noop */ } finally { setSugiriendoIdx(null); } }} sx={{ color: P, p: '4px', '&:hover': { bgcolor: `${P}14` }, borderRadius: '6px' }}><AutoAwesomeIcon sx={{ fontSize: 15 }} /></IconButton>
-                        </span>
-                      </Tooltip>
+                      {tieneIA && (
+                        <Tooltip title="Sugerir precio de venta con IA">
+                          <span>
+                            <IconButton size="small" disabled={sugiriendoIdx === idx} onClick={async () => { const n = l.productoData?.nombre || ''; const c = Number(l.precio_compra) || 0; if (!c || !n) return; setSugiriendoIdx(idx); try { const s = await iaService.sugerirPrecio(n, c); if (s) setForm(f => { const ls = [...f.lineas]; const bc = Number(ls[idx].precio_compra); ls[idx] = { ...ls[idx], precio_venta: String(s), margen: bc ? String(Math.round(((s / bc) - 1) * 1000) / 10) : '10' }; return { ...f, lineas: ls }; }); } catch { /* noop */ } finally { setSugiriendoIdx(null); } }} sx={{ color: P, p: '4px', '&:hover': { bgcolor: `${P}14` }, borderRadius: '6px' }}><AutoAwesomeIcon sx={{ fontSize: 15 }} /></IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
                     </TableCell>
 
                     <TableCell sx={rowTdSx} align="center">
@@ -625,19 +867,25 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
       <BarcodeScanner
         open={scannerLineaIdx !== null}
         onClose={() => setScannerLineaIdx(null)}
-        onScan={(code) => {
-          const prod = productosComprables.find(p =>
-            (p.codigo || '').toLowerCase() === code.toLowerCase() ||
-            p.nombre.toLowerCase() === code.toLowerCase()
-          );
-          if (prod) {
-            setForm(f => {
-              const lineas = [...f.lineas];
-              lineas[scannerLineaIdx] = { ...lineas[scannerLineaIdx], id_producto: prod.id, precio_venta: String(prod.precioFinal ?? '') };
-              return { ...f, lineas };
-            });
-            toast(`${prod.nombre} seleccionado`, 'success');
-          } else {
+        onScan={async (code) => {
+          const idx = scannerLineaIdx;
+          try {
+            let prod = (await productosService.getAll({ codigo_exacto: code }))[0];
+            if (!prod) {
+              const candidatos = await productosService.getAll({ search: code, per_page: 5 });
+              prod = candidatos.find(p => p.nombre.toLowerCase() === code.toLowerCase());
+            }
+            if (prod) {
+              setForm(f => {
+                const lineas = [...f.lineas];
+                lineas[idx] = { ...lineas[idx], id_producto: prod.id, productoData: prod, precio_venta: String(prod.precioFinal ?? '') };
+                return { ...f, lineas };
+              });
+              toast(`${prod.nombre} seleccionado`, 'success');
+            } else {
+              toast(`Sin producto con código: ${code}`, 'error');
+            }
+          } catch {
             toast(`Sin producto con código: ${code}`, 'error');
           }
           setScannerLineaIdx(null);
@@ -648,21 +896,74 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, prod
       <ModalCompraPorCurva
         open={modalCurva}
         onClose={() => setModalCurva(false)}
-        productos={productos}
         onAgregarLineas={agregarLineasDeCurva}
       />
+
+      <ModalVerComprobante open={verTicketOpen} onClose={() => setVerTicketOpen(false)} url={comprobanteUrl} />
+
+      {/* Cargar por monto total — para no tener que dividir a mano cuando
+          compraste un bulto (ej. 100m de manguera a $12.000, o una bolsa de
+          tornillos vendida por kg) y el ticket del proveedor solo te da el
+          total pagado, no el costo por unidad. */}
+      <Dialog open={calcularLineaIdx !== null} onClose={() => setCalcularLineaIdx(null)} maxWidth="xs" fullWidth
+        PaperProps={{ sx: modalPaperSx }}>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16, mb: 0.5 }}>Cargar por monto total</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 13, mb: 2 }}>
+            Ingresá lo que pagaste en total por esta línea — calculamos el costo por {calcularLineaIdx != null ? abrevUnidad(unidadDeLinea(form.lineas[calcularLineaIdx])) : 'unidad'} solo.
+          </Typography>
+          <TextField fullWidth autoFocus type="number" placeholder="0" value={calcularTotal}
+            onChange={e => setCalcularTotal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleConfirmarCalculo(); }}
+            InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: MUTED }}>$</InputAdornment> }}
+            sx={{ ...numberFieldSx, mb: 1 }} />
+          {calcularLineaIdx != null && parseFloat(calcularTotal) > 0 && Number(form.lineas[calcularLineaIdx]?.cantidad) > 0 && (
+            <Typography sx={{ color: P, fontSize: 13, fontWeight: 600, mb: 2 }}>
+              = {fmtMoney(Math.round((parseFloat(calcularTotal) / Number(form.lineas[calcularLineaIdx].cantidad)) * 100) / 100)} por {abrevUnidad(unidadDeLinea(form.lineas[calcularLineaIdx]))}
+            </Typography>
+          )}
+          <Box sx={{ display: 'flex', gap: 1.5, mt: 2 }}>
+            <Button fullWidth onClick={() => setCalcularLineaIdx(null)}
+              sx={{ color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: HOVER } }}>
+              Cancelar
+            </Button>
+            <Button fullWidth variant="contained" onClick={handleConfirmarCalculo}
+              sx={{ bgcolor: P, textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: P_HOVER } }}>
+              Calcular
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
 
 /* ── Modal: comprar por curva (proporción fija de talles por bulto) ── */
-function ModalCompraPorCurva({ open, onClose, productos, onAgregarLineas }) {
+function ModalCompraPorCurva({ open, onClose, onAgregarLineas }) {
   const toast = useToast();
   const [productoId, setProductoId] = useState('');
   const [numCurvas, setNumCurvas] = useState('1');
   const [cantidades, setCantidades] = useState({});
+  // El dropdown necesita ver TODOS los productos con talles, no un top-N de
+  // una búsqueda — mismo criterio que ModalActualizarPrecios: se pide sin
+  // paginar, en dos pasadas (la primera solo para saber el total).
+  const [productosConVariantes, setProductosConVariantes] = useState([]);
 
-  const productosConVariantes = useMemo(() => productos.filter(p => p.tieneVariantes), [productos]);
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const primera = await productosService.getAllPaginado({ tiene_variantes: true, estado: true, per_page: 1 });
+        const total = primera.total || 0;
+        if (total === 0) { setProductosConVariantes([]); return; }
+        const completo = await productosService.getAllPaginado({ tiene_variantes: true, estado: true, per_page: total });
+        setProductosConVariantes(completo.items);
+      } catch {
+        setProductosConVariantes([]);
+      }
+    })();
+  }, [open]);
+
   const producto = productosConVariantes.find(p => p.id === productoId) || null;
 
   useEffect(() => {
@@ -693,6 +994,7 @@ function ModalCompraPorCurva({ open, onClose, productos, onAgregarLineas }) {
       .filter(v => (Number(cantidades[v.id]) || 0) > 0)
       .map(v => ({
         id_producto: v.id,
+        productoData: { ...producto, id: v.id, nombre: `${producto.nombre} — Talle ${v.talle}`, codigo: v.codigo, talle: v.talle, tieneVariantes: false },
         cantidad: Number(cantidades[v.id]),
         precio_compra: producto.costo > 0 ? String(producto.costo) : '',
         precio_venta: String(producto.precioFinal ?? producto.precio ?? ''),
@@ -790,11 +1092,40 @@ function DetalleCompraItem({ label, value }) {
   );
 }
 
-function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevolucion }) {
+function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevolucion, onComprobanteActualizado }) {
+  const toast = useToast();
   const isMobile = useIsMobile();
   const [pagina, setPagina] = useState(1);
   const [pageSize, setPageSize] = useState(5);
+  const [subiendoComprobante, setSubiendoComprobante] = useState(false);
+  const [verTicketOpen, setVerTicketOpen] = useState(false);
   if (!compra) return null;
+
+  const handleArchivoComprobante = async (file) => {
+    if (!file) return;
+    setSubiendoComprobante(true);
+    try {
+      const updated = await comprasService.subirComprobante(compra.id, file);
+      onComprobanteActualizado?.(updated);
+      toast('Ticket adjuntado', 'success');
+    } catch {
+      toast('No se pudo subir el ticket', 'error');
+    } finally {
+      setSubiendoComprobante(false);
+    }
+  };
+
+  const handleEliminarComprobante = async () => {
+    setSubiendoComprobante(true);
+    try {
+      const updated = await comprasService.eliminarComprobante(compra.id);
+      onComprobanteActualizado?.(updated);
+    } catch {
+      toast('No se pudo quitar el ticket', 'error');
+    } finally {
+      setSubiendoComprobante(false);
+    }
+  };
   const ec = ESTADO_COLORS[compra.estado] || ESTADO_COLORS['pendiente'];
   const lineas = compra.lineas || [];
   const totalPages = Math.max(1, Math.ceil(lineas.length / pageSize));
@@ -838,6 +1169,26 @@ function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevol
           <DetalleCompraItem label="Total" value={
             <Typography sx={{ color: INK, fontSize: 16, fontWeight: 800 }}>{fmtMoney(compra.total)}</Typography>
           } />
+          <DetalleCompraItem label="Ticket del proveedor" value={
+            compra.comprobanteUrl ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography onClick={() => setVerTicketOpen(true)}
+                  sx={{ color: P, fontSize: 14, fontWeight: 600, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
+                  Ver ticket
+                </Typography>
+                <IconButton size="small" onClick={handleEliminarComprobante} disabled={subiendoComprobante}
+                  sx={{ color: MUTED, p: 0.25, '&:hover': { color: ERROR } }}>
+                  <CloseIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+              </Box>
+            ) : (
+              <Button component="label" size="small" disabled={subiendoComprobante}
+                sx={{ color: P, textTransform: 'none', fontWeight: 600, fontSize: 13, p: 0, minWidth: 0, '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}>
+                {subiendoComprobante ? 'Subiendo...' : 'Adjuntar ticket'}
+                <input type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf" onChange={e => handleArchivoComprobante(e.target.files?.[0])} />
+              </Button>
+            )
+          } />
           {compra.estado === 'cancelada' && compra.anuladoPor && (
             <DetalleCompraItem label="Anulado por" value={
               <Typography sx={{ color: ERROR, fontSize: 14, fontWeight: 600 }}>
@@ -863,7 +1214,7 @@ function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevol
                   <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700, flexShrink: 0, ml: 1 }}>{fmtMoney(l.subtotal)}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 0.5 }}>
-                  <Typography sx={{ color: MUTED, fontSize: 12 }}>Cantidad: <Box component="span" sx={{ color: INK2, fontWeight: 600 }}>{l.cantidad}</Box></Typography>
+                  <Typography sx={{ color: MUTED, fontSize: 12 }}>Cantidad: <Box component="span" sx={{ color: INK2, fontWeight: 600 }}>{l.cantidad}{esFraccionable(l.unidadMedida) ? ` ${abrevUnidad(l.unidadMedida)}` : ''}</Box></Typography>
                   <Typography sx={{ color: MUTED, fontSize: 12 }}>Costo: <Box component="span" sx={{ color: INK2, fontWeight: 600 }}>{fmtMoney(l.precio_compra)}</Box></Typography>
                   <Typography sx={{ color: MUTED, fontSize: 12 }}>Precio venta: <Box component="span" sx={{ color: INK2, fontWeight: 600 }}>{l.precio_venta != null ? fmtMoney(l.precio_venta) : '—'}</Box></Typography>
                 </Box>
@@ -884,7 +1235,7 @@ function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevol
             {paginadas.map((l, i) => (
               <Box key={i} sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', px: 2, py: 1.25, borderBottom: `1px solid ${BORDER}`, '&:last-child': { borderBottom: 'none' }, '&:hover': { bgcolor: HOVER } }}>
                 <Typography sx={{ color: INK, fontSize: 13 }} noWrap>{l.nombre}</Typography>
-                <Typography sx={{ color: INK2, fontSize: 13, textAlign: 'center' }}>{l.cantidad}</Typography>
+                <Typography sx={{ color: INK2, fontSize: 13, textAlign: 'center' }}>{l.cantidad}{esFraccionable(l.unidadMedida) ? ` ${abrevUnidad(l.unidadMedida)}` : ''}</Typography>
                 <Typography sx={{ color: INK2, fontSize: 13, textAlign: 'right' }}>{fmtMoney(l.precio_compra)}</Typography>
                 <Typography sx={{ color: INK2, fontSize: 13, textAlign: 'right' }}>{l.precio_venta != null ? fmtMoney(l.precio_venta) : '—'}</Typography>
                 <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600, textAlign: 'right' }}>{fmtMoney(l.subtotal)}</Typography>
@@ -904,6 +1255,7 @@ function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevol
           </Button>
         )}
       </DialogContent>
+      <ModalVerComprobante open={verTicketOpen} onClose={() => setVerTicketOpen(false)} url={compra.comprobanteUrl} />
     </Dialog>
   );
 }
@@ -975,7 +1327,7 @@ function ModalDevolucionCompra({ open, onClose, compra, onDevuelto }) {
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography sx={{ color: INK, fontSize: 13.5, fontWeight: 600 }} noWrap>{l.nombre}</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 11.5 }}>
-                      {fmtMoney(l.precio_compra)} c/u · disponible: {l.disponibleDevolver ?? l.cantidad} de {l.cantidad}
+                      {fmtMoney(l.precio_compra)} c/u · disponible: {l.disponibleDevolver ?? l.cantidad} de {l.cantidad}{esFraccionable(l.unidadMedida) ? ` ${abrevUnidad(l.unidadMedida)}` : ''}
                     </Typography>
                   </Box>
                   <TextField type="number" size="small" placeholder="0" value={cantidades[l.id] ?? ''}
@@ -1040,7 +1392,7 @@ export default function Compras() {
   const puedeFiltrarFechas = checkPermisos('verFiltrosFechas');
   const hoy = toLocalDateStr();
   const { tieneIA } = usePlan();
-  const { productos, recargarProductos, crearProducto } = useProductos();
+  const { recargarProductos, crearProducto } = useProductos();
   const [compras,    setCompras]    = useState([]);
   const [proveedores, setProveedores] = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -1197,11 +1549,12 @@ export default function Compras() {
       subtitle: `${c.fecha} · Total: ${fmtMoney(full.total)} · Estado: ${full.estado}`,
       columns: [
         { header: 'Producto', width: 32 },
-        { header: 'Cant.', width: 8, align: 'center' },
+        { header: 'Cant.',    width: 10, align: 'center' },
+        { header: 'Unidad',   width: 12 },
         { header: 'Costo unit.', width: 16, numFmt: '$#,##0.00', align: 'right' },
         { header: 'Subtotal', width: 16, numFmt: '$#,##0.00', align: 'right' },
       ],
-      rows: full.lineas.map(l => [l.nombre, l.cantidad, l.precio_compra, l.subtotal]),
+      rows: full.lineas.map(l => [l.nombre, l.cantidad, UNIDAD_LABEL[l.unidadMedida] || UNIDAD_LABEL.unidad, l.precio_compra, l.subtotal]),
     });
   };
 
@@ -1262,7 +1615,7 @@ export default function Compras() {
       ]],
       body: full.lineas.map(l => [
         l.nombre,
-        { content: String(l.cantidad),         styles: { halign: 'center' } },
+        { content: `${l.cantidad}${esFraccionable(l.unidadMedida) ? ` ${abrevUnidad(l.unidadMedida)}` : ''}`, styles: { halign: 'center' } },
         { content: fmtMoney(l.precio_compra),  styles: { halign: 'right' } },
         { content: fmtMoney(l.subtotal),       styles: { halign: 'right' } },
       ]),
@@ -1293,14 +1646,14 @@ export default function Compras() {
           <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{compras.length} compras registradas</Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Tooltip title={tieneIA ? 'Escanear factura' : 'Disponible en el plan IA'}>
-            <span>
-              <Button data-tour="compras-escanear" startIcon={<AutoAwesomeIcon sx={{ fontSize: 15 }} />} onClick={() => setOpenScan(true)} disabled={!tieneIA}
+          {tieneIA && (
+            <Tooltip title="Escanear factura">
+              <Button data-tour="compras-escanear" startIcon={<AutoAwesomeIcon sx={{ fontSize: 15 }} />} onClick={() => setOpenScan(true)}
                 sx={{ color: P, borderColor: `${P}50`, border: '1px solid', textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: `${P}10`, borderColor: P } }}>
                 <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Escanear factura</Box>
               </Button>
-            </span>
-          </Tooltip>
+            </Tooltip>
+          )}
           <Tooltip title="Importar desde Excel">
             <Button startIcon={<TableChartIcon sx={{ fontSize: 15 }} />} onClick={() => setOpenImportExcel(true)}
               sx={{ color: INK2, borderColor: BORDER, border: '1px solid', textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: HOVER, borderColor: 'var(--border-hover)' } }}>
@@ -1492,7 +1845,6 @@ export default function Compras() {
         onCreate={handleCrear}
         onUpdate={handleActualizar}
         proveedores={proveedores}
-        productos={productos}
         initialData={compraEditar ?? scanData}
         editId={compraEditar?.id}
         crearProducto={crearProducto}
@@ -1505,6 +1857,7 @@ export default function Compras() {
         compra={compraVer}
         puedeDevolver={puedeDevolver}
         onAbrirDevolucion={() => setModalDevolucion(true)}
+        onComprobanteActualizado={updated => { setCompraVer(updated); handleActualizar(updated); }}
       />
 
       <ModalDevolucionCompra
@@ -1522,7 +1875,6 @@ export default function Compras() {
         onClose={() => setOpenScan(false)}
         onConfirm={handleScanConfirm}
         proveedores={proveedores}
-        productos={productos}
       />
 
       <ImportarExcelModal
@@ -1530,7 +1882,6 @@ export default function Compras() {
         onClose={() => setOpenImportExcel(false)}
         onConfirm={handleScanConfirm}
         proveedores={proveedores}
-        productos={productos}
       />
 
       <ConfirmDialog

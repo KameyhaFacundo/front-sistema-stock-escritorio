@@ -7,6 +7,7 @@ export const DEMO_TOKEN = import.meta.env.VITE_DEMO_TOKEN || 'demo-mode-token'
 const DEMO_PERMISOS_CODIGOS = [
   'view-dashboard', 'create-ventas', 'list-productos', 'list-ventas',
   'list-compras', 'list-proveedores', 'list-clientes', 'list-usuarios',
+  'list-presupuestos', 'view-presupuestos', 'create-presupuestos', 'update-presupuestos', 'delete-presupuestos',
   'list-movimientos', 'list-caja', 'list-historial-caja', 'ver-montos-caja',
   'update-productos', 'update-usuarios',
   'create-compras', 'create-caja', 'create-movimientos',

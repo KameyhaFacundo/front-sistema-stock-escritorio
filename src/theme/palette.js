@@ -27,7 +27,13 @@ export const WARNING_BG = 'rgba(245,158,11,0.15)';
 export const INFO   = '#3b82f6';
 export const MONEY  = '#22c55e';
 export const PURPLE = '#8b5cf6';
-export const ORANGE = '#f97316';
+// Naranja y dorado tomados de rumica.com.ar (referencia de diseño a pedido)
+// — P ya es el terracota de esa misma paleta, así que estos quedan como
+// acentos secundarios para diferenciar elementos que antes usaban un
+// azul/celeste genérico sin relación con la marca (rol Gerente, ícono de
+// pago con Tarjeta, colores de categoría).
+export const ORANGE = '#E07B39';
+export const GOLD   = '#D4A017';
 
 // ── Payment method colours ──────────────────────────────────────────────────
 export const METHOD_COLORS = {

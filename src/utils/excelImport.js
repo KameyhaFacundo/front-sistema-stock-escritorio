@@ -6,6 +6,7 @@
 const ALIAS_NOMBRE    = ['nombre', 'producto', 'artículo', 'articulo', 'descripcion', 'descripción', 'detalle'];
 const ALIAS_CANTIDAD  = ['cantidad', 'cant', 'cant.', 'unidades', 'qty'];
 const ALIAS_PRECIO    = ['precio', 'costo', 'precio unitario', 'precio_unitario', 'valor', 'importe'];
+const ALIAS_CODIGO    = ['codigo', 'código', 'cod', 'sku'];
 
 function normalizar(v) {
   return String(v ?? '').trim().toLowerCase();
@@ -138,6 +139,61 @@ export async function leerExcelCompra(file) {
       nombre,
       cantidad: parseNumero(fila[iCantidad]) || 1,
       precio: parseNumero(fila[iPrecio]),
+    });
+  }
+  return lineas;
+}
+
+/**
+ * Detecta a qué columna corresponde nombre/código/cantidad — mismo criterio
+ * que detectarColumnas() pero para el formato que exporta Movimientos
+ * (Producto, Código, Cantidad), pensado para poder reimportarse tal cual.
+ */
+function detectarColumnasMovimiento(filaEncabezado) {
+  const celdas = filaEncabezado.map(normalizar);
+  const buscar = (alias) => celdas.findIndex(c => c && alias.some(a => c.includes(a)));
+
+  const iNombre   = buscar(ALIAS_NOMBRE);
+  const iCodigo   = buscar(ALIAS_CODIGO);
+  const iCantidad = buscar(ALIAS_CANTIDAD);
+
+  if (iNombre === -1 && iCodigo === -1 && iCantidad === -1) return null;
+  return {
+    nombre:   iNombre   !== -1 ? iNombre   : 0,
+    codigo:   iCodigo   !== -1 ? iCodigo   : 1,
+    cantidad: iCantidad !== -1 ? iCantidad : 2,
+  };
+}
+
+/**
+ * Lee el .xlsx/.csv que exporta "Movimientos" (Producto, Código, Cantidad) —
+ * pensado para transferir mercadería entre dos instalaciones separadas: se
+ * exporta acá, se importa en la otra. El código es la clave real de matching
+ * (se resuelve contra el catálogo en el llamador); el nombre es solo para
+ * mostrarlo en la vista previa si el código no se encuentra.
+ * @param {File} file
+ * @returns {Promise<Array<{nombre: string, codigo: string, cantidad: number}>>}
+ */
+export async function leerExcelMovimientos(file) {
+  const todasLasFilas = await leerFilasArchivo(file);
+  if (!todasLasFilas.length) return [];
+  const inicio = indiceEncabezado(todasLasFilas);
+  const filas = todasLasFilas.slice(inicio);
+
+  const cols = detectarColumnasMovimiento(filas[0]);
+  const desdeFila = cols ? 1 : 0;
+  const { nombre: iNombre, codigo: iCodigo, cantidad: iCantidad } = cols || { nombre: 0, codigo: 1, cantidad: 2 };
+
+  const lineas = [];
+  for (let i = desdeFila; i < filas.length; i++) {
+    const fila = filas[i];
+    const nombre = String(fila[iNombre] ?? '').trim();
+    const codigo = String(fila[iCodigo] ?? '').trim();
+    if (!nombre && !codigo) continue;
+    lineas.push({
+      nombre,
+      codigo,
+      cantidad: parseNumero(fila[iCantidad]) || 1,
     });
   }
   return lineas;

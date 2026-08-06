@@ -12,6 +12,7 @@ import QrCodeIcon        from '@mui/icons-material/QrCode';
 import EventIcon        from '@mui/icons-material/Event';
 import NotesIcon        from '@mui/icons-material/Notes';
 import AttachMoneyIcon  from '@mui/icons-material/AttachMoney';
+import CampoPrecio      from './CampoPrecio';
 import {
   BORDER, INK, INK2, MUTED, P,
   INPUT, HOVER, CARD,
@@ -40,6 +41,10 @@ const fieldSx = {
   },
   '& .MuiInputBase-input': { py: '13px', px: '16px' },
   '& .MuiInputBase-input::placeholder': { color: MUTED, opacity: 1 },
+  '& input[type=number]': { MozAppearance: 'textfield' },
+  '& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button': {
+    WebkitAppearance: 'none', margin: 0,
+  },
 };
 
 const PaymentModal = memo(function PaymentModal({
@@ -159,8 +164,8 @@ const PaymentModal = memo(function PaymentModal({
               </Button>
             )}
           </Box>
-          <TextField fullWidth type="number" placeholder={`0.00`}
-            value={form.monto} onChange={set('monto')} inputProps={{ min: 0.01, max: saldo }}
+          <CampoPrecio fullWidth placeholder="0"
+            value={form.monto} onChange={set('monto')}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">

@@ -9,6 +9,8 @@ const PERMISOS_MAP = {
   verMovimientos: 'list-movimientos',
   verVentas: 'list-ventas',
   verCompras: 'list-compras',
+  verPresupuestos: 'list-presupuestos',
+  gestionarPresupuestos: 'create-presupuestos',
   verProveedores: 'list-proveedores',
   verClientes: 'list-clientes',
   verUsuarios: 'list-usuarios',

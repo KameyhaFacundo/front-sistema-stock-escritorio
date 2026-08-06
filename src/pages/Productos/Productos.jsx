@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, Suspense, useRef } from 'react';
 import {
   Box, Typography, TextField, Button, InputAdornment, IconButton,
   Select, MenuItem, ListSubheader, FormControl, Switch, Dialog, DialogContent, DialogTitle,
-  Chip, Tooltip, Checkbox, Collapse, Autocomplete, CircularProgress,
+  Chip, Tooltip, Checkbox, Collapse, Autocomplete, LinearProgress,
 } from "@mui/material";
 import SearchIcon       from '@mui/icons-material/Search';
 import FilterListIcon   from '@mui/icons-material/FilterList';
@@ -31,6 +31,7 @@ import BlockIcon       from '@mui/icons-material/Block';
 import InventoryIcon   from '@mui/icons-material/Inventory';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon  from '@mui/icons-material/CheckCircle';
+import CalculateIcon    from '@mui/icons-material/Calculate';
 
 import { BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, INPUT, HOVER, TABLE_HEADER, DROPDOWN, fieldSx, selectSx, modalPaperSx,
          SUCCESS, SUCCESS_BG, ERROR, ERROR_BG, ERROR_DARK, WARNING } from '../../theme/tokens';
@@ -42,6 +43,7 @@ import { leerFilasArchivo, indiceEncabezado } from '../../utils/excelImport';
 import ViewListIcon   from '@mui/icons-material/ViewList';
 import GridViewIcon   from '@mui/icons-material/GridView';
 import TablePagination from '../../components/shared/TablePagination';
+import CampoPrecio from '../../components/shared/CampoPrecio';
 import lazyWithRetry from '../../utils/lazyWithRetry';
 const BarcodeScanner = lazyWithRetry(() => import('../../components/shared/BarcodeScanner'));
 import ColSortHeader from '../../components/shared/ColSortHeader';
@@ -51,6 +53,9 @@ import { productosService } from '../../services/productosService';
 import { gruposTallesService } from '../../services/gruposTallesService';
 import { tallesService } from '../../services/tallesService';
 import { useProductos } from '../../context/ProductosContextBase';
+import { useProductosPaginado } from '../../hooks/queries/useProductosQueries';
+import useBusquedaProductos from '../../hooks/useBusquedaProductos';
+import useDebouncedValue from '../../hooks/useDebouncedValue';
 import { useSucursales } from '../../hooks/queries/useSucursalesQueries';
 import useHasPermiso from '../../hooks/useHasPermiso';
 import usePlan from '../../hooks/usePlan';
@@ -60,10 +65,23 @@ import { registerTour } from '../../utils/tour';
 import { useIsMobile } from '../../utils/responsive';
 import iaService from '../../services/iaService';
 import { useAuth } from '../../auth/AuthContextBase';
-import { abrevUnidad } from '../../utils/unidadMedida';
+import { abrevUnidad, UNIDAD_LABEL, parseUnidad } from '../../utils/unidadMedida';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { COMPANY_NAME, PRIMARY_COLOR } from '../../config/brand';
+
+// Código interno para un producto sin código de fábrica — arranca con "20"
+// (rango que los sistemas de punto de venta reservan para códigos de uso
+// interno, así nunca choca con un código real de fabricante) + un dígito
+// verificador real, mismo algoritmo que un EAN-13 — queda un código de
+// barras válido de punta a punta, no un texto cualquiera con forma de
+// código (ver EtiquetaPreview.jsx, que lo imprime como código de barras).
+function generarCodigoInterno() {
+  const cuerpo = '20' + Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join('');
+  const suma = cuerpo.split('').reduce((acc, d, i) => acc + Number(d) * (i % 2 === 0 ? 1 : 3), 0);
+  const verificador = (10 - (suma % 10)) % 10;
+  return cuerpo + verificador;
+}
 
 function hexToRgbInventario(hex) {
   const clean = hex.replace('#', '');
@@ -124,7 +142,7 @@ function Label({ children, required }) {
 function ModalCategorias({ open, onClose, categorias, setCategorias }) {
   const toast = useToast();
   const [nombre,     setNombre]     = useState('');
-  const [color,      setColor]      = useState('#5c6ef8');
+  const [color,      setColor]      = useState(P);
   const [loading,    setLoading]    = useState(false);
   const [editandoId, setEditandoId] = useState(null);
   const [editNombre, setEditNombre] = useState('');
@@ -229,7 +247,7 @@ function ModalCategorias({ open, onClose, categorias, setCategorias }) {
       if (!nombre) continue;
       try {
         const nueva = await categoriasService.create(nombre);
-        setCategorias(prev => [...prev, { ...nueva, color: '#5c6ef8', productos: 0 }]);
+        setCategorias(prev => [...prev, { ...nueva, color: P, productos: 0 }]);
         ok++;
       } catch { /* skip duplicados */ }
     }
@@ -689,24 +707,27 @@ function ModalGruposTalles({ open, onClose, grupos, setGrupos }) {
 /* ──────────────────────────────────────────────
    EDITOR: Componentes de un combo/kit
 ────────────────────────────────────────────── */
-function ComboComponentesEditor({ productos, value, onChange, excludeId }) {
+function ComboComponentesEditor({ value, onChange, excludeId }) {
   const [seleccion, setSeleccion] = useState(null);
   const [cantidad,  setCantidad]  = useState('1');
+  const [queryTexto, setQueryTexto] = useState('');
+  const { resultados, buscando } = useBusquedaProductos(queryTexto, { perPage: 20 });
 
   // Un producto con variantes no tiene stock propio (vive en cada talle) —
   // usarlo como componente dejaría el combo imposible de vender (el chequeo
   // de stock del componente siempre daría 0). Mismo criterio que ya excluye
   // a los combos de esta lista.
-  const disponibles = useMemo(() => productos.filter(p =>
+  const disponibles = useMemo(() => resultados.filter(p =>
     !p.esCombo && !p.tieneVariantes && p.id !== excludeId && !value.some(c => c.id_producto === p.id)
-  ), [productos, value, excludeId]);
+  ), [resultados, value, excludeId]);
 
   const agregar = () => {
     if (!seleccion) return;
     const cant = Math.max(1, Number(cantidad) || 1);
-    onChange([...value, { id_producto: seleccion.id, cantidad: cant, nombre: seleccion.nombre, codigo: seleccion.codigo }]);
+    onChange([...value, { id_producto: seleccion.id, cantidad: cant, nombre: seleccion.nombre, codigo: seleccion.codigo, costo: seleccion.costo, precioFinal: seleccion.precioFinal }]);
     setSeleccion(null);
     setCantidad('1');
+    setQueryTexto('');
   };
 
   const quitar = (id) => onChange(value.filter(c => c.id_producto !== id));
@@ -721,10 +742,13 @@ function ComboComponentesEditor({ productos, value, onChange, excludeId }) {
         <Autocomplete
           fullWidth size="small"
           options={disponibles}
+          loading={buscando}
           getOptionLabel={(o) => o.nombre || ''}
           isOptionEqualToValue={(o, v) => o.id === v.id}
           value={seleccion}
-          onChange={(_, v) => setSeleccion(v)}
+          onChange={(_, v) => { setSeleccion(v); setQueryTexto(v ? v.nombre : ''); }}
+          inputValue={queryTexto}
+          onInputChange={(_, v) => setQueryTexto(v)}
           renderInput={(params) => <TextField {...params} placeholder="Buscar producto para agregar..." sx={fieldSx} />}
           renderOption={(props, o) => (
             <Box component="li" {...props} key={o.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, fontSize: 14 }}>
@@ -737,13 +761,8 @@ function ComboComponentesEditor({ productos, value, onChange, excludeId }) {
               </Typography>
             </Box>
           )}
-          filterOptions={(options, { inputValue }) => {
-            const q = inputValue.trim().toLowerCase();
-            return q
-              ? options.filter(o => o.nombre.toLowerCase().includes(q) || o.codigo.toLowerCase().includes(q))
-              : options;
-          }}
-          noOptionsText="No hay productos disponibles"
+          filterOptions={(options) => options}
+          noOptionsText={queryTexto.trim() ? 'No se encontraron productos' : 'Escribí para buscar un producto'}
         />
         <TextField type="number" size="small" value={cantidad} onChange={e => setCantidad(e.target.value)}
           inputProps={{ min: 1 }} sx={{ ...fieldSx, width: 90, flexShrink: 0 }} />
@@ -759,15 +778,14 @@ function ComboComponentesEditor({ productos, value, onChange, excludeId }) {
         <>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {value.map(c => {
-              const prod = productos.find(p => p.id === c.id_producto);
-              const costoLinea  = (prod?.costo ?? 0) * c.cantidad;
-              const ventaLinea  = (prod?.precioFinal ?? 0) * c.cantidad;
+              const costoLinea  = (c.costo ?? 0) * c.cantidad;
+              const ventaLinea  = (c.precioFinal ?? 0) * c.cantidad;
               return (
                 <Box key={c.id_producto} sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: INPUT, border: `1px solid ${BORDER}`, borderRadius: '8px', px: 1.5, py: 1 }}>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography sx={{ color: INK, fontSize: 14 }} noWrap>{c.nombre}</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 11.5 }}>
-                      Costo {fmtMoney(costoLinea)} · Venta {fmtMoney(ventaLinea)} {c.cantidad > 1 && `(${c.cantidad} × ${fmtMoney(prod?.precioFinal ?? 0)})`}
+                      Costo {fmtMoney(costoLinea)} · Venta {fmtMoney(ventaLinea)} {c.cantidad > 1 && `(${c.cantidad} × ${fmtMoney(c.precioFinal ?? 0)})`}
                     </Typography>
                   </Box>
                   <TextField type="number" size="small" value={c.cantidad} onChange={e => cambiarCantidad(c.id_producto, e.target.value)}
@@ -783,8 +801,8 @@ function ComboComponentesEditor({ productos, value, onChange, excludeId }) {
           {/* Referencia para decidir el precio del combo: cuánto sale armarlo vs.
               cuánto costarían los componentes comprados por separado. */}
           {(() => {
-            const costoTotal = value.reduce((s, c) => s + (productos.find(p => p.id === c.id_producto)?.costo ?? 0) * c.cantidad, 0);
-            const ventaTotal = value.reduce((s, c) => s + (productos.find(p => p.id === c.id_producto)?.precioFinal ?? 0) * c.cantidad, 0);
+            const costoTotal = value.reduce((s, c) => s + (c.costo ?? 0) * c.cantidad, 0);
+            const ventaTotal = value.reduce((s, c) => s + (c.precioFinal ?? 0) * c.cantidad, 0);
             return (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mt: 1.5, px: 1.5, py: 1, bgcolor: `${P}0c`, border: `1px solid ${P}30`, borderRadius: '8px' }}>
                 <Typography sx={{ color: INK2, fontSize: 12.5 }}>
@@ -874,25 +892,19 @@ function BloqueImagenProducto({ nombre, imagenUrl, loading, inputRef, onSubir, o
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title={tieneIA ? '' : 'Disponible en el plan IA'}>
-            <span>
-              <Button size="small" variant="outlined" startIcon={<AutoAwesomeIcon sx={{ fontSize: 16 }} />} disabled={loading || !tieneIA}
-                onClick={onGenerar}
-                sx={{ borderColor: `${P}40`, color: P, textTransform: 'none', '&:hover': { borderColor: P, bgcolor: `${P}0a` } }}>
-                Generar con IA
-              </Button>
-            </span>
-          </Tooltip>
-          {onComponerDesdeComponentes && (
-            <Tooltip title={tieneIA ? '' : 'Disponible en el plan IA'}>
-              <span>
-                <Button size="small" variant="outlined" startIcon={<AutoAwesomeIcon sx={{ fontSize: 16 }} />} disabled={loading || !tieneIA}
-                  onClick={onComponerDesdeComponentes}
-                  sx={{ borderColor: `${P}40`, color: P, textTransform: 'none', '&:hover': { borderColor: P, bgcolor: `${P}0a` } }}>
-                  Componer con fotos de los productos
-                </Button>
-              </span>
-            </Tooltip>
+          {tieneIA && (
+            <Button size="small" variant="outlined" startIcon={<AutoAwesomeIcon sx={{ fontSize: 16 }} />} disabled={loading}
+              onClick={onGenerar}
+              sx={{ borderColor: `${P}40`, color: P, textTransform: 'none', '&:hover': { borderColor: P, bgcolor: `${P}0a` } }}>
+              Generar con IA
+            </Button>
+          )}
+          {tieneIA && onComponerDesdeComponentes && (
+            <Button size="small" variant="outlined" startIcon={<AutoAwesomeIcon sx={{ fontSize: 16 }} />} disabled={loading}
+              onClick={onComponerDesdeComponentes}
+              sx={{ borderColor: `${P}40`, color: P, textTransform: 'none', '&:hover': { borderColor: P, bgcolor: `${P}0a` } }}>
+              Componer con fotos de los productos
+            </Button>
           )}
           {imagenUrl && (
             <Button size="small" variant="text" startIcon={<DeleteIcon sx={{ fontSize: 16 }} />} disabled={loading}
@@ -923,7 +935,7 @@ function formDesdeProducto(producto) {
   const costo       = Number(producto.costo ?? 0);
   const precioSinIva = precioFinal ? round2(precioFinal / 1.21) : 0;
   return {
-    nombre: producto.nombre || '', codigo: producto.codigo || '', descripcion: '',
+    nombre: producto.nombre || '', codigo: producto.codigo || '', codigoBarras: producto.codigoBarras || '', descripcion: '',
     categoria: producto.categoria || '', proveedor: producto.id_proveedor ? String(producto.id_proveedor) : '',
     unidadMedida: producto.unidadMedida || 'unidad', activo: producto.activo ?? true,
     stock: String(producto.stock ?? 0), alertaStock: String(producto.alerta ?? 5),
@@ -957,7 +969,7 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
   const [creado, setCreado] = useState(null);
   const idProductoActual = producto?.id ?? creado?.id;
   const [form, setForm] = useState(() => isEdit ? formDesdeProducto(producto) : {
-    nombre: initialNombre, codigo: '', descripcion: '',
+    nombre: initialNombre, codigo: '', codigoBarras: '', descripcion: '',
     categoria: '', proveedor: '', unidadMedida: 'unidad',
     activo: true, stock: '0', alertaStock: '5',
     fechaVencimiento: '', iva: '21', costo: '0.00', margen: '0',
@@ -1065,6 +1077,25 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
     setErrors(prev => { const next = { ...prev }; delete next.precioFinal; return next; });
   };
 
+  // "Cargar por monto total" — para no tener que dividir a mano cuando
+  // compraste un bulto (ej. una bolsa de 25kg a $10.000) y lo que tenés es el
+  // total pagado, no el costo por kg/m/L suelto. Independiente del stock ya
+  // cargado: pregunta cantidad y total directo, así funciona sin importar en
+  // qué orden se completó el formulario.
+  const [calculadoraCostoOpen, setCalculadoraCostoOpen] = useState(false);
+  const [calcCantidad, setCalcCantidad] = useState('');
+  const [calcTotal,    setCalcTotal]    = useState('');
+  const handleConfirmarCalculoCosto = () => {
+    const cantidad = parseFloat(String(calcCantidad).replace(',', '.'));
+    const total    = parseFloat(String(calcTotal).replace(',', '.'));
+    if (cantidad > 0 && total > 0) {
+      setCosto({ target: { value: String(round2(total / cantidad)) } });
+    }
+    setCalculadoraCostoOpen(false);
+    setCalcCantidad('');
+    setCalcTotal('');
+  };
+
   const [saving, setSaving] = useState(false);
 
   const handleGuardar = async () => {
@@ -1083,6 +1114,7 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
       const payload = {
         producto:          form.nombre.trim(),
         codigo:            form.codigo.trim(),
+        codigo_barras:     form.codigoBarras.trim() || null,
         precio:            Number(form.precioFinal) || 0,
         costo:             Number(form.costo) || 0,
         stock_minimo:      Number(form.alertaStock) || 5,
@@ -1122,9 +1154,16 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
       }
     } catch (e) {
       const errCodigo = e.response?.data?.errors?.codigo?.[0];
-      if (errCodigo) {
-        setErrors(prev => ({ ...prev, codigo: 'Este código ya existe' }));
-        toast('El código ya existe. Usá uno diferente.', 'error');
+      const errCodigoBarras = e.response?.data?.errors?.codigo_barras?.[0];
+      if (errCodigo || errCodigoBarras) {
+        setErrors(prev => ({
+          ...prev,
+          ...(errCodigo ? { codigo: 'Este código ya existe' } : {}),
+          ...(errCodigoBarras ? { codigoBarras: 'Este código de barra ya existe' } : {}),
+        }));
+        toast(errCodigo && errCodigoBarras
+          ? 'El código y el código de barra ya existen. Usá otros.'
+          : errCodigo ? 'El código ya existe. Usá uno diferente.' : 'El código de barra ya existe. Usá uno diferente.', 'error');
       } else {
         toast(e.response?.data?.message || `Error al ${isEdit ? 'actualizar' : 'crear'} el producto`, 'error');
       }
@@ -1133,8 +1172,8 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
     }
   };
 
-  const generarCodigo = () => {
-    setForm(f => ({ ...f, codigo: Math.random().toString(36).slice(2, 10).toUpperCase() }));
+  const generarCodigoBarras = () => {
+    setForm(f => ({ ...f, codigoBarras: generarCodigoInterno() }));
   };
 
   const handleSubirImagen = async (file) => {
@@ -1247,8 +1286,15 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
               <TextField fullWidth placeholder="Nombre del producto" value={form.nombre} onChange={set('nombre')} error={!!errors.nombre} helperText={errors.nombre} sx={fieldSx} />
             </Box>
             <Box>
-              <Label required={!isEdit}>Código/SKU</Label>
-              <TextField fullWidth placeholder="Código único" value={form.codigo} onChange={set('codigo')} error={!!errors.codigo} helperText={errors.codigo} sx={fieldSx}
+              <Label required={!isEdit}>Código</Label>
+              <TextField fullWidth placeholder="Referencia interna, se carga a mano" value={form.codigo} onChange={set('codigo')} error={!!errors.codigo} helperText={errors.codigo} sx={fieldSx} />
+            </Box>
+          </Box>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+            <Box>
+              <Label>Código de barra</Label>
+              <TextField fullWidth placeholder="Escaneá o generá uno" value={form.codigoBarras} onChange={set('codigoBarras')} error={!!errors.codigoBarras} helperText={errors.codigoBarras} sx={fieldSx}
                 InputProps={{ endAdornment: (
                   <InputAdornment position="end">
                     <Tooltip title="Escanear código de barras">
@@ -1256,8 +1302,8 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
                         <CameraAltIcon sx={{ fontSize: 18 }} />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Generar código">
-                      <IconButton size="small" onClick={generarCodigo} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+                    <Tooltip title="Generar código de barra">
+                      <IconButton size="small" onClick={generarCodigoBarras} sx={{ color: MUTED, '&:hover': { color: INK } }}>
                         <ShuffleIcon sx={{ fontSize: 18 }} />
                       </IconButton>
                     </Tooltip>
@@ -1270,21 +1316,22 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
                 <Label required>Categoría</Label>
-                <Tooltip title={tieneIA ? 'Sugerir con IA' : 'Disponible en el plan IA'}>
-                  <Chip icon={<AutoAwesomeIcon sx={{ fontSize: 12 }} />} label="IA" size="small" clickable={tieneIA}
-                    disabled={!tieneIA}
-                    onClick={async () => {
-                      if (!tieneIA || !form.nombre || form.nombre.length < 2) return;
-                      try {
-                        const sugerida = await iaService.sugerirCategoria(form.nombre);
-                        if (sugerida) setForm(f => ({ ...f, categoria: sugerida }));
-                        else toast('La IA no pudo sugerir una categoría para este producto', 'info');
-                      } catch (e) {
-                        toast(e.response?.data?.message || 'No se pudo obtener la sugerencia de categoría', 'error');
-                      }
-                    }}
-                    sx={{ height: 22, fontSize: 10, fontWeight: 600, bgcolor: `${P}18`, color: P, border: `1px solid ${P}30`, '& .MuiChip-icon': { color: P, ml: 0.5 } }} />
-                </Tooltip>
+                {tieneIA && (
+                  <Tooltip title="Sugerir con IA">
+                    <Chip icon={<AutoAwesomeIcon sx={{ fontSize: 12 }} />} label="IA" size="small" clickable
+                      onClick={async () => {
+                        if (!form.nombre || form.nombre.length < 2) return;
+                        try {
+                          const sugerida = await iaService.sugerirCategoria(form.nombre);
+                          if (sugerida) setForm(f => ({ ...f, categoria: sugerida }));
+                          else toast('La IA no pudo sugerir una categoría para este producto', 'info');
+                        } catch (e) {
+                          toast(e.response?.data?.message || 'No se pudo obtener la sugerencia de categoría', 'error');
+                        }
+                      }}
+                      sx={{ height: 22, fontSize: 10, fontWeight: 600, bgcolor: `${P}18`, color: P, border: `1px solid ${P}30`, '& .MuiChip-icon': { color: P, ml: 0.5 } }} />
+                  </Tooltip>
+                )}
               </Box>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <FormControl fullWidth>
@@ -1382,8 +1429,18 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
           <Typography sx={sectionEyebrow}>Precios</Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(5, 1fr)' }, gap: 2 }}>
             <Box>
-              <Label>Costo</Label>
-              <TextField fullWidth type="number" value={form.costo} onChange={setCosto} sx={fieldSx} />
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Label>Costo{esFerreteria && form.unidadMedida !== 'unidad' ? ` (por ${abrevUnidad(form.unidadMedida)})` : ''}</Label>
+                {esFerreteria && form.unidadMedida !== 'unidad' && (
+                  <Tooltip title="Cargar por monto total pagado">
+                    <IconButton size="small" onClick={() => setCalculadoraCostoOpen(true)}
+                      sx={{ color: MUTED, p: '2px', mb: '4px', '&:hover': { color: P } }}>
+                      <CalculateIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
+              <CampoPrecio fullWidth value={form.costo} onChange={setCosto} sx={fieldSx} />
             </Box>
             <Box>
               <Label>Margen (%)</Label>
@@ -1394,16 +1451,17 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
               <TextField fullWidth type="number" value={form.iva} onChange={setIva} sx={fieldSx} />
             </Box>
             <Box>
-              <Label required>Precio sin IVA</Label>
-              <TextField fullWidth type="number" value={form.precioSinIva} onChange={setPrecioSinIva} sx={fieldSx} />
+              <Label required>Precio sin IVA{esFerreteria && form.unidadMedida !== 'unidad' ? ` (por ${abrevUnidad(form.unidadMedida)})` : ''}</Label>
+              <CampoPrecio fullWidth value={form.precioSinIva} onChange={setPrecioSinIva} sx={fieldSx} />
             </Box>
             <Box>
-              <Label required>Precio final</Label>
-              <TextField fullWidth type="number" value={form.precioFinal} onChange={setPrecioFinal} sx={fieldSx} />
+              <Label required>Precio final{esFerreteria && form.unidadMedida !== 'unidad' ? ` (por ${abrevUnidad(form.unidadMedida)})` : ''}</Label>
+              <CampoPrecio fullWidth value={form.precioFinal} onChange={setPrecioFinal} sx={fieldSx} />
             </Box>
           </Box>
           <Typography sx={{ color: MUTED, fontSize: 11.5, mt: 1.5 }}>
             Costo + Margen calculan el precio sin IVA, y ese más el IVA calculan el precio final — editar cualquiera de los tres últimos recalcula los anteriores.
+            {esFerreteria && form.unidadMedida !== 'unidad' && ` Todos estos valores son por ${abrevUnidad(form.unidadMedida)} — si compraste un paquete o bolsa, dividí lo que pagaste por cuántos ${abrevUnidad(form.unidadMedida)} tenía.`}
           </Typography>
         </Box>
 
@@ -1571,12 +1629,48 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
       <ModalProveedores open={modalProv} onClose={() => setModalProv(false)}
         proveedores={proveedores} setProveedores={setProveedores} />
 
+      {/* Cargar costo por monto total — para no tener que dividir a mano
+          cuando comprás un bulto (ej. una bolsa de 25kg a $10.000). */}
+      <Dialog open={calculadoraCostoOpen} onClose={() => setCalculadoraCostoOpen(false)} maxWidth="xs" fullWidth
+        PaperProps={{ sx: modalPaperSx }}>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16, mb: 0.5 }}>Cargar por monto total</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 13, mb: 2 }}>
+            Ingresá cuánto compraste y lo que pagaste en total — calculamos el costo por {abrevUnidad(form.unidadMedida)} solo.
+          </Typography>
+          <Label>Cantidad ({abrevUnidad(form.unidadMedida)})</Label>
+          <TextField fullWidth autoFocus type="number" placeholder="0" value={calcCantidad}
+            onChange={e => setCalcCantidad(e.target.value)} sx={{ ...fieldSx, mb: 1.5 }} />
+          <Label>Total pagado</Label>
+          <TextField fullWidth type="number" placeholder="0" value={calcTotal}
+            onChange={e => setCalcTotal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleConfirmarCalculoCosto(); }}
+            InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: MUTED }}>$</InputAdornment> }}
+            sx={{ ...fieldSx, mb: 1 }} />
+          {parseFloat(calcCantidad) > 0 && parseFloat(calcTotal) > 0 && (
+            <Typography sx={{ color: P, fontSize: 13, fontWeight: 600, mb: 2 }}>
+              = {fmtMoney(round2(parseFloat(calcTotal) / parseFloat(calcCantidad)))} por {abrevUnidad(form.unidadMedida)}
+            </Typography>
+          )}
+          <Box sx={{ display: 'flex', gap: 1.5, mt: 2 }}>
+            <Button fullWidth onClick={() => setCalculadoraCostoOpen(false)}
+              sx={{ color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: HOVER } }}>
+              Cancelar
+            </Button>
+            <Button fullWidth variant="contained" onClick={handleConfirmarCalculoCosto}
+              sx={{ bgcolor: P, textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: P_HOVER } }}>
+              Usar este costo
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
       {openScanner && (
         <Suspense fallback={null}>
           <BarcodeScanner
             open={openScanner}
             onClose={() => setOpenScanner(false)}
-            onScan={(code) => setForm(f => ({ ...f, codigo: code }))}
+            onScan={(code) => setForm(f => ({ ...f, codigoBarras: code }))}
           />
         </Suspense>
       )}
@@ -1807,9 +1901,16 @@ function DetalleItem({ label, value }) {
   );
 }
 
-function ModalDetalleProducto({ open, onClose, producto, onVerHistorial, onVerHistorialCompras, productos = [], actualizarProducto }) {
+function ModalDetalleProducto({ open, onClose, producto: productoInicial, onVerHistorial, onVerHistorialCompras, actualizarProducto }) {
   const toast = useToast();
   const [varianteADesactivar, setVarianteADesactivar] = useState(null);
+  // Copia local en vez de leer directo del array de productos del padre (ya
+  // no existe un array completo en memoria) — se resincroniza con la prop al
+  // abrir, y se refresca a mano después de descontinuar un talle para que
+  // "Stock por talle" se actualice sin cerrar y volver a abrir el modal.
+  const [producto, setProducto] = useState(productoInicial);
+  useEffect(() => { setProducto(productoInicial); }, [productoInicial]);
+
   if (!producto) return null;
   const margen = producto.costo > 0 && producto.precioFinal > 0
     ? Math.round((producto.precioFinal - producto.costo) / producto.precioFinal * 100)
@@ -1819,6 +1920,8 @@ function ModalDetalleProducto({ open, onClose, producto, onVerHistorial, onVerHi
     if (!varianteADesactivar) return;
     try {
       await actualizarProducto(varianteADesactivar.id, { estado: false });
+      const fresco = await productosService.getById(producto.id);
+      setProducto(fresco);
       toast(`Talle ${varianteADesactivar.talle} descontinuado`, 'success');
     } catch (e) {
       toast(e.response?.data?.message || 'No se pudo descontinuar el talle', 'error');
@@ -1864,8 +1967,9 @@ function ModalDetalleProducto({ open, onClose, producto, onVerHistorial, onVerHi
         </Box>
 
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2.5 }}>
-          <DetalleItem label="Precio de venta" value={fmtMoney(producto.precioFinal)} />
-          <DetalleItem label="Costo" value={fmtMoney(producto.costo)} />
+          <DetalleItem label="Código de barra" value={producto.codigoBarras || 'Sin código de barra'} />
+          <DetalleItem label="Precio de venta" value={`${fmtMoney(producto.precioFinal)}${producto.unidadMedida !== 'unidad' ? ` /${abrevUnidad(producto.unidadMedida)}` : ''}`} />
+          <DetalleItem label="Costo" value={`${fmtMoney(producto.costo)}${producto.unidadMedida !== 'unidad' ? ` /${abrevUnidad(producto.unidadMedida)}` : ''}`} />
           <DetalleItem label="Margen" value={margen !== null ? `${margen}%` : '—'} />
           <DetalleItem label="Proveedor" value={producto.proveedor || 'Sin proveedor'} />
           {!producto.esCombo && !producto.tieneVariantes && <DetalleItem label="Stock actual" value={`${producto.stock} ${abrevUnidad(producto.unidadMedida)}`} />}
@@ -1916,8 +2020,8 @@ function ModalDetalleProducto({ open, onClose, producto, onVerHistorial, onVerHi
         />
 
         {producto.esCombo && producto.componentes.length > 0 && (() => {
-          const costoTotal = producto.componentes.reduce((s, c) => s + (productos.find(p => p.id === c.id_producto)?.costo ?? 0) * c.cantidad, 0);
-          const ventaTotal = producto.componentes.reduce((s, c) => s + (productos.find(p => p.id === c.id_producto)?.precioFinal ?? 0) * c.cantidad, 0);
+          const costoTotal = producto.componentes.reduce((s, c) => s + (c.costo ?? 0) * c.cantidad, 0);
+          const ventaTotal = producto.componentes.reduce((s, c) => s + (c.precioFinal ?? 0) * c.cantidad, 0);
           return (
             <Box sx={{ mb: 2.5 }}>
               <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 1 }}>
@@ -1925,7 +2029,6 @@ function ModalDetalleProducto({ open, onClose, producto, onVerHistorial, onVerHi
               </Typography>
               <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '10px', overflow: 'hidden' }}>
                 {producto.componentes.map((c, i) => {
-                  const compProd = productos.find(p => p.id === c.id_producto);
                   return (
                     <Box key={c.id_producto} sx={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1,
@@ -1934,7 +2037,7 @@ function ModalDetalleProducto({ open, onClose, producto, onVerHistorial, onVerHi
                       <Box sx={{ minWidth: 0 }}>
                         <Typography sx={{ color: INK, fontSize: 13 }} noWrap>{c.nombre}</Typography>
                         <Typography sx={{ color: MUTED, fontSize: 11.5 }}>
-                          Costo {fmtMoney((compProd?.costo ?? 0) * c.cantidad)} · Venta {fmtMoney((compProd?.precioFinal ?? 0) * c.cantidad)}
+                          Costo {fmtMoney((c.costo ?? 0) * c.cantidad)} · Venta {fmtMoney((c.precioFinal ?? 0) * c.cantidad)}
                         </Typography>
                       </Box>
                       <Typography sx={{ color: MUTED, fontSize: 13, flexShrink: 0, ml: 1 }}>x{c.cantidad}</Typography>
@@ -1981,11 +2084,11 @@ function ModalDetalleProducto({ open, onClose, producto, onVerHistorial, onVerHi
    MODAL: Combo — creación y edición en un solo lugar, separado del
    alta/edición de producto normal (la mezcla anterior quedaba muy cargada).
 ────────────────────────────────────────────── */
-function ModalCombo({ open, onClose, combo, productos, crearProducto, actualizarProducto, subirImagen, eliminarImagen, generarImagenIa, generarImagenComboIa }) {
+function ModalCombo({ open, onClose, combo, crearProducto, actualizarProducto, subirImagen, eliminarImagen, generarImagenIa, generarImagenComboIa }) {
   const toast = useToast();
   const isEdit = !!combo;
   const [openScanner, setOpenScanner] = useState(false);
-  const [form, setForm] = useState({ nombre: '', codigo: '', precio: '0.00', costo: '0.00', activo: true });
+  const [form, setForm] = useState({ nombre: '', codigo: '', codigoBarras: '', precio: '0.00', costo: '0.00', activo: true });
   const [componentes, setComponentes] = useState([]);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -2001,13 +2104,13 @@ function ModalCombo({ open, onClose, combo, productos, crearProducto, actualizar
     if (!open) return;
     if (combo) {
       setForm({
-        nombre: combo.nombre || '', codigo: combo.codigo || '',
+        nombre: combo.nombre || '', codigo: combo.codigo || '', codigoBarras: combo.codigoBarras || '',
         precio: combo.precioFinal ?? 0, costo: combo.costo ?? 0, activo: combo.activo ?? true,
       });
       setComponentes(combo.componentes ?? []);
       setImagenUrl(combo.imagenUrl || null);
     } else {
-      setForm({ nombre: '', codigo: '', precio: '0.00', costo: '0.00', activo: true });
+      setForm({ nombre: '', codigo: '', codigoBarras: '', precio: '0.00', costo: '0.00', activo: true });
       setComponentes([]);
       setImagenUrl(null);
     }
@@ -2078,7 +2181,7 @@ function ModalCombo({ open, onClose, combo, productos, crearProducto, actualizar
     setErrors(prev => { const next = { ...prev }; delete next.componentes; return next; });
   };
 
-  const generarCodigo = () => setForm(f => ({ ...f, codigo: Math.random().toString(36).slice(2, 10).toUpperCase() }));
+  const generarCodigoBarras = () => setForm(f => ({ ...f, codigoBarras: generarCodigoInterno() }));
 
   const handleGuardar = async () => {
     const errs = {};
@@ -2090,6 +2193,7 @@ function ModalCombo({ open, onClose, combo, productos, crearProducto, actualizar
     const payload = {
       producto:     form.nombre.trim(),
       codigo:       form.codigo.trim(),
+      codigo_barras: form.codigoBarras.trim() || null,
       precio:       Number(form.precio) || 0,
       costo:        Number(form.costo) || 0,
       estado:       form.activo,
@@ -2115,9 +2219,16 @@ function ModalCombo({ open, onClose, combo, productos, crearProducto, actualizar
       }
     } catch (e) {
       const errCodigo = e.response?.data?.errors?.codigo?.[0];
-      if (errCodigo) {
-        setErrors(prev => ({ ...prev, codigo: 'Este código ya existe' }));
-        toast('El código ya existe. Usá uno diferente.', 'error');
+      const errCodigoBarras = e.response?.data?.errors?.codigo_barras?.[0];
+      if (errCodigo || errCodigoBarras) {
+        setErrors(prev => ({
+          ...prev,
+          ...(errCodigo ? { codigo: 'Este código ya existe' } : {}),
+          ...(errCodigoBarras ? { codigoBarras: 'Este código de barra ya existe' } : {}),
+        }));
+        toast(errCodigo && errCodigoBarras
+          ? 'El código y el código de barra ya existen. Usá otros.'
+          : errCodigo ? 'El código ya existe. Usá uno diferente.' : 'El código de barra ya existe. Usá uno diferente.', 'error');
       } else {
         toast(e.response?.data?.message || 'No se pudo guardar el combo', 'error');
       }
@@ -2171,8 +2282,15 @@ function ModalCombo({ open, onClose, combo, productos, crearProducto, actualizar
             <TextField fullWidth placeholder="Combo Familiar" value={form.nombre} onChange={set('nombre')} error={!!errors.nombre} helperText={errors.nombre} sx={fieldSx} />
           </Box>
           <Box>
-            <Label required>Código/SKU</Label>
-            <TextField fullWidth placeholder="Código único" value={form.codigo} onChange={set('codigo')} error={!!errors.codigo} helperText={errors.codigo} sx={fieldSx}
+            <Label required>Código</Label>
+            <TextField fullWidth placeholder="Referencia interna, se carga a mano" value={form.codigo} onChange={set('codigo')} error={!!errors.codigo} helperText={errors.codigo} sx={fieldSx} />
+          </Box>
+        </Box>
+
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+          <Box>
+            <Label>Código de barra</Label>
+            <TextField fullWidth placeholder="Escaneá o generá uno" value={form.codigoBarras} onChange={set('codigoBarras')} error={!!errors.codigoBarras} helperText={errors.codigoBarras} sx={fieldSx}
               InputProps={{ endAdornment: (
                 <InputAdornment position="end">
                   <Tooltip title="Escanear código de barras">
@@ -2180,8 +2298,8 @@ function ModalCombo({ open, onClose, combo, productos, crearProducto, actualizar
                       <CameraAltIcon sx={{ fontSize: 18 }} />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Generar código">
-                    <IconButton size="small" onClick={generarCodigo} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+                  <Tooltip title="Generar código de barra">
+                    <IconButton size="small" onClick={generarCodigoBarras} sx={{ color: MUTED, '&:hover': { color: INK } }}>
                       <ShuffleIcon sx={{ fontSize: 18 }} />
                     </IconButton>
                   </Tooltip>
@@ -2194,18 +2312,18 @@ function ModalCombo({ open, onClose, combo, productos, crearProducto, actualizar
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2.5 }}>
           <Box>
             <Label required>Precio de venta ($)</Label>
-            <TextField fullWidth type="number" value={form.precio} onChange={set('precio')} inputProps={{ min: 0 }} sx={fieldSx} />
+            <CampoPrecio fullWidth value={form.precio} onChange={set('precio')} sx={fieldSx} />
           </Box>
           <Box>
             <Label>Costo ($, opcional)</Label>
-            <TextField fullWidth type="number" value={form.costo} onChange={set('costo')} inputProps={{ min: 0 }} sx={fieldSx} />
+            <CampoPrecio fullWidth value={form.costo} onChange={set('costo')} sx={fieldSx} />
           </Box>
         </Box>
 
         {/* Componentes */}
         <Box sx={{ mb: 2.5 }}>
           <Label required>Productos que componen el combo</Label>
-          <ComboComponentesEditor productos={productos} value={componentes} onChange={setComponentesYLimpiar} excludeId={combo?.id} />
+          <ComboComponentesEditor value={componentes} onChange={setComponentesYLimpiar} excludeId={combo?.id} />
         </Box>
 
         {/* Imagen (solo en edición — necesita un combo ya creado) */}
@@ -2240,7 +2358,7 @@ function ModalCombo({ open, onClose, combo, productos, crearProducto, actualizar
 
       {openScanner && (
         <Suspense fallback={null}>
-          <BarcodeScanner open={openScanner} onClose={() => setOpenScanner(false)} onScan={(code) => setForm(f => ({ ...f, codigo: code }))} />
+          <BarcodeScanner open={openScanner} onClose={() => setOpenScanner(false)} onScan={(code) => setForm(f => ({ ...f, codigoBarras: code }))} />
         </Suspense>
       )}
     </Dialog>
@@ -2250,49 +2368,112 @@ function ModalCombo({ open, onClose, combo, productos, crearProducto, actualizar
 /* ──────────────────────────────────────────────
    MODAL: Actualizar precios masivo
 ────────────────────────────────────────────── */
-function ModalActualizarPrecios({ open, onClose, productos, categorias, proveedores, actualizarProducto, toast }) {
+function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recargarProductos, toast }) {
   const [tipo,               setTipo]               = useState('%');
   const [valor,              setValor]              = useState('');
   const [alcance,            setAlcance]            = useState('todos');
   const [categoria,          setCategoria]          = useState('');
   const [proveedor,          setProveedor]          = useState('');
   const [loading,            setLoading]            = useState(false);
+  const [progreso,           setProgreso]           = useState({ hecho: 0, total: 0 });
+  const [cancelando,         setCancelando]         = useState(false);
+  // Productos que el usuario sacó de la vista previa a mano — el cambio
+  // masivo no les toca el precio, aunque entren en el alcance elegido.
+  const [excluidos,          setExcluidos]          = useState(() => new Set());
+  // Mismo criterio que confirmarImportacion() en Productos() — el loop de
+  // handleAplicar() solo para si chequea este ref, si no "Cancelar" no
+  // frenaba nada de verdad y seguía actualizando precios en segundo plano.
+  const cancelarRef = useRef(false);
+  useEffect(() => () => { cancelarRef.current = true; }, []);
 
-  const targets = useMemo(() => {
-    if (alcance === 'categoria' && categoria)
-      return productos.filter(p => p.categoria === categoria && p.activo);
-    if (alcance === 'proveedor' && proveedor)
-      return productos.filter(p => p.id_proveedor === proveedor && p.activo);
-    return productos.filter(p => p.activo);
-  }, [alcance, categoria, proveedor, productos]);
+  // El alcance de este cambio (una categoría entera, un proveedor entero, o
+  // "todos") necesita autoridad sobre el catálogo completo que matchea, no
+  // un top-N — a diferencia de un buscador tipo autocomplete. Se pide en dos
+  // pasadas: la primera solo para saber el total, la segunda ya trae todo.
+  const [targets, setTargets] = useState([]);
+  const [targetsLoading, setTargetsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) { setTargets([]); return; }
+    const params = { estado: true };
+    if (alcance === 'categoria') {
+      if (!categoria) { setTargets([]); return; }
+      const cat = categorias.find(c => c.nombre === categoria);
+      if (!cat) { setTargets([]); return; }
+      params.id_categoria = cat.id;
+    } else if (alcance === 'proveedor') {
+      if (!proveedor) { setTargets([]); return; }
+      params.id_proveedor = proveedor;
+    }
+    let cancelado = false;
+    (async () => {
+      setTargetsLoading(true);
+      try {
+        const primera = await productosService.getAllPaginado({ ...params, per_page: 1 });
+        const total = primera.total || 0;
+        if (cancelado) return;
+        if (total === 0) { setTargets([]); return; }
+        const completo = await productosService.getAllPaginado({ ...params, per_page: total });
+        if (!cancelado) setTargets(completo.items);
+      } catch {
+        if (!cancelado) setTargets([]);
+      } finally {
+        if (!cancelado) setTargetsLoading(false);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [open, alcance, categoria, proveedor, categorias]);
+
+  const targetsAplicados = useMemo(() => targets.filter(p => !excluidos.has(p.id)), [targets, excluidos]);
+
+  // Cambiar de alcance (categoría/proveedor/todos) invalida las exclusiones
+  // hechas a mano — son sobre la lista anterior, no tienen sentido acá.
+  useEffect(() => { setExcluidos(new Set()); }, [targets]);
 
   const preview = useMemo(() => {
     const v = parseFloat(valor);
     if (!targets.length || !v || isNaN(v)) return null;
-    const sample = targets.slice(0, 3).map(p => {
+    const items = targets.map(p => {
       const delta = tipo === '%' ? p.precioFinal * v / 100 : v;
       const nuevo = Math.max(0, p.precioFinal + delta);
-      return { nombre: p.nombre, antes: p.precioFinal, despues: Math.round(nuevo) };
+      return { id: p.id, nombre: p.nombre, antes: p.precioFinal, despues: Math.round(nuevo) };
     });
-    return { sample, count: targets.length };
-  }, [valor, tipo, targets]);
+    return { items, count: targetsAplicados.length };
+  }, [valor, tipo, targets, targetsAplicados]);
 
   const handleAplicar = async () => {
     const v = parseFloat(valor);
     if (!v || isNaN(v)) return;
+    cancelarRef.current = false;
+    setCancelando(false);
     setLoading(true);
-    let ok = 0;
-    for (const p of targets) {
+    setProgreso({ hecho: 0, total: targetsAplicados.length });
+    let ok = 0, cancelado = false;
+    for (const p of targetsAplicados) {
+      if (cancelarRef.current) { cancelado = true; break; }
       const delta = tipo === '%' ? p.precioFinal * v / 100 : v;
       const nuevo = Math.round(Math.max(0, p.precioFinal + delta));
       try {
-        await actualizarProducto(p.id, { precio: nuevo });
+        // productosService.update() directo, no actualizarProducto() del
+        // contexto: ese invalida (y refetchea) la lista completa en cada
+        // llamada — con "todos" como alcance eso es un refetch de cientos de
+        // productos por cada producto actualizado. Un solo recargarProductos()
+        // al final alcanza (ver mismo criterio en confirmarImportacion()).
+        await productosService.update(p.id, { precio: nuevo });
         ok++;
       } catch { /* skip */ }
+      setProgreso(pr => ({ ...pr, hecho: pr.hecho + 1 }));
     }
+    if (ok > 0) recargarProductos();
     setLoading(false);
-    toast(`${ok} precio${ok !== 1 ? 's' : ''} actualizado${ok !== 1 ? 's' : ''}`, 'success');
+    setCancelando(false);
+    toast(`${ok} precio${ok !== 1 ? 's' : ''} actualizado${ok !== 1 ? 's' : ''}${cancelado ? ' · cancelado' : ''}`, 'success');
     onClose();
+  };
+
+  const handleCancelar = () => {
+    cancelarRef.current = true;
+    setCancelando(true);
   };
 
   const handleAlcance = (val) => {
@@ -2301,23 +2482,31 @@ function ModalActualizarPrecios({ open, onClose, productos, categorias, proveedo
     setProveedor('');
   };
 
+  const toggleExcluido = (id) => {
+    setExcluidos(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   const colorPrecio = (s) => s.despues > s.antes ? SUCCESS : s.despues < s.antes ? WARNING : MUTED;
 
   const fmtP = n => n.toLocaleString('es-AR');
 
-  const isDisabled = !preview || loading
+  const isDisabled = !preview || loading || targetsLoading || preview.count === 0
     || (alcance === 'categoria' && !categoria)
     || (alcance === 'proveedor' && !proveedor);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
+    <Dialog open={open} onClose={() => !loading && onClose()} maxWidth="sm" fullWidth
       PaperProps={{ sx: modalPaperSx }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 1.5, sm: 3 }, pt: { xs: 1.75, sm: 3 }, pb: 2 }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: 18 }}>Actualizar precios</Typography>
           <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>Modificá precios en masa o por producto</Typography>
         </Box>
-        <IconButton size="small" onClick={onClose} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+        <IconButton size="small" onClick={onClose} disabled={loading} sx={{ color: MUTED, '&:hover': { color: INK } }}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
@@ -2391,32 +2580,64 @@ function ModalActualizarPrecios({ open, onClose, productos, categorias, proveedo
           </Box>
         </Box>
 
-        {/* Preview */}
+        {targetsLoading && (
+          <Typography sx={{ color: MUTED, fontSize: 13, mb: 2.5 }}>Buscando productos...</Typography>
+        )}
+
+        {/* Preview — con checkbox por fila para sacar algún producto puntual
+            del cambio masivo, sin tener que cambiar de alcance. */}
         {preview && (
-          <Box sx={{ bgcolor: `${P}0a`, border: `1px solid ${P}30`, borderRadius: '10px', p: 2, mb: 2.5 }}>
-            <Typography sx={{ color: P, fontSize: 13, fontWeight: 600, mb: 1.25 }}>
-              Vista previa · {preview.count} producto{preview.count !== 1 ? 's' : ''} afectado{preview.count !== 1 ? 's' : ''}
+          <Box sx={{ border: `1px solid ${P}30`, borderRadius: '10px', mb: 2.5, overflow: 'hidden' }}>
+            <Typography sx={{ color: P, fontSize: 13, fontWeight: 600, px: 2, py: 1.25, bgcolor: `${P}0a` }}>
+              Vista previa · {preview.count} de {preview.items.length} producto{preview.items.length !== 1 ? 's' : ''} afectado{preview.count !== 1 ? 's' : ''}
             </Typography>
-            {preview.sample.map((s, i) => (
-              <Box key={i} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
-                <Typography sx={{ color: INK2, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '55%' }}>{s.nombre}</Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-                  <Typography sx={{ color: MUTED, fontSize: 13, textDecoration: 'line-through' }}>${fmtP(s.antes)}</Typography>
-                  <Typography sx={{ color: MUTED, fontSize: 12 }}>→</Typography>
-                  <Typography sx={{ color: colorPrecio(s), fontSize: 13, fontWeight: 700 }}>${fmtP(s.despues)}</Typography>
-                </Box>
-              </Box>
-            ))}
-            {preview.count > 3 && (
-              <Typography sx={{ color: MUTED, fontSize: 12, mt: 0.5 }}>y {preview.count - 3} más...</Typography>
-            )}
+            <Box sx={{ maxHeight: 260, overflowY: 'auto' }}>
+              {preview.items.map((s) => {
+                const excluido = excluidos.has(s.id);
+                return (
+                  <Box key={s.id} onClick={() => toggleExcluido(s.id)}
+                    sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1, py: 0.5, cursor: 'pointer', opacity: excluido ? 0.45 : 1, '&:hover': { bgcolor: HOVER } }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, flex: 1 }}>
+                      <Checkbox size="small" checked={!excluido} onClick={e => e.stopPropagation()} onChange={() => toggleExcluido(s.id)}
+                        sx={{ color: BORDER, '&.Mui-checked': { color: P }, p: 0.5 }} />
+                      <Typography sx={{ color: INK2, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.nombre}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                      <Typography sx={{ color: MUTED, fontSize: 13, textDecoration: 'line-through' }}>${fmtP(s.antes)}</Typography>
+                      <Typography sx={{ color: MUTED, fontSize: 12 }}>→</Typography>
+                      <Typography sx={{ color: colorPrecio(s), fontSize: 13, fontWeight: 700 }}>${fmtP(s.despues)}</Typography>
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
           </Box>
         )}
 
-        <Button fullWidth variant="contained" disabled={isDisabled} onClick={handleAplicar}
-          sx={{ bgcolor: P, color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: 14, py: 1.5, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { bgcolor: P, opacity: 0.4, color: '#fff' } }}>
-          {loading ? 'Actualizando...' : `Aplicar a ${preview?.count || 0} producto${(preview?.count || 0) !== 1 ? 's' : ''}`}
-        </Button>
+        {loading ? (
+          <Box sx={{ mt: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+              <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600 }}>
+                {cancelando ? 'Cancelando…' : 'Actualizando precios…'}
+              </Typography>
+              <Typography sx={{ color: P, fontSize: 12.5, fontWeight: 700 }}>{progreso.hecho} / {progreso.total}</Typography>
+            </Box>
+            <LinearProgress variant="determinate"
+              value={progreso.total ? (progreso.hecho / progreso.total) * 100 : 0}
+              sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: cancelando ? MUTED : P, borderRadius: 4 } }} />
+            <Button fullWidth onClick={handleCancelar} disabled={cancelando} sx={{
+              mt: 1, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600,
+              borderRadius: '8px', py: 0.75, fontSize: 12.5, '&:hover': { bgcolor: HOVER },
+            }}>
+              {cancelando ? 'Terminando de cancelar…' : 'Cancelar'}
+            </Button>
+          </Box>
+        ) : (
+          <Button fullWidth variant="contained" disabled={isDisabled} onClick={handleAplicar}
+            sx={{ bgcolor: P, color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: 14, py: 1.5, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { bgcolor: P, opacity: 0.4, color: '#fff' } }}>
+            {`Aplicar a ${preview?.count || 0} producto${(preview?.count || 0) !== 1 ? 's' : ''}`}
+          </Button>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -2428,10 +2649,11 @@ function ModalActualizarPrecios({ open, onClose, productos, categorias, proveedo
 ────────────────────────────────────────────── */
 export default function Productos() {
   const isMobile = useIsMobile();
-  const { productos, crearProducto, actualizarProducto, eliminarProducto, subirImagenProducto, eliminarImagenProducto, generarImagenIaProducto, generarImagenComboIaProducto } = useProductos();
+  const { crearProducto, actualizarProducto, eliminarProducto, subirImagenProducto, eliminarImagenProducto, generarImagenIaProducto, generarImagenComboIaProducto, recargarProductos } = useProductos();
   const toast = useToast();
   const { user } = useAuth();
   const esIndumentaria = user?.empresa?.tipo === 'indument';
+  const esFerreteria = user?.empresa?.tipo === 'ferret';
   const { checkPermisos } = useHasPermiso();
   const { data: sucursales = [] } = useSucursales({ enabled: checkPermisos('list-sucursales') });
   const mostrarStockTotal = sucursales.length > 1;
@@ -2472,7 +2694,64 @@ export default function Productos() {
   const [openActualizar,  setOpenActualizar]  = useState(false);
   const [importPreview,   setImportPreview]   = useState(null);
   const [importando,      setImportando]      = useState(false);
+  const [importProgreso,  setImportProgreso]  = useState({ hecho: 0, total: 0 });
+  const [cancelandoImport, setCancelandoImport] = useState(false);
+  const [importPagina,    setImportPagina]    = useState(1);
+  const [importPageSize,  setImportPageSize]  = useState(20);
+  const [exportando,      setExportando]      = useState(false);
   const csvRef = useRef(null);
+  // El loop de confirmarImportacion() itera un array capturado por closure —
+  // cerrar el modal (setImportPreview(null)) o navegar a otra pantalla NO lo
+  // frenaba, seguía creando productos solo en segundo plano. Si el usuario
+  // volvía a importar el mismo archivo pensando que se había cancelado,
+  // terminaba con dos pasadas superpuestas (productos duplicados). Este ref
+  // es lo único que el loop chequea para saber si tiene que parar — se
+  // resetea a false al arrancar un import nuevo, y se pone en true tanto al
+  // tocar "Cancelar" durante el import como al desmontar la página.
+  const cancelarImportRef = useRef(false);
+  useEffect(() => () => { cancelarImportRef.current = true; }, []);
+
+  // Edita una fila de la previsualización de importación a mano (por si el
+  // parseo del Excel no matcheó bien algo) — recalcula categoría/proveedor/
+  // código duplicado en base al valor nuevo, igual que se calculó al leer el
+  // archivo.
+  const handleEditarFilaImport = (idx, campo, valor) => {
+    setImportPreview(prev => {
+      const next = [...prev];
+      const fila = { ...next[idx], [campo]: valor };
+      if (campo === 'catNombre') {
+        fila.catId = valor ? categorias.find(c => c.nombre.toLowerCase() === valor.toLowerCase())?.id : undefined;
+      }
+      if (campo === 'provNombre') {
+        fila.provId = valor ? proveedores.find(p => p.nombre.toLowerCase() === valor.toLowerCase())?.id : undefined;
+      }
+      if (campo === 'codigo') {
+        // Se recalcula abajo, de forma asíncrona contra el backend — un
+        // array local ya no alcanza para saber si el código existe en todo
+        // el catálogo (podría ser un código fuera de los primeros N cargados).
+        fila.codigoDuplicado = false;
+      }
+      next[idx] = fila;
+      return next;
+    });
+    if (campo === 'codigo' && valor) {
+      productosService.getAll({ codigo_exacto: valor }).then(coincidencias => {
+        const duplicado = coincidencias.length > 0;
+        setImportPreview(prev => {
+          if (!prev) return prev;
+          const next = [...prev];
+          // Si el usuario siguió editando esta fila mientras la consulta
+          // estaba en vuelo, no pisamos su valor más reciente con uno viejo.
+          if (next[idx] && next[idx].codigo === valor) next[idx] = { ...next[idx], codigoDuplicado: duplicado };
+          return next;
+        });
+      }).catch(() => {});
+    }
+  };
+
+  const handleQuitarFilaImport = (idx) => {
+    setImportPreview(prev => prev.filter((_, i) => i !== idx));
+  };
 
   useEffect(() => {
     categoriasService.getAll().then(setCategorias).catch(() => {});
@@ -2506,16 +2785,17 @@ export default function Productos() {
         { header: 'Nombre',    width: 32 },
         { header: 'Código',    width: 16 },
         { header: 'Categoría', width: 18 },
-        { header: 'Precio',    width: 14, numFmt: '"$" #,##0.00', align: 'right' },
+        { header: 'Unidad',    width: 16 },
         { header: 'Costo',     width: 14, numFmt: '"$" #,##0.00', align: 'right' },
+        { header: 'Precio',    width: 14, numFmt: '"$" #,##0.00', align: 'right' },
         { header: 'Stock',     width: 10, align: 'center' },
         ...(mostrarStockTotal ? [{ header: 'Stock total', width: 12, align: 'center' }] : []),
         { header: 'Proveedor', width: 22 },
         { header: 'Estado',    width: 12 },
       ],
       rows: rows.map(p => [
-        p.nombre, p.codigo, p.categoria,
-        p.precioFinal, p.costo || null, p.stock,
+        p.nombre, p.codigo, p.categoria, UNIDAD_LABEL[p.unidadMedida] || UNIDAD_LABEL.unidad,
+        p.costo || null, p.precioFinal, p.stock,
         ...(mostrarStockTotal ? [p.stockTotal] : []),
         p.proveedor || '', p.activo ? 'Activo' : 'Inactivo',
       ]),
@@ -2554,6 +2834,8 @@ export default function Productos() {
     const colCosto  = findCol('costo');
     const colStock  = findCol('stock');
     const colCat    = findCol('categoria', 'categoría');
+    const colUnidad = findCol('unidad');
+    const colProv   = findCol('proveedor');
     // Solo indumentaria: "Grupo de talles" genera todas las variantes de ese
     // grupo (igual que el selector del alta manual); "Talle" solo (sin grupo)
     // asigna un talle fijo y propio, sin generar nada.
@@ -2568,6 +2850,9 @@ export default function Productos() {
       const codigo = colCodigo >= 0 ? (cols[colCodigo] || '') : '';
       const catNombre = colCat >= 0 ? (cols[colCat] || '') : '';
       const catId = catNombre ? categorias.find(c => c.nombre.toLowerCase() === catNombre.toLowerCase())?.id : undefined;
+      const unidadMedida = colUnidad >= 0 ? parseUnidad(cols[colUnidad]) : 'unidad';
+      const provNombre = colProv >= 0 ? (cols[colProv] || '').trim() : '';
+      const provId = provNombre ? proveedores.find(p => p.nombre.toLowerCase() === provNombre.toLowerCase())?.id : undefined;
       const grupoNombre = colGrupoTalle >= 0 ? (cols[colGrupoTalle] || '').trim() : '';
       const grupo = grupoNombre ? grupos.find(g => g.nombre.toLowerCase() === grupoNombre.toLowerCase()) : null;
       const talleValor = !grupo && colTalle >= 0 ? (cols[colTalle] || '').trim() : '';
@@ -2580,37 +2865,113 @@ export default function Productos() {
         stock: colStock >= 0 ? Number(cols[colStock]) || 0 : 0,
         catNombre,
         catId,
+        unidadMedida,
+        provNombre,
+        provId,
         grupo,
         talle,
-        codigoDuplicado: codigo ? productos.some(p => p.codigo && p.codigo.toLowerCase() === codigo.toLowerCase()) : false,
+        codigoDuplicado: false,
       });
     }
     if (!filas.length) { toast('No se encontraron productos válidos en el archivo', 'warning'); return; }
+    // El chequeo de duplicados es contra el catálogo completo del backend, no
+    // un array local — se pide de a lotes chicos en paralelo (uno por código
+    // único) en vez de una consulta por fila en serie, para no demorar
+    // minutos con un archivo de miles de filas.
+    const codigosUnicos = [...new Set(filas.map(f => f.codigo).filter(Boolean))];
+    const existentes = new Set();
+    const LOTE = 8;
+    for (let i = 0; i < codigosUnicos.length; i += LOTE) {
+      const lote = codigosUnicos.slice(i, i + LOTE);
+      await Promise.all(lote.map(async (codigo) => {
+        try {
+          const coincidencias = await productosService.getAll({ codigo_exacto: codigo });
+          if (coincidencias.length > 0) existentes.add(codigo.toLowerCase());
+        } catch { /* un error puntual de red no debería bloquear el import */ }
+      }));
+    }
+    filas.forEach(f => { f.codigoDuplicado = f.codigo ? existentes.has(f.codigo.toLowerCase()) : false; });
+    setImportPagina(1);
     setImportPreview(filas);
   };
 
   const confirmarImportacion = async () => {
     if (!importPreview) return;
+    cancelarImportRef.current = false;
+    setCancelandoImport(false);
     setImportando(true);
-    let ok = 0, fallas = 0;
+    setImportProgreso({ hecho: 0, total: importPreview.length });
+    let ok = 0, fallas = 0, cancelado = false;
+    // Si dos filas del mismo archivo piden la misma categoría/proveedor nueva,
+    // se crea una sola vez y se reusa el id para el resto — sin este cache se
+    // crearía una categoría/proveedor duplicado por cada fila.
+    const catsNuevas = new Map();
+    const provsNuevos = new Map();
     for (const f of importPreview) {
+      if (cancelarImportRef.current) { cancelado = true; break; }
       try {
-        await crearProducto({
+        let catId = f.catId;
+        if (!catId && f.catNombre) {
+          const key = f.catNombre.toLowerCase();
+          if (catsNuevas.has(key)) {
+            catId = catsNuevas.get(key);
+          } else {
+            const nueva = await categoriasService.create(f.catNombre.trim());
+            catId = nueva.id;
+            catsNuevas.set(key, catId);
+            setCategorias(prev => [...prev, nueva]);
+          }
+        }
+        let provId = f.provId;
+        if (!provId && f.provNombre) {
+          const key = f.provNombre.toLowerCase();
+          if (provsNuevos.has(key)) {
+            provId = provsNuevos.get(key);
+          } else {
+            const nuevo = await proveedoresService.create({ persona: f.provNombre.trim(), estado: true });
+            provId = nuevo.id;
+            provsNuevos.set(key, provId);
+            setProveedores(prev => [...prev, nuevo]);
+          }
+        }
+        // productosService.create() directo, no crearProducto() del contexto:
+        // ese pasa por React Query y en cada llamada invalida (y refetchea)
+        // la lista completa de productos apenas termina — con miles de filas
+        // eso duplica los pedidos al backend durante el import (una carga +
+        // un refetch por cada fila). Acá alcanza con refrescar una sola vez
+        // al final, ver recargarProductos() más abajo.
+        await productosService.create({
           producto: f.nombre,
           codigo: f.codigo || undefined,
           precio: f.precio,
           costo: f.costo,
           stock: f.stock,
-          id_categoria: f.catId,
+          id_categoria: catId,
+          id_proveedor: provId,
+          unidad_medida: esFerreteria ? f.unidadMedida : 'unidad',
           ...(f.grupo ? { tiene_variantes: true, id_grupo_talle: f.grupo.id } : {}),
           ...(f.talle ? { id_talle: f.talle.id } : {}),
         });
         ok++;
       } catch { fallas++; }
+      setImportProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
     }
+    if (ok > 0) recargarProductos();
     setImportando(false);
+    setCancelandoImport(false);
     setImportPreview(null);
-    toast(`${ok} producto${ok !== 1 ? 's' : ''} importado${ok !== 1 ? 's' : ''}${fallas ? ` · ${fallas} fallaron` : ''}`, ok > 0 ? 'success' : 'error');
+    const sufijoCancelado = cancelado ? ' · importación cancelada' : '';
+    toast(`${ok} producto${ok !== 1 ? 's' : ''} importado${ok !== 1 ? 's' : ''}${fallas ? ` · ${fallas} fallaron` : ''}${sufijoCancelado}`, ok > 0 ? 'success' : 'error');
+  };
+
+  // "Cancelar" no apaga importando de una: mientras el loop no confirme que
+  // frenó (chequeando el ref al principio de la próxima vuelta), el botón
+  // "Importar" tiene que seguir escondido — si no, un click ahí mismo
+  // dispara un SEGUNDO confirmarImportacion() superpuesto con el que
+  // todavía está terminando de cortar, el mismo bug que esto vino a arreglar.
+  const handleCancelarImport = () => {
+    cancelarImportRef.current = true;
+    setCancelandoImport(true);
   };
 
   const handleEliminarSeleccionados = async () => {
@@ -2645,33 +3006,86 @@ export default function Productos() {
     setPagina(1);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let list = [...productos];
-    if (q) list = list.filter(r => (r.nombre || '').toLowerCase().includes(q) || (r.codigo || '').toLowerCase().includes(q));
-    if (filtroCategoria) list = list.filter(r => r.categoria === filtroCategoria);
-    if (filtroEstado === 'activo')   list = list.filter(r => r.activo);
-    if (filtroEstado === 'inactivo') list = list.filter(r => !r.activo);
-    if (filtroProveedor) list = list.filter(r => String(r.id_proveedor) === filtroProveedor);
-    if (filtroStockBajo) list = list.filter(r => r.stock <= (r.alerta ?? 5));
-    if (filtroVencimiento) {
-      const limit = new Date(); limit.setDate(limit.getDate() + 30);
-      list = list.filter(r => {
-        if (!r.fechaVencimiento) return false;
-        return new Date(r.fechaVencimiento) <= limit;
-      });
-    }
-    if (filtroPromocion) list = list.filter(r => r.esCombo);
-    list.sort((a, b) => {
-      const va = sortCol === 'stock' ? a.stock : sortCol === 'stockTotal' ? a.stockTotal : sortCol === 'precioFinal' ? a.precioFinal : sortCol === 'reciente' ? a.id : (a.nombre || '').toLowerCase();
-      const vb = sortCol === 'stock' ? b.stock : sortCol === 'stockTotal' ? b.stockTotal : sortCol === 'precioFinal' ? b.precioFinal : sortCol === 'reciente' ? b.id : (b.nombre || '').toLowerCase();
-      return sortDir === 'asc' ? (va < vb ? -1 : va > vb ? 1 : 0) : (va > vb ? -1 : va < vb ? 1 : 0);
-    });
-    return list;
-  }, [productos, search, filtroCategoria, filtroEstado, filtroProveedor, filtroStockBajo, filtroVencimiento, filtroPromocion, sortCol, sortDir]);
+  // Búsqueda debounced para no pedirle al backend en cada tecla — el resto
+  // de los filtros ya cambian con poca frecuencia (selects/toggles), no
+  // necesitan el mismo debounce.
+  const debouncedSearch = useDebouncedValue(search, 300);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paged      = filtered.slice((pagina - 1) * pageSize, pagina * pageSize);
+  // filtroCategoria guarda el NOMBRE (así lo pinta el <Select>), pero el
+  // backend filtra por id — se resuelve acá con las categorías ya cargadas.
+  const idCategoriaFiltro = useMemo(
+    () => (filtroCategoria ? categorias.find(c => c.nombre === filtroCategoria)?.id : undefined),
+    [categorias, filtroCategoria]
+  );
+
+  const queryParams = useMemo(() => {
+    const params = { page: pagina, per_page: pageSize, sort: sortCol, dir: sortDir };
+    const q = debouncedSearch.trim();
+    if (q) params.search = q;
+    if (idCategoriaFiltro) params.id_categoria = idCategoriaFiltro;
+    if (filtroEstado === 'activo') params.estado = 1;
+    if (filtroEstado === 'inactivo') params.estado = 0;
+    if (filtroProveedor) params.id_proveedor = filtroProveedor;
+    if (filtroStockBajo) params.stock_bajo = 1;
+    if (filtroVencimiento) params.vencimiento_proximo = 1;
+    if (filtroPromocion) params.es_combo = 1;
+    return params;
+  }, [pagina, pageSize, sortCol, sortDir, debouncedSearch, idCategoriaFiltro, filtroEstado, filtroProveedor, filtroStockBajo, filtroVencimiento, filtroPromocion]);
+
+  const { data: listado } = useProductosPaginado(queryParams);
+  const paged = listado?.items ?? [];
+  const totalProductos = listado?.total ?? 0;
+  const totalPages = listado?.lastPage ?? 1;
+
+  // Independiente de los filtros de la tabla — es el total real del
+  // catálogo para el encabezado ("X productos en inventario"), no el total
+  // filtrado. per_page:1 alcanza, solo importa el campo `total`.
+  const { data: totalGeneral } = useProductosPaginado({ per_page: 1 });
+
+  // "Crear primer producto" solo tiene sentido si el negocio no tiene NINGÚN
+  // producto todavía — si hay productos pero el filtro/búsqueda no encontró
+  // nada, hay que decir eso, no invitar a crear uno de nuevo.
+  const hayFiltrosActivos = Boolean(search || filtroCategoria || filtroEstado || filtroProveedor || filtroStockBajo || filtroVencimiento || filtroPromocion);
+
+  const limpiarTodosFiltros = () => {
+    setSearch(''); setFiltroCategoria(''); setFiltroEstado(''); setFiltroProveedor('');
+    setFiltroStockBajo(false); setFiltroVencimiento(false); setFiltroPromocion(false);
+    setPagina(1);
+  };
+
+  // Exportar (Excel/PDF) tiene que traer TODO lo que matchea los filtros
+  // actuales, no solo la página visible en pantalla — se pide sin paginar,
+  // en dos pasadas (la primera solo para saber el total).
+  const obtenerTodosFiltrados = async () => {
+    const { page: _page, per_page: _perPage, ...paramsSinPaginar } = queryParams;
+    const primera = await productosService.getAllPaginado({ ...paramsSinPaginar, per_page: 1 });
+    const total = primera.total || 0;
+    if (total === 0) return [];
+    const completo = await productosService.getAllPaginado({ ...paramsSinPaginar, per_page: total });
+    return completo.items;
+  };
+
+  const handleExportarCSV = async () => {
+    setExportando(true);
+    try {
+      exportarCSVProductos(await obtenerTodosFiltrados());
+    } catch {
+      toast('No se pudo exportar el listado', 'error');
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const handleExportarPdfInventario = async () => {
+    setExportando(true);
+    try {
+      generarPdfInventario(await obtenerTodosFiltrados(), user?.empresa);
+    } catch {
+      toast('No se pudo generar el PDF', 'error');
+    } finally {
+      setExportando(false);
+    }
+  };
 
   const todosOk  = paged.length > 0 && paged.every(r => seleccionados.includes(r.id));
   const algunoOk = paged.some(r => seleccionados.includes(r.id));
@@ -2682,9 +3096,12 @@ export default function Productos() {
   };
 
   const colTh = { color: MUTED, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', userSelect: 'none' };
+  // Código/Estado/Stock tienen contenido corto y fijo (un código, un switch,
+  // "30 u") — les viene mejor un ancho fijo chico que competir 1fr contra
+  // Producto/Categoría/Proveedor, que sí necesitan lugar para texto variable.
   const COLS = mostrarStockTotal
-    ? '44px repeat(7, minmax(0, 1fr)) 130px 112px'
-    : '44px repeat(6, minmax(0, 1fr)) 130px 112px';
+    ? '44px 80px minmax(0, 1fr) minmax(0, 1fr) 90px 100px 100px minmax(0, 1fr) minmax(0, 1fr) 130px 112px'
+    : '44px 80px minmax(0, 1fr) minmax(0, 1fr) 90px 100px minmax(0, 1fr) minmax(0, 1fr) 130px 112px';
 
   const swSx = {
     '& .MuiSwitch-switchBase.Mui-checked': { color: P },
@@ -2703,15 +3120,16 @@ export default function Productos() {
 
       <ModalActualizarPrecios
         open={openActualizar} onClose={() => setOpenActualizar(false)}
-        productos={productos} categorias={categorias} proveedores={proveedores}
-        actualizarProducto={actualizarProducto} toast={toast}
+        categorias={categorias} proveedores={proveedores}
+        recargarProductos={recargarProductos} toast={toast}
       />
 
-      {/* Modal Nuevo Producto — mismo diseño y tamaño que el modal de Combo */}
+      {/* Modal Nuevo Producto — más ancho que el modal de Combo para que los
+          campos de precios/stock no queden amontonados */}
       <Dialog
         open={vista === 'nuevo'}
         onClose={() => setVista('lista')}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
         PaperProps={{ sx: modalPaperSx }}
       >
@@ -2726,7 +3144,7 @@ export default function Productos() {
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 3, flexWrap: 'wrap' }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.2 }}>Productos</Typography>
-          <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{productos.length} productos en inventario</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{totalGeneral?.total ?? '...'} productos en inventario</Typography>
         </Box>
         <Box data-tour="prod-opciones" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Tooltip title="Actualizar precios">
@@ -2882,7 +3300,7 @@ export default function Productos() {
             </Tooltip>
             <Tooltip title="Exportar Excel">
               <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
-                onClick={() => exportarCSVProductos(filtered)}
+                onClick={handleExportarCSV} disabled={exportando}
                 sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
                 <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
               </Button>
@@ -2901,7 +3319,7 @@ export default function Productos() {
               <Button
                 variant="outlined"
                 size="small"
-                onClick={() => generarPdfInventario(filtered, user?.empresa)}
+                onClick={handleExportarPdfInventario} disabled={exportando}
                 startIcon={<InventoryIcon sx={{ fontSize: 15 }} />}
                 sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
                 <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Inventario</Box>
@@ -3012,12 +3430,19 @@ export default function Productos() {
                 <Box sx={{ width: 48, height: 48, borderRadius: '12px', bgcolor: P, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <AddBoxIcon sx={{ color: '#fff', fontSize: 26 }} />
                 </Box>
-                <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>No hay productos</Typography>
-                <Typography sx={{ color: MUTED, fontSize: 14 }}>Aún no has creado ningún producto en tu negocio.</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setVista('nuevo')}
-                  sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
-                  Crear primer producto
-                </Button>
+                <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>{hayFiltrosActivos ? 'Sin resultados' : 'No hay productos'}</Typography>
+                <Typography sx={{ color: MUTED, fontSize: 14 }}>{hayFiltrosActivos ? 'Ningún producto coincide con la búsqueda o los filtros.' : 'Aún no has creado ningún producto en tu negocio.'}</Typography>
+                {hayFiltrosActivos ? (
+                  <Button variant="outlined" onClick={limpiarTodosFiltros}
+                    sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: HOVER } }}>
+                    Limpiar filtros
+                  </Button>
+                ) : (
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => setVista('nuevo')}
+                    sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
+                    Crear primer producto
+                  </Button>
+                )}
               </Box>
             ) : paged.map(p => (
               <Box key={p.id}
@@ -3096,6 +3521,7 @@ export default function Productos() {
             <Checkbox size="small" checked={todosOk} indeterminate={algunoOk && !todosOk}
               onChange={toggleTodos}
               sx={{ color: BORDER, '&.Mui-checked': { color: P }, '&.MuiCheckbox-indeterminate': { color: P }, p: 0 }} />
+            <Typography sx={colTh}>Código</Typography>
             <ColSortHeader col="nombre"      label="Producto"  sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
             <Typography sx={colTh}>Categoría</Typography>
             <Typography sx={colTh}>Estado</Typography>
@@ -3105,7 +3531,7 @@ export default function Productos() {
             )}
             <ColSortHeader col="precioFinal" label="Precio"    sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
             <Typography sx={colTh}>Proveedor</Typography>
-            <Typography sx={colTh}>Última modificación</Typography>
+            <Typography sx={colTh}>Últ. modificación</Typography>
             <Typography data-tour="prod-acciones" sx={{ ...colTh, textAlign: 'right' }}>Acciones</Typography>
           </Box>
 
@@ -3114,12 +3540,19 @@ export default function Productos() {
             <Box sx={{ width: 48, height: 48, borderRadius: '12px', bgcolor: P, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <AddBoxIcon sx={{ color: '#fff', fontSize: 26 }} />
             </Box>
-            <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>No hay productos</Typography>
-            <Typography sx={{ color: MUTED, fontSize: 14 }}>Aún no has creado ningún producto en tu negocio.</Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setVista('nuevo')}
-              sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
-              Crear primer producto
-            </Button>
+            <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>{hayFiltrosActivos ? 'Sin resultados' : 'No hay productos'}</Typography>
+            <Typography sx={{ color: MUTED, fontSize: 14 }}>{hayFiltrosActivos ? 'Ningún producto coincide con la búsqueda o los filtros.' : 'Aún no has creado ningún producto en tu negocio.'}</Typography>
+            {hayFiltrosActivos ? (
+              <Button variant="outlined" onClick={limpiarTodosFiltros}
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: HOVER } }}>
+                Limpiar filtros
+              </Button>
+            ) : (
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setVista('nuevo')}
+                sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
+                Crear primer producto
+              </Button>
+            )}
           </Box>
         ) : paged.map(p => (
           <Box key={p.id}
@@ -3138,6 +3571,9 @@ export default function Productos() {
               }}
               onClick={e => e.stopPropagation()}
               sx={{ color: BORDER, '&.Mui-checked': { color: P }, p: 0 }} />
+            <Typography sx={{ color: MUTED, fontSize: 12.5, fontFamily: 'monospace' }}>
+              {p.codigo || '—'}
+            </Typography>
             <Box sx={{ minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
                 <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</Typography>
@@ -3152,7 +3588,6 @@ export default function Productos() {
                 )}
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mt: 0.25 }}>
-                <Typography sx={{ color: MUTED, fontSize: 12 }}>{p.codigo}</Typography>
                 {(() => {
                   const [label, color] = getVencimientoBadge(p.fechaVencimiento);
                   if (!label) return null;
@@ -3223,18 +3658,18 @@ export default function Productos() {
         {/* Paginación — visible en ambas vistas, no solo en la tabla */}
         <TablePagination
           pagina={pagina} totalPages={totalPages}
-          pageSize={pageSize} totalItems={filtered.length} label="productos"
+          pageSize={pageSize} totalItems={totalProductos} label="productos"
           onPageChange={setPagina} onPageSizeChange={(s) => { setPageSize(s); setPagina(1); }}
         />
       </Box>
 
       {/* Modal editar producto — mismo componente que "Nuevo producto", en
           modo edición (misma lógica de precios/IVA/stock que crear, ver #6).
-          Mismo diseño y tamaño que el modal de Combo. */}
+          Mismo ancho que el modal de alta (ver comentario ahí). */}
       <Dialog
         open={!!productoEditar}
         onClose={() => setProductoEditar(null)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
         PaperProps={{ sx: modalPaperSx }}
       >
@@ -3264,7 +3699,6 @@ export default function Productos() {
         open={openCombo || !!comboEditar}
         onClose={() => { setOpenCombo(false); setComboEditar(null); }}
         combo={comboEditar}
-        productos={productos}
         crearProducto={crearProducto}
         actualizarProducto={actualizarProducto}
         subirImagen={subirImagenProducto}
@@ -3293,11 +3727,7 @@ export default function Productos() {
       <ModalDetalleProducto
         open={!!productoDetalle}
         onClose={() => setProductoDetalle(null)}
-        // Re-derivado del listado en vivo (no el snapshot del click) para que
-        // desactivar un talle desaparezca de "Stock por talle" al instante,
-        // sin tener que cerrar y volver a abrir el modal.
-        producto={productos.find(p => p.id === productoDetalle?.id) ?? productoDetalle}
-        productos={productos}
+        producto={productoDetalle}
         actualizarProducto={actualizarProducto}
         onVerHistorial={() => { setHistorialProducto(productoDetalle); setProductoDetalle(null); }}
         onVerHistorialCompras={() => { setHistorialComprasProducto(productoDetalle); setProductoDetalle(null); }}
@@ -3349,70 +3779,169 @@ export default function Productos() {
 
       <Box component="input" ref={csvRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleImportarCSV} sx={{ display: 'none' }} />
 
-      {importPreview && (
-        <Dialog open onClose={() => !importando && setImportPreview(null)} maxWidth="sm" fullWidth
-          PaperProps={{ sx: modalPaperSx }}>
+      {importPreview && (() => {
+        const importCols = [
+          { key: 'nombre',      header: 'Nombre',    width: '1.6fr' },
+          { key: 'codigo',      header: 'Código',    width: '120px' },
+          { key: 'catNombre',   header: 'Categoría', width: '1fr' },
+          { key: 'provNombre',  header: 'Proveedor',  width: '1fr' },
+          ...(esFerreteria ? [{ key: 'unidadMedida', header: 'Unidad', width: '96px' }] : []),
+          { key: 'costo',       header: 'Costo',   width: '96px' },
+          { key: 'precio',      header: 'Precio',  width: '96px' },
+          { key: 'stock',       header: 'Stock',   width: '80px' },
+          { key: '_quitar',     header: '',        width: '36px' },
+        ];
+        const gridTemplate = importCols.map(c => c.width).join(' ');
+        const totalPages = Math.max(1, Math.ceil(importPreview.length / importPageSize));
+        const pagina = Math.min(importPagina, totalPages);
+        const inicioPag = (pagina - 1) * importPageSize;
+        const paginadas = importPreview.slice(inicioPag, inicioPag + importPageSize).map((f, i) => ({ ...f, _idx: inicioPag + i }));
+        const celdaSx = { '& .MuiInputBase-root': { fontSize: 12.5 }, '& .MuiInputBase-input': { py: '6px', px: '8px' } };
+
+        return (
+        <Dialog open onClose={() => !importando && setImportPreview(null)} maxWidth="xl" fullWidth
+          PaperProps={{ sx: { ...modalPaperSx, height: '88vh' } }}>
           <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
             <Box>
               <Typography sx={{ fontWeight: 700, fontSize: 17, color: INK }}>Confirmar importación</Typography>
               <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 0.25 }}>
-                {importPreview.length} producto{importPreview.length !== 1 ? 's' : ''} encontrado{importPreview.length !== 1 ? 's' : ''} en el archivo
+                {importPreview.length} producto{importPreview.length !== 1 ? 's' : ''} encontrado{importPreview.length !== 1 ? 's' : ''} en el archivo — revisá y corregí lo que haga falta antes de importar
               </Typography>
             </Box>
             <IconButton size="small" onClick={() => setImportPreview(null)} disabled={importando} sx={{ color: MUTED, '&:hover': { color: INK } }}>
               <CloseIcon fontSize="small" />
             </IconButton>
           </DialogTitle>
-          <DialogContent sx={{ pt: 1 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 400, overflowY: 'auto', mb: 2.5 }}>
-              {importPreview.map((f, i) => (
-                <Box key={i} sx={{
-                  p: 1.5, bgcolor: HOVER,
-                  border: `1px solid ${f.codigoDuplicado ? '#f59e0b44' : BORDER}`,
-                  borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1,
-                }}>
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, minWidth: 0 }}>
-                    {f.codigoDuplicado
-                      ? <WarningAmberIcon sx={{ color: '#f59e0b', fontSize: 14, flexShrink: 0, mt: '2px' }} />
-                      : <CheckCircleIcon sx={{ color: '#10b981', fontSize: 14, flexShrink: 0, mt: '2px' }} />
-                    }
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {f.nombre}
-                      </Typography>
-                      <Typography sx={{ color: MUTED, fontSize: 11 }}>
-                        {f.codigo || 'Sin código'}
-                        {f.catNombre ? ` · ${f.catId ? f.catNombre : `"${f.catNombre}" (no existe, sin categoría)`}` : ''}
-                      </Typography>
-                      {f.codigoDuplicado && (
-                        <Typography sx={{ color: '#f59e0b', fontSize: 11 }}>Ya existe un producto con ese código</Typography>
-                      )}
+          <DialogContent sx={{ pt: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: gridTemplate, minWidth: 760 }}>
+                <Box role="row" sx={{ display: 'contents' }}>
+                  {importCols.map(c => (
+                    <Box key={c.key} sx={{
+                      position: 'sticky', top: 0, zIndex: 1, bgcolor: TABLE_HEADER, borderBottom: `1px solid ${BORDER}`,
+                      px: 1, py: 1, display: 'flex', alignItems: 'center', justifyContent: c.align === 'right' ? 'flex-end' : 'flex-start',
+                    }}>
+                      <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{c.header}</Typography>
                     </Box>
-                  </Box>
-                  <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                    <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600 }}>{fmtMoney(f.precio)}</Typography>
-                    <Typography sx={{ color: MUTED, fontSize: 11 }}>Stock: {f.stock}</Typography>
-                  </Box>
+                  ))}
                 </Box>
-              ))}
+                {paginadas.map((f) => {
+                  const problema = f.codigoDuplicado;
+                  const rowBg = problema ? '#f59e0b12' : 'transparent';
+                  return (
+                    <Box key={f._idx} role="row" sx={{ display: 'contents' }}>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75, display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                        {problema
+                          ? <Tooltip title="Ya existe un producto con ese código"><WarningAmberIcon sx={{ color: '#f59e0b', fontSize: 14, flexShrink: 0 }} /></Tooltip>
+                          : <CheckCircleIcon sx={{ color: '#10b981', fontSize: 14, flexShrink: 0 }} />
+                        }
+                        <TextField fullWidth variant="standard" value={f.nombre} onChange={e => handleEditarFilaImport(f._idx, 'nombre', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" value={f.codigo} onChange={e => handleEditarFilaImport(f._idx, 'codigo', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75, minWidth: 0 }}>
+                        <TextField fullWidth variant="standard" value={f.catNombre} placeholder="Sin categoría"
+                          onChange={e => handleEditarFilaImport(f._idx, 'catNombre', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                        {f.catNombre && !f.catId && (
+                          <Typography sx={{ color: '#f59e0b', fontSize: 10 }} noWrap>se va a crear</Typography>
+                        )}
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75, minWidth: 0 }}>
+                        <TextField fullWidth variant="standard" value={f.provNombre} placeholder="Sin proveedor"
+                          onChange={e => handleEditarFilaImport(f._idx, 'provNombre', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                        {f.provNombre && !f.provId && (
+                          <Typography sx={{ color: '#f59e0b', fontSize: 10 }} noWrap>se va a crear</Typography>
+                        )}
+                      </Box>
+                      {esFerreteria && (
+                        <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                          <Select fullWidth variant="standard" value={f.unidadMedida} disableUnderline
+                            onChange={e => handleEditarFilaImport(f._idx, 'unidadMedida', e.target.value)}
+                            MenuProps={{ PaperProps: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, color: INK } } }}
+                            sx={{ fontSize: 12.5 }}>
+                            <MenuItem value="unidad" sx={{ fontSize: 12.5 }}>Unidad</MenuItem>
+                            <MenuItem value="kg" sx={{ fontSize: 12.5 }}>kg</MenuItem>
+                            <MenuItem value="metro" sx={{ fontSize: 12.5 }}>Metro</MenuItem>
+                            <MenuItem value="litro" sx={{ fontSize: 12.5 }}>Litro</MenuItem>
+                          </Select>
+                        </Box>
+                      )}
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" type="number" value={f.costo ?? ''}
+                          onChange={e => handleEditarFilaImport(f._idx, 'costo', e.target.value === '' ? undefined : Number(e.target.value))}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" type="number" value={f.precio}
+                          onChange={e => handleEditarFilaImport(f._idx, 'precio', Number(e.target.value) || 0)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" type="number" value={f.stock}
+                          onChange={e => handleEditarFilaImport(f._idx, 'stock', Number(e.target.value) || 0)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 0.5, py: 0.75, display: 'flex', justifyContent: 'center' }}>
+                        <Tooltip title="Quitar de la importación">
+                          <IconButton size="small" onClick={() => handleQuitarFilaImport(f._idx)} sx={{ color: MUTED, '&:hover': { color: '#ef4444' } }}>
+                            <CloseIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
             </Box>
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
-              <Button onClick={() => setImportPreview(null)} disabled={importando} sx={{
-                flex: 1, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600, borderRadius: '8px', py: 1.25,
-                '&:hover': { bgcolor: HOVER },
-              }}>
-                Cancelar
-              </Button>
-              <Button onClick={confirmarImportacion} disabled={importando} variant="contained" sx={{
-                flex: 1, bgcolor: P, textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.25,
-                '&:hover': { bgcolor: P_HOVER },
-              }}>
-                {importando ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : `Importar ${importPreview.length} producto${importPreview.length !== 1 ? 's' : ''}`}
-              </Button>
-            </Box>
+
+            {totalPages > 1 && (
+              <TablePagination pagina={pagina} totalPages={totalPages} pageSize={importPageSize} totalItems={importPreview.length} label="productos"
+                onPageChange={setImportPagina} onPageSizeChange={(s) => { setImportPageSize(s); setImportPagina(1); }} />
+            )}
+
+            {importando ? (
+              <Box sx={{ mt: 2, flexShrink: 0 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+                  <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600 }}>
+                    {cancelandoImport ? 'Cancelando…' : 'Importando productos…'}
+                  </Typography>
+                  <Typography sx={{ color: P, fontSize: 12.5, fontWeight: 700 }}>{importProgreso.hecho} / {importProgreso.total}</Typography>
+                </Box>
+                <LinearProgress variant="determinate"
+                  value={importProgreso.total ? (importProgreso.hecho / importProgreso.total) * 100 : 0}
+                  sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: cancelandoImport ? MUTED : P, borderRadius: 4 } }} />
+                <Button onClick={handleCancelarImport} disabled={cancelandoImport} sx={{
+                  mt: 1.25, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600,
+                  borderRadius: '8px', py: 0.75, fontSize: 12.5, '&:hover': { bgcolor: HOVER },
+                }}>
+                  {cancelandoImport ? 'Terminando de cancelar…' : 'Cancelar importación'}
+                </Button>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', gap: 1.5, mt: 2, flexShrink: 0 }}>
+                <Button onClick={() => setImportPreview(null)} sx={{
+                  flex: 1, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600, borderRadius: '8px', py: 1.25,
+                  '&:hover': { bgcolor: HOVER },
+                }}>
+                  Cancelar
+                </Button>
+                <Button onClick={confirmarImportacion} disabled={!importPreview.length} variant="contained" sx={{
+                  flex: 1, bgcolor: P, textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.25,
+                  '&:hover': { bgcolor: P_HOVER },
+                }}>
+                  {`Importar ${importPreview.length} producto${importPreview.length !== 1 ? 's' : ''}`}
+                </Button>
+              </Box>
+            )}
           </DialogContent>
         </Dialog>
-      )}
+        );
+      })()}
     </Box>
   );
 }

@@ -39,6 +39,7 @@ import { cajaService } from '../../services/cajaService';
 import { ventasService } from '../../services/ventasService';
 import { fmtDate, toLocalDateStr } from '../../utils/format';
 import AyudaButton from '../../components/shared/AyudaButton';
+import CampoPrecio from '../../components/shared/CampoPrecio';
 import { registerTour } from '../../utils/tour';
 import useHasPermiso from '../../hooks/useHasPermiso';
 
@@ -96,8 +97,8 @@ function TabCaja({ caja, onAbrir, onCerrar, arqueoIniciado }) {
           </Box>
           <Box sx={{ width: '100%', maxWidth: 320 }}>
             <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Monto inicial en efectivo</Typography>
-            <TextField fullWidth type="number" placeholder="0.00" value={montoInicial}
-              onChange={e => setMontoInicial(e.target.value)} inputProps={{ min: 0 }}
+            <CampoPrecio fullWidth placeholder="0" value={montoInicial}
+              onChange={e => setMontoInicial(e.target.value)}
               InputProps={{ startAdornment: <InputAdornment position="start"><Typography sx={{ color: MUTED, fontSize: 14 }}>$</Typography></InputAdornment> }}
               sx={fieldSx} />
           </Box>
@@ -172,6 +173,7 @@ function TabCaja({ caja, onAbrir, onCerrar, arqueoIniciado }) {
 /* ─── TAB MOVIMIENTOS ─── */
 function TabMovimientos({ movimientos, onAgregar, cajaAbierta, ocultarMontos }) {
   const [tipo,     setTipo]     = useState('ingreso');
+  const [metodo,   setMetodo]   = useState('efectivo');
   const [monto,    setMonto]    = useState('');
   const [motivo,   setMotivo]   = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -180,11 +182,11 @@ function TabMovimientos({ movimientos, onAgregar, cajaAbierta, ocultarMontos }) 
     if (!monto || Number(monto) <= 0) return;
     const now = new Date();
     onAgregar({
-      id: Date.now(), tipo, monto: Number(monto),
+      id: Date.now(), tipo, metodo, monto: Number(monto),
       motivo: motivo.trim() || (tipo === 'ingreso' ? 'Ingreso manual' : 'Egreso manual'),
       hora: now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
     });
-    setMonto(''); setMotivo(''); setShowForm(false);
+    setMonto(''); setMotivo(''); setMetodo('efectivo'); setShowForm(false);
   };
 
   return (
@@ -229,10 +231,33 @@ function TabMovimientos({ movimientos, onAgregar, cajaAbierta, ocultarMontos }) 
               </Button>
             ))}
           </Box>
+          <Box sx={{ mb: 2 }}>
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Método</Typography>
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              {[
+                { key: 'efectivo',     label: 'Efectivo' },
+                { key: 'transferencia', label: 'Transferencia' },
+              ].map(opt => (
+                <Button key={opt.key} fullWidth onClick={() => setMetodo(opt.key)}
+                  sx={{ py: 1, textTransform: 'none', fontWeight: 600, fontSize: 13.5, borderRadius: '8px',
+                    border: `1px solid ${metodo === opt.key ? P : BORDER}`,
+                    bgcolor: metodo === opt.key ? `${P}18` : 'transparent',
+                    color:   metodo === opt.key ? P : INK2,
+                    '&:hover': { bgcolor: `${P}18`, borderColor: P, color: P } }}>
+                  {opt.label}
+                </Button>
+              ))}
+            </Box>
+            {metodo === 'transferencia' && (
+              <Typography sx={{ color: MUTED, fontSize: 12, mt: 0.75 }}>
+                No es plata física — no afecta el efectivo esperado ni el arqueo de cierre, solo queda registrado.
+              </Typography>
+            )}
+          </Box>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, mb: 2 }}>
             <Box>
               <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Monto</Typography>
-              <TextField fullWidth type="number" placeholder="0.00" value={monto} onChange={e => setMonto(e.target.value)}
+              <CampoPrecio fullWidth placeholder="0" value={monto} onChange={e => setMonto(e.target.value)}
                 InputProps={{ startAdornment: <InputAdornment position="start"><Typography sx={{ color: MUTED, fontSize: 14 }}>$</Typography></InputAdornment> }}
                 sx={fieldSx} />
             </Box>
@@ -242,7 +267,7 @@ function TabMovimientos({ movimientos, onAgregar, cajaAbierta, ocultarMontos }) 
             </Box>
           </Box>
           <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end' }}>
-            <Button onClick={() => { setShowForm(false); setMonto(''); setMotivo(''); }}
+            <Button onClick={() => { setShowForm(false); setMonto(''); setMotivo(''); setMetodo('efectivo'); }}
               sx={{ color: INK2, textTransform: 'none', fontWeight: 600, borderRadius: '8px', '&:hover': { bgcolor: HOVER } }}>
               Cancelar
             </Button>
@@ -271,8 +296,13 @@ function TabMovimientos({ movimientos, onAgregar, cajaAbierta, ocultarMontos }) 
             {movimientos.map(m => (
               <Box key={m.id} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '90px 1fr 1fr 110px' }, alignItems: 'center', px: 2.5, py: 1.5, borderBottom: `1px solid ${BORDER}`, '&:last-child': { borderBottom: 'none' }, '&:hover': { bgcolor: HOVER } }}>
                 <Typography sx={{ color: MUTED, fontSize: 13 }}>{m.hora}</Typography>
-                <Chip label={m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} size="small"
-                  sx={{ width: 'fit-content', bgcolor: m.tipo === 'ingreso' ? SUCCESS_BG : ERROR_BG, color: m.tipo === 'ingreso' ? SUCCESS : ERROR, fontWeight: 600, fontSize: 12, borderRadius: '6px' }} />
+                <Box>
+                  <Chip label={m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} size="small"
+                    sx={{ width: 'fit-content', bgcolor: m.tipo === 'ingreso' ? SUCCESS_BG : ERROR_BG, color: m.tipo === 'ingreso' ? SUCCESS : ERROR, fontWeight: 600, fontSize: 12, borderRadius: '6px' }} />
+                  {m.metodo === 'transferencia' && (
+                    <Typography sx={{ color: MUTED, fontSize: 11, mt: 0.25 }}>Transferencia</Typography>
+                  )}
+                </Box>
                 <Typography sx={{ color: INK2, fontSize: 13, display: { xs: 'none', sm: 'block' } }}>{m.motivo}</Typography>
                 <Typography sx={{ color: m.tipo === 'ingreso' ? SUCCESS : ERROR, fontSize: 14, fontWeight: 700, textAlign: { xs: 'left', sm: 'right' } }}>
                   {ocultarMontos ? '•••••' : `${m.tipo === 'ingreso' ? '+' : '-'}${fmt(m.monto)}`}
@@ -291,8 +321,11 @@ function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoC
   const toast = useToast();
   const [contado, setContado] = useState('');
 
-  const totalIngresos   = movimientos.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + m.monto, 0);
-  const totalEgresos    = movimientos.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0);
+  // Solo los movimientos en efectivo entran acá — una transferencia no es
+  // plata física, así que no puede formar parte del "esperado" que este
+  // cálculo tiene que igualar (ver comentario más abajo).
+  const totalIngresos   = movimientos.filter(m => m.tipo === 'ingreso' && (m.metodo ?? 'efectivo') === 'efectivo').reduce((s, m) => s + m.monto, 0);
+  const totalEgresos    = movimientos.filter(m => m.tipo === 'egreso' && (m.metodo ?? 'efectivo') === 'efectivo').reduce((s, m) => s + m.monto, 0);
   const ventasEfectivo  = caja.ventasEfectivo || 0;
   // Tarjeta/transferencia/QR/fiado no mueven plata física — no forman parte
   // del efectivo "esperado" que el arqueo ciego protege, así que se muestran
@@ -370,7 +403,7 @@ function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoC
             Contá el efectivo físico de la caja antes de escribir el monto — el sistema recién te muestra si coincide después de confirmar.
           </Typography>
           <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Efectivo contado</Typography>
-          <TextField fullWidth type="number" placeholder="0.00" value={contado} onChange={e => setContado(e.target.value)}
+          <CampoPrecio fullWidth placeholder="0" value={contado} onChange={e => setContado(e.target.value)}
             InputProps={{ startAdornment: <InputAdornment position="start"><Typography sx={{ color: MUTED, fontSize: 14 }}>$</Typography></InputAdornment> }}
             sx={fieldSx} />
         </Box>
@@ -410,7 +443,7 @@ function VentaDetalleModal({ venta, onClose }) {
               </Box>
               <Box>
                 <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>Detalle de venta</Typography>
-                <Typography sx={{ color: MUTED, fontFamily: 'monospace', fontSize: 12 }}>{venta.numero}</Typography>
+                <Typography sx={{ color: MUTED, fontFamily: 'monospace', fontSize: 12 }}>#{venta.id}</Typography>
               </Box>
             </Box>
             <IconButton size="small" onClick={onClose} sx={{ color: MUTED, '&:hover': { color: INK } }}>
@@ -520,7 +553,7 @@ function TurnoVentasDetalle({ idTurno }) {
             borderBottom: i < paginadas.length - 1 ? `1px solid ${BORDER}` : 'none', '&:hover': { bgcolor: HOVER },
           }}>
             <Typography sx={{ color: MUTED, fontSize: 12.5 }}>{v.hora}</Typography>
-            <Typography sx={{ color: INK2, fontSize: 13, fontFamily: 'monospace', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.numero}</Typography>
+            <Typography sx={{ color: INK2, fontSize: 13, fontFamily: 'monospace', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>#{v.id}</Typography>
             <Typography sx={{ color: INK2, fontSize: 13, display: { xs: 'none', sm: 'block' } }}>{v.cliente}</Typography>
             <Typography sx={{ color: INK, fontSize: 13, fontWeight: 700, textAlign: 'right' }}>
               {fmt(v.total)}
@@ -576,7 +609,9 @@ function MovimientosCollapsable({ movimientos }) {
               <Typography sx={{ color: MUTED, fontSize: 12.5 }}>{m.hora}</Typography>
               <Chip label={m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} size="small"
                 sx={{ width: 'fit-content', height: 20, fontSize: 11, bgcolor: m.tipo === 'ingreso' ? SUCCESS_BG : ERROR_BG, color: m.tipo === 'ingreso' ? SUCCESS : ERROR, fontWeight: 600, borderRadius: '6px' }} />
-              <Typography sx={{ color: INK2, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.motivo}</Typography>
+              <Typography sx={{ color: INK2, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {m.motivo}{m.metodo === 'transferencia' && <Box component="span" sx={{ color: MUTED }}> · Transferencia</Box>}
+              </Typography>
               <Typography sx={{ color: m.tipo === 'ingreso' ? SUCCESS : ERROR, fontSize: 13, fontWeight: 700, textAlign: 'right' }}>
                 {m.tipo === 'ingreso' ? '+' : '-'}{fmt(m.monto)}
               </Typography>

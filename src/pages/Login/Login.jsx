@@ -161,7 +161,7 @@ function View2FA({ pendingToken, onVerificado, onCancelar }) {
   );
 }
 
-function ViewLogin({ onForgot, onRequiere2fa }) {
+function ViewLogin({ onRequiere2fa }) {
   const { control, handleSubmit, formState: { errors } } = useForm({ mode: 'onTouched' });
   const [showPass, setShowPass] = useState(false);
   const [error,    setError]    = useState('');
@@ -199,7 +199,7 @@ function ViewLogin({ onForgot, onRequiere2fa }) {
           <Controller name="email" control={control} defaultValue=""
             rules={{ required: 'El correo es obligatorio', pattern: { value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, message: 'Correo inválido' } }}
             render={({ field }) => (
-              <TextField {...field} type="email" placeholder="nombre@empresa.com" fullWidth
+              <TextField {...field} type="email" placeholder="nombre@gmail.com" fullWidth
                 autoComplete="email" autoFocus error={!!errors.email} helperText={errors.email?.message}
                 InputLabelProps={{ shrink: false }} label="" sx={inputSx} />
             )} />
@@ -208,10 +208,11 @@ function ViewLogin({ onForgot, onRequiere2fa }) {
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
             <Label>Contraseña</Label>
-            <Typography onClick={onForgot}
-              sx={{ color: PRIMARY_COLOR, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
-              ¿Olvidaste tu contraseña?
-            </Typography>
+            {/* "¿Olvidaste tu contraseña?" comentado — la instalación de escritorio
+                es local y no tiene un servidor de mail configurado para enviar el
+                link de reseteo (ver ViewForgot/forgotPasswordApi más abajo, que sí
+                quedan intactos por si en algún momento se habilita SMTP). Para
+                reactivar, descomentar este bloque. */}
           </Box>
           <Controller name="password" control={control} defaultValue=""
             render={({ field }) => (
@@ -306,7 +307,7 @@ function ViewForgot({ onBack }) {
           <Label>Correo electrónico</Label>
           <Controller name="email" control={control} defaultValue=""
               render={({ field }) => (
-                <TextField {...field} type="email" placeholder="nombre@empresa.com" fullWidth autoFocus
+                <TextField {...field} type="email" placeholder="nombre@gmail.com" fullWidth autoFocus
                   error={!!errors.email} helperText={errors.email?.message}
                   InputLabelProps={{ shrink: false }} label="" sx={inputSx} />
               )} />
@@ -558,7 +559,7 @@ export default function Login() {
                   </Box>
 
                   <Box sx={{ animation: `${slideLeft} 0.25s ease` }}>
-                    <ViewLogin onForgot={() => setView('forgot')} onRequiere2fa={(token) => { setPendingToken(token); setView('2fa'); }} />
+                    <ViewLogin onRequiere2fa={(token) => { setPendingToken(token); setView('2fa'); }} />
                   </Box>
                 </>
               )}

@@ -5,7 +5,7 @@
 
 export { P, P_HOVER, SUCCESS, SUCCESS_HOVER, SUCCESS_BG, SUCCESS_BORDER,
          ERROR, ERROR_BG, ERROR_BORDER, ERROR_DARK, WARNING, WARNING_BG,
-         INFO, MONEY, PURPLE, ORANGE, SUCCESS_LIGHT, METHOD_COLORS, ROL_COLORS,
+         INFO, MONEY, PURPLE, ORANGE, GOLD, SUCCESS_LIGHT, METHOD_COLORS, ROL_COLORS,
 } from './palette';
 
 // ── Theme-aware CSS variable tokens ────────────────────────────────────────
@@ -99,4 +99,11 @@ export const fieldSx = {
   '& .MuiInputLabel-root': { color: MUTED },
   '& .MuiInputLabel-root.Mui-focused': { color: P },
   '& .MuiFormHelperText-root': { color: '#ef4444', mx: 0, mt: 0.5, fontSize: 12 },
+  // Sin esto, los input type="number" muestran las flechitas nativas del
+  // navegador (subir/bajar) superpuestas al valor — se ven mal y no las usa
+  // nadie acá (se tipea el número directo), así que se ocultan en todos lados.
+  '& input[type=number]': { MozAppearance: 'textfield' },
+  '& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button': {
+    WebkitAppearance: 'none', margin: 0,
+  },
 };

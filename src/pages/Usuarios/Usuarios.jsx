@@ -16,7 +16,7 @@ import HistoryIcon from '@mui/icons-material/History';
 
 import {
   BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, INPUT, HOVER, TABLE_HEADER, DROPDOWN,
-  fieldSx, selectSx as selectFieldSx, modalPaperSx, SUCCESS_LIGHT, ERROR,
+  fieldSx, selectSx as selectFieldSx, modalPaperSx, SUCCESS_LIGHT, ERROR, GOLD,
 } from '../../theme/tokens';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WatchLaterIcon  from '@mui/icons-material/WatchLater';
@@ -34,13 +34,17 @@ import useHasPermiso from '../../hooks/useHasPermiso';
 import usePlan from '../../hooks/usePlan';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 
+// Antes tenían colores fijos (indigo/celeste) sin relación con la marca —
+// admin ahora usa P (el color primario configurable, ver config/brand.js) y
+// gerente usa GOLD (acento dorado de la misma paleta), en vez de hardcodear
+// un azul que no tiene nada que ver.
 const ROL_COLORS = {
-  default:       { bg: '#5c6ef822', fg: '#818cf8', border: '#5c6ef844' },
-  admin:         { bg: '#5c6ef822', fg: '#818cf8', border: '#5c6ef844' },
-  gerente:       { bg: '#0ea5e922', fg: '#38bdf8', border: '#0ea5e944' },
+  default:       { bg: `${P}22`, fg: P, border: `${P}44` },
+  admin:         { bg: `${P}22`, fg: P, border: `${P}44` },
+  gerente:       { bg: `${GOLD}22`, fg: GOLD, border: `${GOLD}44` },
   usuario:       { bg: '#65a30d22', fg: '#86efac', border: '#65a30d44' },
-  Administrador: { bg: '#5c6ef822', fg: '#818cf8', border: '#5c6ef844' },
-  Gerente:       { bg: '#0ea5e922', fg: '#38bdf8', border: '#0ea5e944' },
+  Administrador: { bg: `${P}22`, fg: P, border: `${P}44` },
+  Gerente:       { bg: `${GOLD}22`, fg: GOLD, border: `${GOLD}44` },
   Usuario:       { bg: '#65a30d22', fg: '#86efac', border: '#65a30d44' },
 };
 

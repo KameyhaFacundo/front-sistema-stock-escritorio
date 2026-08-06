@@ -11,6 +11,7 @@ import CheckCircleIcon  from '@mui/icons-material/CheckCircle';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { BG, BORDER, INK, INK2, MUTED, P, HOVER, modalPaperSx } from '../../theme/tokens';
 import { escanearFacturaApi } from '../../services/escanearApi';
+import { productosService } from '../../services/productosService';
 import { toLocalDateStr } from '../../utils/format';
 import { matchProducto, matchProveedor, precioVentaSugerido } from './comprasMatching';
 
@@ -40,7 +41,7 @@ function comprimirImagen(file, maxDim = 1600, quality = 0.82) {
   });
 }
 
-export default function EscanearModal({ open, onClose, onConfirm, proveedores, productos }) {
+export default function EscanearModal({ open, onClose, onConfirm, proveedores }) {
   const fileRef   = useRef(null);
   const [preview, setPreview]   = useState(null);
   const [base64,  setBase64]    = useState(null);
@@ -85,8 +86,26 @@ export default function EscanearModal({ open, onClose, onConfirm, proveedores, p
       const res  = await escanearFacturaApi(base64, mime);
       const data = res.data;
 
+      // Match contra el catálogo completo del backend, no un array local — se
+      // pide un puñado de candidatos por nombre único detectado (una factura
+      // tiene pocas líneas, no hace falta más que eso) y se aplica encima la
+      // misma lógica difusa de siempre (exacto → includes → included-by).
+      const nombresUnicos = [...new Set((data.productos || []).map(p => p.nombre))];
+      const candidatosPorNombre = new Map();
+      const LOTE = 8;
+      for (let i = 0; i < nombresUnicos.length; i += LOTE) {
+        const lote = nombresUnicos.slice(i, i + LOTE);
+        await Promise.all(lote.map(async (nombre) => {
+          try {
+            candidatosPorNombre.set(nombre, await productosService.getAll({ search: nombre, per_page: 5 }));
+          } catch {
+            candidatosPorNombre.set(nombre, []);
+          }
+        }));
+      }
+
       const lineasMapped = (data.productos || []).map(p => {
-        const match = matchProducto(p.nombre, productos);
+        const match = matchProducto(p.nombre, candidatosPorNombre.get(p.nombre) || []);
         return {
           nombre_original: p.nombre,
           id_producto:     match?.id || '',

@@ -55,9 +55,18 @@ export function VentasProvider({ children, onError, onRecargarFiados }) {
       // El propio backend ya crea el movimiento de stock de cada línea dentro de
       // la misma transacción de la venta (VentaCreacionService::crear) — acá solo
       // hay que invalidar los caches para que el resto de la UI se actualice.
+      //
+      // Productos se refetchea activo — el stock nuevo hace falta ya mismo en
+      // la grilla del POS. Caja y Movimientos, en cambio, se marcan solo como
+      // "obsoletos" (refetchType: 'none', sin forzar el pedido ahora): el
+      // servidor PHP embebido (`php artisan serve`) es de un solo hilo, así
+      // que forzar 3 refetch simultáneos en cada venta los hace competir por
+      // el mismo hilo y se siente como que "la venta tarda". CajaContext está
+      // montado en toda la app (por eso igual se actualiza solo, apenas se
+      // vuelva a mirar) y Movimientos no se ve en la pantalla del POS.
       queryClient.invalidateQueries({ queryKey: PRODUCTOS_KEYS.lists() });
-      queryClient.invalidateQueries({ queryKey: CAJA_KEYS.turnoActivo() });
-      queryClient.invalidateQueries({ queryKey: MOVIMIENTOS_KEYS.lists() });
+      queryClient.invalidateQueries({ queryKey: CAJA_KEYS.turnoActivo(), refetchType: 'none' });
+      queryClient.invalidateQueries({ queryKey: MOVIMIENTOS_KEYS.lists(), refetchType: 'none' });
       if (ventaLocal.metodo === 'fiado') onRecargarFiados?.();
 
       return saved;

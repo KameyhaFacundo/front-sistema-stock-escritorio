@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Typography, TextField, Button, InputAdornment, IconButton,
-  Dialog, DialogContent, Chip, Tooltip,
+  Dialog, DialogTitle, DialogContent, Chip, Tooltip, LinearProgress,
 } from '@mui/material';
 import SearchIcon       from '@mui/icons-material/Search';
 import AddIcon          from '@mui/icons-material/Add';
@@ -11,12 +11,18 @@ import BusinessIcon     from '@mui/icons-material/Business';
 import VisibilityIcon   from '@mui/icons-material/Visibility';
 import EditIcon         from '@mui/icons-material/Edit';
 import DeleteIcon       from '@mui/icons-material/Delete';
+import FileUploadIcon   from '@mui/icons-material/FileUpload';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import CheckCircleIcon  from '@mui/icons-material/CheckCircle';
 
-import { BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, INPUT, HOVER, fieldSx,
+import { BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, INPUT, HOVER, fieldSx, TABLE_HEADER,
          SUCCESS, SUCCESS_BG, SUCCESS_BORDER, SUCCESS_LIGHT,
          ERROR, ERROR_BG, ERROR_BORDER, modalPaperSx } from '../../theme/tokens';
 import { useToast }    from '../../context/ToastContext';
 import { fmtMoney, fmtDate } from '../../utils/format';
+import { exportarExcel } from '../../utils/excelExport';
+import { leerFilasArchivo, indiceEncabezado } from '../../utils/excelImport';
 import DataTable       from '../../components/shared/DataTable';
 import TablePagination from '../../components/shared/TablePagination';
 import PaymentModal   from '../../components/shared/PaymentModal';
@@ -26,6 +32,23 @@ import { registerTour } from '../../utils/tour';
 import { proveedoresService } from '../../services/proveedoresService';
 import { deudasService }      from '../../services/deudasService';
 import DEUDA_COLORS from '../../constants/deudaStatus';
+
+/* ── Exportar / Importar Excel ── */
+function exportarCSVProveedores(rows) {
+  exportarExcel({
+    filename: 'proveedores.xlsx',
+    sheetName: 'Proveedores',
+    subtitle: `Listado de proveedores · ${new Date().toLocaleDateString('es-AR')}`,
+    columns: [
+      { header: 'Nombre',    width: 30 },
+      { header: 'CUIT',      width: 16 },
+      { header: 'Teléfono',  width: 16 },
+      { header: 'Email',     width: 26 },
+      { header: 'Dirección', width: 30 },
+    ],
+    rows: rows.map(p => [p.nombre, p.cuit || '', p.telefono || '', p.email || '', p.direccion || '']),
+  });
+}
 
 
 /* ── Modal nuevo proveedor ── */
@@ -371,6 +394,28 @@ export default function Proveedores() {
   const [eliminandoId, setEliminandoId] = useState(null);
   const [pagina,       setPagina]       = useState(1);
   const [pageSize,     setPageSize]     = useState(10);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importando,    setImportando]    = useState(false);
+  const [importProgreso, setImportProgreso] = useState({ hecho: 0, total: 0 });
+  const [importPagina,    setImportPagina]    = useState(1);
+  const [importPageSize,  setImportPageSize]  = useState(20);
+  const csvRef = useRef(null);
+
+  const handleEditarFilaImport = (idx, campo, valor) => {
+    setImportPreview(prev => {
+      const next = [...prev];
+      const fila = { ...next[idx], [campo]: valor };
+      if (campo === 'cuit') {
+        fila.cuitDuplicado = valor ? proveedores.some(p => p.cuit && p.cuit === valor) : false;
+      }
+      next[idx] = fila;
+      return next;
+    });
+  };
+
+  const handleQuitarFilaImport = (idx) => {
+    setImportPreview(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const cargarDeudas = useCallback(async () => {
     try { setDeudaResumen(await deudasService.resumen()); } catch { toast('No se pudo cargar el resumen de deudas', 'error'); }
@@ -419,6 +464,74 @@ export default function Proveedores() {
   });
 
   const handleCrear      = (nuevo) => setProveedores(ps => [...ps, nuevo]);
+
+  // Solo parsea el archivo y arma la vista previa — la creación real pasa
+  // recién en confirmarImportacion(), cuando el usuario revisó la lista y
+  // confirma (mismo criterio que la importación de Productos).
+  const handleImportarCSV = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    let lines;
+    try {
+      lines = await leerFilasArchivo(file);
+    } catch {
+      toast('No se pudo leer el archivo. Asegurate de que sea un .csv o .xlsx válido.', 'error');
+      return;
+    }
+    if (lines.length < 2) { toast('El archivo está vacío o no tiene datos', 'warning'); return; }
+    const inicio = indiceEncabezado(lines);
+    const header = lines[inicio].map(c => String(c || '').replace(/^"|"$/g, '').toLowerCase().trim());
+    const findCol = (...terms) => header.findIndex(c => terms.some(t => c.includes(t)));
+    const colNombre = findCol('nombre', 'persona', 'razon', 'razón') !== -1 ? findCol('nombre', 'persona', 'razon', 'razón') : 0;
+    const colCuit     = findCol('cuit');
+    const colTelefono = findCol('telefono', 'teléfono', 'tel');
+    const colEmail    = findCol('email', 'correo', 'mail');
+    const colDireccion = findCol('direccion', 'dirección');
+
+    const filas = [];
+    for (let i = inicio + 1; i < lines.length; i++) {
+      const cols = lines[i];
+      const nombre = cols[colNombre];
+      if (!nombre) continue;
+      const cuit = colCuit >= 0 ? (cols[colCuit] || '') : '';
+      filas.push({
+        nombre,
+        cuit,
+        telefono:  colTelefono >= 0 ? (cols[colTelefono] || '') : '',
+        email:     colEmail >= 0 ? (cols[colEmail] || '') : '',
+        direccion: colDireccion >= 0 ? (cols[colDireccion] || '') : '',
+        cuitDuplicado: cuit ? proveedores.some(p => p.cuit && p.cuit === cuit) : false,
+      });
+    }
+    if (!filas.length) { toast('No se encontraron proveedores válidos en el archivo', 'warning'); return; }
+    setImportPagina(1);
+    setImportPreview(filas);
+  };
+
+  const confirmarImportacion = async () => {
+    if (!importPreview) return;
+    setImportando(true);
+    setImportProgreso({ hecho: 0, total: importPreview.length });
+    let ok = 0, fallas = 0;
+    for (const f of importPreview) {
+      try {
+        const nuevo = await proveedoresService.create({
+          persona: f.nombre,
+          cuit: f.cuit || undefined,
+          telefono: f.telefono || undefined,
+          email: f.email || undefined,
+          direccion: f.direccion || undefined,
+        });
+        setProveedores(ps => [...ps, nuevo]);
+        ok++;
+      } catch { fallas++; }
+      setImportProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
+    }
+    setImportando(false);
+    setImportPreview(null);
+    toast(`${ok} proveedor${ok !== 1 ? 'es' : ''} importado${ok !== 1 ? 's' : ''}${fallas ? ` · ${fallas} fallaron` : ''}`, ok > 0 ? 'success' : 'error');
+  };
   const handleActualizar = (actualizado) => setProveedores(ps => ps.map(p => p.id === actualizado.id ? actualizado : p));
   const handleEliminar = async (row) => {
     setEliminandoId(row.id);
@@ -448,6 +561,20 @@ export default function Proveedores() {
               <Typography sx={{ color: ERROR, fontWeight: 800, fontSize: 18 }}>{fmtMoney(totalDeuda)}</Typography>
             </Box>
           )}
+          <Tooltip title="Importar Excel o CSV">
+            <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />}
+              onClick={() => csvRef.current?.click()}
+              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar</Box>
+            </Button>
+          </Tooltip>
+          <Tooltip title="Exportar Excel">
+            <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
+              onClick={() => exportarCSVProveedores(filtered)}
+              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
+            </Button>
+          </Tooltip>
           <Tooltip title="Nuevo Proveedor">
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
               sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
@@ -457,6 +584,8 @@ export default function Proveedores() {
           <AyudaButton />
         </Box>
       </Box>
+
+      <Box component="input" ref={csvRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleImportarCSV} sx={{ display: 'none' }} />
 
       <TextField data-tour="prov-buscar" fullWidth placeholder="Buscar por nombre o CUIT..."
         value={search} onChange={e => { setSearch(e.target.value); setPagina(1); }}
@@ -558,6 +687,130 @@ export default function Proveedores() {
         message="Se eliminarán todos sus datos. Esta acción no se puede deshacer."
         confirmLabel="Eliminar"
       />
+
+      {importPreview && (() => {
+        const importCols = [
+          { key: 'nombre',    header: 'Nombre',    width: '1.4fr' },
+          { key: 'cuit',      header: 'CUIT',      width: '1fr' },
+          { key: 'telefono',  header: 'Teléfono',  width: '1fr' },
+          { key: 'email',     header: 'Email',     width: '1.2fr' },
+          { key: 'direccion', header: 'Dirección', width: '1.2fr' },
+          { key: '_quitar',   header: '',          width: '36px' },
+        ];
+        const gridTemplate = importCols.map(c => c.width).join(' ');
+        const totalPages = Math.max(1, Math.ceil(importPreview.length / importPageSize));
+        const pagina = Math.min(importPagina, totalPages);
+        const inicioPag = (pagina - 1) * importPageSize;
+        const paginadas = importPreview.slice(inicioPag, inicioPag + importPageSize).map((f, i) => ({ ...f, _idx: inicioPag + i }));
+        const celdaSx = { '& .MuiInputBase-root': { fontSize: 12.5 }, '& .MuiInputBase-input': { py: '6px', px: '8px' } };
+
+        return (
+        <Dialog open onClose={() => !importando && setImportPreview(null)} maxWidth="lg" fullWidth
+          PaperProps={{ sx: { ...modalPaperSx, height: '88vh' } }}>
+          <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 700, fontSize: 17, color: INK }}>Confirmar importación</Typography>
+              <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 0.25 }}>
+                {importPreview.length} proveedor{importPreview.length !== 1 ? 'es' : ''} encontrado{importPreview.length !== 1 ? 's' : ''} en el archivo — revisá y corregí lo que haga falta antes de importar
+              </Typography>
+            </Box>
+            <IconButton size="small" onClick={() => setImportPreview(null)} disabled={importando} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent sx={{ pt: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: gridTemplate, minWidth: 640 }}>
+                <Box role="row" sx={{ display: 'contents' }}>
+                  {importCols.map(c => (
+                    <Box key={c.key} sx={{
+                      position: 'sticky', top: 0, zIndex: 1, bgcolor: TABLE_HEADER, borderBottom: `1px solid ${BORDER}`,
+                      px: 1, py: 1, display: 'flex', alignItems: 'center',
+                    }}>
+                      <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{c.header}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+                {paginadas.map((f) => {
+                  const rowBg = f.cuitDuplicado ? '#f59e0b12' : 'transparent';
+                  return (
+                    <Box key={f._idx} role="row" sx={{ display: 'contents' }}>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75, display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                        {f.cuitDuplicado
+                          ? <Tooltip title="Ya existe un proveedor con ese CUIT"><WarningAmberIcon sx={{ color: '#f59e0b', fontSize: 14, flexShrink: 0 }} /></Tooltip>
+                          : <CheckCircleIcon sx={{ color: '#10b981', fontSize: 14, flexShrink: 0 }} />
+                        }
+                        <TextField fullWidth variant="standard" value={f.nombre} onChange={e => handleEditarFilaImport(f._idx, 'nombre', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" value={f.cuit} placeholder="Sin CUIT"
+                          onChange={e => handleEditarFilaImport(f._idx, 'cuit', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" value={f.telefono}
+                          onChange={e => handleEditarFilaImport(f._idx, 'telefono', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" value={f.email}
+                          onChange={e => handleEditarFilaImport(f._idx, 'email', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" value={f.direccion}
+                          onChange={e => handleEditarFilaImport(f._idx, 'direccion', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 0.5, py: 0.75, display: 'flex', justifyContent: 'center' }}>
+                        <Tooltip title="Quitar de la importación">
+                          <IconButton size="small" onClick={() => handleQuitarFilaImport(f._idx)} sx={{ color: MUTED, '&:hover': { color: '#ef4444' } }}>
+                            <CloseIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
+
+            {totalPages > 1 && (
+              <TablePagination pagina={pagina} totalPages={totalPages} pageSize={importPageSize} totalItems={importPreview.length} label="proveedores"
+                onPageChange={setImportPagina} onPageSizeChange={(s) => { setImportPageSize(s); setImportPagina(1); }} />
+            )}
+
+            {importando ? (
+              <Box sx={{ mt: 2, flexShrink: 0 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+                  <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600 }}>Importando proveedores…</Typography>
+                  <Typography sx={{ color: P, fontSize: 12.5, fontWeight: 700 }}>{importProgreso.hecho} / {importProgreso.total}</Typography>
+                </Box>
+                <LinearProgress variant="determinate"
+                  value={importProgreso.total ? (importProgreso.hecho / importProgreso.total) * 100 : 0}
+                  sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: P, borderRadius: 4 } }} />
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', gap: 1.5, mt: 2, flexShrink: 0 }}>
+                <Button onClick={() => setImportPreview(null)} sx={{
+                  flex: 1, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600, borderRadius: '8px', py: 1.25,
+                  '&:hover': { bgcolor: HOVER },
+                }}>
+                  Cancelar
+                </Button>
+                <Button onClick={confirmarImportacion} disabled={!importPreview.length} variant="contained" sx={{
+                  flex: 1, bgcolor: P, textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.25,
+                  '&:hover': { bgcolor: P_HOVER },
+                }}>
+                  {`Importar ${importPreview.length} proveedor${importPreview.length !== 1 ? 'es' : ''}`}
+                </Button>
+              </Box>
+            )}
+          </DialogContent>
+        </Dialog>
+        );
+      })()}
     </Box>
   );
 }

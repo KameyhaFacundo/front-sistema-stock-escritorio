@@ -35,11 +35,10 @@ import {
 } from '../../theme/tokens';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useApp } from '../../context/AppContextBase';
-import { useProductos } from '../../context/ProductosContextBase';
 import { useVentas } from '../../context/VentasContextBase';
 import { useVencimientosProximos } from '../../hooks/queries/useLotesQueries';
 import { useIsMobile } from '../../utils/responsive';
-import { getDashboardStats } from '../../services/dashboardService';
+import { getDashboardStats, getRankingProductos } from '../../services/dashboardService';
 import { ventasService } from '../../services/ventasService';
 import { emitirNotaCredito, getFactura } from '../../services/arcaService';
 import { comprasService } from '../../services/comprasService';
@@ -132,7 +131,7 @@ function TooltipHora({ active, payload, label }) {
 /* ══════════════════════════════════════════
    TAB RESUMEN
 ══════════════════════════════════════════ */
-function TabResumen({ ventas, productos, lineData, totalVentasN, ventasPorDia, ventasPorHora, chartBorder, chartMuted }) {
+function TabResumen({ ventas, dashStats, lineData, totalVentasN, ventasPorDia, ventasPorHora, chartBorder, chartMuted }) {
   const metodoMasUsado = useMemo(
     () => calcularMetodoMasUsado(ventas, METODO_LABELS, totalVentasN),
     [ventas, totalVentasN]
@@ -155,14 +154,11 @@ function TabResumen({ ventas, productos, lineData, totalVentasN, ventasPorDia, v
     return Object.values(map).sort((a, b) => b.unidades - a.unidades).slice(0, 5);
   }, [ventas]);
 
-  const stockBajo = productos.filter(p => p.stock <= p.alerta).slice(0, 6);
+  // Agregados reales del backend (suma/filtra sobre TODO el catálogo, no
+  // solo lo que haya en memoria) — ver DashboardController::stats().
+  const stockBajo = (dashStats?.stockBajo ?? []).slice(0, 6);
   const ventasRecientes = ventas.slice(0, 5);
-
-  const valorInventario = useMemo(() => {
-    const costo = productos.reduce((s, p) => s + p.stock * (p.costo || 0), 0);
-    const venta = productos.reduce((s, p) => s + p.stock * (p.precioFinal || 0), 0);
-    return { costo, venta };
-  }, [productos]);
+  const valorInventario = dashStats?.valorInventario ?? { costo: 0, venta: 0 };
 
   const infoCards = [
     { label: 'Valor del inventario', value: fmtMoney(valorInventario.costo),                 sub: `Precio de venta: ${fmtMoney(valorInventario.venta)}`,          color: MONEY, Icon: AttachMoneyIcon },
@@ -214,7 +210,7 @@ function TabResumen({ ventas, productos, lineData, totalVentasN, ventasPorDia, v
               <XAxis dataKey="dia" stroke={chartMuted} tick={{ fill: chartMuted, fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis stroke={chartMuted} tick={{ fill: chartMuted, fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
               <ReTooltip content={<TooltipLinea />} />
-              <Line type="monotone" dataKey="ingresos" name="Ingresos" stroke="#5c6ef8" strokeWidth={2} dot={{ fill: PRIMARY_COLOR, r: 3 }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="ingresos" name="Ingresos" stroke={PRIMARY_COLOR} strokeWidth={2} dot={{ fill: PRIMARY_COLOR, r: 3 }} activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
         </Box>
@@ -271,7 +267,7 @@ function TabResumen({ ventas, productos, lineData, totalVentasN, ventasPorDia, v
                   <Typography sx={{ color: INK, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {v.cliente || 'Consumidor Final'}
                   </Typography>
-                  <Typography sx={{ color: MUTED, fontSize: 11 }}>#{(v.numero || String(v.id)).slice(0, 8)}</Typography>
+                  <Typography sx={{ color: MUTED, fontSize: 11 }}>#{v.id}</Typography>
                 </Box>
               </Box>
               <Typography sx={{ color: INK, fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fmtMoney(v.total)}</Typography>
@@ -543,7 +539,7 @@ function TabVentas({ ventas, onVentaActualizada }) {
     try {
       const factura = v.factura ? await getFactura(v.factura.id) : null;
       await imprimirTicket({
-        ticketId: v.numero || v.id,
+        ticketId: v.id,
         fecha: fmtDate(v.fecha),
         hora: v.hora,
         items: (v.items || []).map(i => ({ nombre: i.nombre, precio: i.precio, cantidad: i.cantidad, unidadMedida: i.unidadMedida })),
@@ -564,7 +560,12 @@ function TabVentas({ ventas, onVentaActualizada }) {
 
   const rows = useMemo(() => ventas.map(v => ({
     rawId:     v.id,
-    id:        v.numero || String(v.id).slice(-8).toUpperCase(),
+    // El código interno (v.numero, ej. "MSGL50HT-6790") es un timestamp en
+    // base-36 pensado para generarse offline sin ir al servidor — sirve para
+    // el ticket impreso y para matchear el movimiento de stock, pero como
+    // "ID" visible en la lista es ilegible; se muestra el id real de la venta.
+    id:        String(v.id),
+    ticketCodigo: v.numero || '',
     fecha:     v.fecha || '—',
     hora:      v.hora  || '',
     cliente:   v.cliente || 'Consumidor Final',
@@ -598,7 +599,8 @@ function TabVentas({ ventas, onVentaActualizada }) {
   };
 
   const filtradas = rows.filter(v =>
-    v.id.toLowerCase().includes(busqueda.toLowerCase()) ||
+    v.id.includes(busqueda) ||
+    v.ticketCodigo.toLowerCase().includes(busqueda.toLowerCase()) ||
     v.cliente.toLowerCase().includes(busqueda.toLowerCase()) ||
     v.usuario.toLowerCase().includes(busqueda.toLowerCase())
   );
@@ -629,7 +631,7 @@ function TabVentas({ ventas, onVentaActualizada }) {
                 sx={{ color: MUTED, '&.Mui-checked': { color: P }, p: 0.5, flexShrink: 0 }} />
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
-                  <Typography sx={{ color: INK2, fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>{v.id}</Typography>
+                  <Typography sx={{ color: INK2, fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>#{v.id}</Typography>
                   <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14 }}>{v.total}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
@@ -679,7 +681,7 @@ function TabVentas({ ventas, onVentaActualizada }) {
                 </Box>
                 <Box component="td" sx={COL_TD}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <Typography sx={{ color: INK2, fontFamily: 'monospace', fontSize: 12.5, fontWeight: 600 }}>{v.id}</Typography>
+                    <Typography sx={{ color: INK2, fontFamily: 'monospace', fontSize: 12.5, fontWeight: 600 }}>#{v.id}</Typography>
                     {v.estado === 'cancelada' && (
                       <Chip label="Anulada" size="small" sx={{ height: 16, fontSize: 9, fontWeight: 700, bgcolor: ERROR_BG, color: ERROR, '& .MuiChip-label': { px: 0.6 } }} />
                     )}
@@ -1194,16 +1196,54 @@ function TabCompras({ compras, onCompraActualizada }) {
   );
 }
 
-function TabProductos({ ventas }) {
-  const productosData = useMemo(() => {
-    const map = {};
-    ventas.forEach(v => v.items?.forEach(i => {
-      if (!map[i.nombre]) map[i.nombre] = { nombre: i.nombre, ingresos: 0, unidades: 0, color: P };
-      map[i.nombre].ingresos += (i.precio || 0) * (i.cantidad || 1);
-      map[i.nombre].unidades += i.cantidad || 1;
-    }));
-    return Object.values(map).sort((a, b) => b.ingresos - a.ingresos);
-  }, [ventas]);
+function TablaSinMovimiento({ datos, dias }) {
+  const [busq, setBusq] = useState('');
+  const filtrados = datos.filter(d => d.nombre.toLowerCase().includes(busq.toLowerCase()));
+  return (
+    <Box sx={{ ...card, p: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box>
+        <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>Sin movimiento</Typography>
+        <Typography sx={{ color: MUTED, fontSize: 13 }}>
+          Sin ventas en los últimos {dias} días · capital parado, ordenado de mayor a menor
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '8px', px: 1.5, py: 1 }}>
+        <SearchIcon sx={{ color: MUTED, fontSize: 17 }} />
+        <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Buscar producto..."
+          style={{ background: 'transparent', border: 'none', color: INK, fontSize: 13, outline: 'none', width: '100%', fontFamily: 'inherit' }} />
+      </Box>
+      <Box sx={{ maxHeight: 340, overflowY: 'auto' }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 70px 100px', gap: 1, pb: 1, borderBottom: `1px solid ${BORDER}`, mb: 1 }}>
+          <Typography sx={{ color: MUTED, fontSize: 12, fontWeight: 600 }}>PRODUCTO</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 12, fontWeight: 600, textAlign: 'right' }}>STOCK</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 12, fontWeight: 600, textAlign: 'right' }}>CAPITAL</Typography>
+        </Box>
+        {filtrados.length === 0
+          ? <Typography sx={{ color: MUTED, fontSize: 13, textAlign: 'center', py: 3 }}>Sin datos</Typography>
+          : filtrados.map(d => (
+            <Box key={d.id} sx={{ display: 'grid', gridTemplateColumns: '1fr 70px 100px', gap: 1, py: 0.75, borderBottom: `1px solid ${BORDER}` }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ color: INK, fontSize: 13.5, fontWeight: 500 }} noWrap>{d.nombre}</Typography>
+                <Typography sx={{ color: MUTED, fontSize: 11 }}>{d.codigo}</Typography>
+              </Box>
+              <Typography sx={{ color: INK2, fontSize: 13, textAlign: 'right' }}>{d.stock}</Typography>
+              <Typography sx={{ color: WARNING, fontSize: 13, fontWeight: 700, textAlign: 'right' }}>{fmtMoney(d.valorCapital)}</Typography>
+            </Box>
+          ))
+        }
+      </Box>
+      <Typography sx={{ color: MUTED, fontSize: 12, mt: 'auto' }}>
+        Mostrando {filtrados.length} de {datos.length} productos
+      </Typography>
+    </Box>
+  );
+}
+
+function TabProductos({ ventas, ranking }) {
+  // Se reemplazó el cálculo client-side (limitado a las 300 ventas que trae
+  // el fetch de esta pestaña, impreciso en rangos grandes) por el agregado
+  // real del backend — ver DashboardController::rankingProductos().
+  const productosData = useMemo(() => (ranking?.masVendidos ?? []).map(p => ({ ...p, color: P })), [ranking]);
 
   const categoriasData = useMemo(() => {
     const map = {};
@@ -1216,18 +1256,23 @@ function TabProductos({ ventas }) {
     return Object.values(map).sort((a, b) => b.ingresos - a.ingresos);
   }, [ventas]);
 
-  if (productosData.length === 0) return (
+  if (ranking && productosData.length === 0 && categoriasData.length === 0) return (
     <Box sx={{ py: 10, textAlign: 'center' }}>
       <Typography sx={{ color: MUTED, fontSize: 14 }}>Sin ventas en el período seleccionado</Typography>
     </Box>
   );
 
   return (
-    <Box data-tour="dash-productos-grid" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-      <ListaProductos datos={productosData} labelCol="Productos" labelSub="productos" placeholder="Buscar producto..."
-        footer={`${productosData.length} producto${productosData.length !== 1 ? 's' : ''} vendido${productosData.length !== 1 ? 's' : ''}`} />
-      <ListaProductos datos={categoriasData} labelCol="Categorías" labelSub="categorías" placeholder="Buscar categoría..."
-        footer={`${categoriasData.length} categoría${categoriasData.length !== 1 ? 's' : ''}`} />
+    <Box data-tour="dash-productos-grid" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+        <ListaProductos datos={productosData} labelCol="Productos" labelSub="productos" placeholder="Buscar producto..."
+          footer={`${productosData.length} producto${productosData.length !== 1 ? 's' : ''} vendido${productosData.length !== 1 ? 's' : ''}`} />
+        <ListaProductos datos={categoriasData} labelCol="Categorías" labelSub="categorías" placeholder="Buscar categoría..."
+          footer={`${categoriasData.length} categoría${categoriasData.length !== 1 ? 's' : ''}`} />
+      </Box>
+      {ranking?.sinMovimiento && (
+        <TablaSinMovimiento datos={ranking.sinMovimiento} dias={ranking.diasSinMovimiento} />
+      )}
     </Box>
   );
 }
@@ -1556,7 +1601,6 @@ export default function Dashboard() {
   const [hasta, setHasta] = useState(() => toLocalDateStr());
 
   const { mode } = useAppTheme();
-  const { productos } = useProductos();
   const ventasCtx = useVentas().ventas;
   const { statsHoy, loadingData, recargarDashboardStats } = useApp();
   const [dashStats, setDashStats] = useState(null);
@@ -1576,6 +1620,13 @@ export default function Dashboard() {
   }, [desde, hasta]);
 
   useEffect(() => { refetchDashStats(); }, [refetchDashStats]);
+
+  // Ranking de productos (agregado real del backend) — separado de dashStats
+  // porque solo hace falta en la pestaña "Productos", sin límite de 300 filas.
+  const [rankingProductos, setRankingProductos] = useState(null);
+  useEffect(() => {
+    getRankingProductos({ desde, hasta }).then(r => startTransition(() => setRankingProductos(r))).catch(() => {});
+  }, [desde, hasta]);
 
   // La ayuda del dashboard depende de la pestaña activa: cada una tiene su
   // propio recorrido que explica solo lo que se ve en pantalla en ese momento
@@ -1675,7 +1726,7 @@ export default function Dashboard() {
   const ingresos       = dashStats?.totalIngresos ?? ventasActivas.reduce((s, v) => s + (v.total || 0), 0);
   const totalVentasN   = dashStats?.totalVentas ?? ventasActivas.length;
   const ticketPromedio = dashStats?.ticketPromedio ?? (totalVentasN ? ingresos / totalVentasN : 0);
-  const stockBajoCount = dashStats?.stockBajo?.length ?? productos.filter(p => p.stock <= p.alerta).length;
+  const stockBajoCount = dashStats?.stockBajo?.length ?? 0;
 
   const statsData = [
     { label: 'Ingresos del período', value: fmtMoney(ingresos),      Icon: AttachMoneyIcon, color: MONEY  },
@@ -1746,7 +1797,7 @@ export default function Dashboard() {
               <BarChartIcon sx={{ color: P, fontSize: 22 }} />
             </Box>
             <Box>
-              <Typography sx={{ color: INK, fontWeight: 800, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.15 }}>Dashboard</Typography>
+              <Typography sx={{ color: INK, fontWeight: 800, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.15 }}>Reportes</Typography>
               <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>
                 {loadingDash
                   ? <CircularProgress size={12} sx={{ color: MUTED, mr: 1 }} />
@@ -1867,7 +1918,7 @@ export default function Dashboard() {
 
       {tab === 0 && (
         <TabResumen
-          ventas={ventasActivas} productos={productos}
+          ventas={ventasActivas} dashStats={dashStats}
           lineData={lineData} totalVentasN={totalVentasN}
           ventasPorDia={ventasPorDia} ventasPorHora={ventasPorHora}
           chartBorder={chartBorder} chartMuted={chartMuted}
@@ -1875,7 +1926,7 @@ export default function Dashboard() {
       )}
       {tab === 1 && <TabVentas ventas={ventasFiltradas} onVentaActualizada={actualizarVentaLocal} />}
       {tab === 2 && <TabCompras compras={comprasFiltradas} onCompraActualizada={actualizarCompraLocal} />}
-      {tab === 3 && <TabProductos ventas={ventasActivas} />}
+      {tab === 3 && <TabProductos ventas={ventasActivas} ranking={rankingProductos} />}
       {tab === 4 && <TabMetodosPago ventas={ventasActivas} />}
       {tab === 5 && <TabCaja desde={desde} hasta={hasta} />}
       {tab === tabAuditoriaIndex && puedeVerAuditoria && <TabAuditoria />}
