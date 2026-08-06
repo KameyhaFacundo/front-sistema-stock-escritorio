@@ -12,7 +12,6 @@ import { useIsMobile } from '../../utils/responsive';
 import { abrevUnidad, esFraccionable as esUnidadFraccionable } from '../../utils/unidadMedida';
 import { guardarIntentoActivo, leerIntentoActivo, limpiarIntentoActivo } from '../../utils/posIntentoActivo';
 import { guardarCarritoDraft, leerCarritoDraft } from '../../utils/carritoDraft';
-import useOnlineStatus from '../../hooks/useOnlineStatus';
 import SearchIcon            from '@mui/icons-material/Search';
 import AttachMoneyIcon       from '@mui/icons-material/AttachMoney';
 import AddIcon               from '@mui/icons-material/Add';
@@ -374,7 +373,6 @@ function Home() {
   const [nuevoCliente, setNuevoCliente] = useState({ active: false, nombre: '', cuit: '', telefono: '' });
   const [creandoCliente, setCreandoCliente] = useState(false);
   const [cart, setCart]       = useState(() => leerCarritoDraft());
-  const online = useOnlineStatus();
   useEffect(() => { guardarCarritoDraft(cart); }, [cart]);
   // Si el carrito viene de un presupuesto, se manda junto con la venta al
   // confirmar (ver handleConfirmarVenta) para que el backend lo marque como
@@ -979,7 +977,7 @@ function Home() {
     limpiarIntentoActivo();
   };
 
-  const confirmarVentaDisabled = !online || procesando || (variosPagos && pagosAplicados.reduce((a, p) => a + p.monto, 0) < total * 0.99);
+  const confirmarVentaDisabled = procesando || (variosPagos && pagosAplicados.reduce((a, p) => a + p.monto, 0) < total * 0.99);
 
   const ejecutarConfirmarVenta = () => {
     if (confirmarVentaDisabled) return;
@@ -1140,13 +1138,6 @@ function Home() {
         </Box>
       </Box>
 
-      {!online && (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, px: 2, py: 0.75, bgcolor: ERROR_BG, borderBottom: `1px solid ${ERROR_BORDER}`, flexShrink: 0 }}>
-          <Typography sx={{ color: ERROR, fontSize: 13, fontWeight: 700 }}>
-            Sin conexión — el carrito está a salvo, pero no se puede cobrar hasta que vuelva internet.
-          </Typography>
-        </Box>
-      )}
 
       {/* Body */}
       <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden', p: { xs: 0, md: 3 }, gap: { xs: 0, md: 3 }, flexDirection: { xs: 'column', md: 'row' } }}>
@@ -1946,7 +1937,7 @@ function Home() {
                 Abrí la caja antes de vender →
               </Typography>
             )}
-            <Tooltip title={!online ? 'Sin conexión — no se puede cobrar' : cart.length > 0 && caja.abierta ? 'Confirmar (Enter)' : ''}>
+            <Tooltip title={cart.length > 0 && caja.abierta ? 'Confirmar (Enter)' : ''}>
               <motion.div whileTap={{ scale: 0.98 }} whileHover={{ scale: 1.01 }}>
                 <Button
                   data-tour="pos-confirmar"
@@ -1963,7 +1954,7 @@ function Home() {
                     '&.Mui-disabled': { background: `linear-gradient(135deg, ${PRIMARY}80, ${P_HOVER}80)`, color: '#fff', opacity: 0.5 },
                   }}
                 >
-                  {!online ? 'Sin conexión' : !variosPagos && metodoPago === 'point' ? 'Cobrar con Point' : (!variosPagos && metodoPago === 'qr' && qrDisponible) ? 'Generar QR' : 'Confirmar Venta'}
+                  {!variosPagos && metodoPago === 'point' ? 'Cobrar con Point' : (!variosPagos && metodoPago === 'qr' && qrDisponible) ? 'Generar QR' : 'Confirmar Venta'}
                 </Button>
               </motion.div>
             </Tooltip>
