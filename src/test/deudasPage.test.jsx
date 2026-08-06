@@ -20,11 +20,16 @@ vi.mock('../services/deudasService', () => ({
 }));
 
 describe('Deudas (página)', () => {
+  // Renderiza la página completa (no un componente chico) — importar y montar
+  // todo ese árbol pasa el timeout por defecto de 5s por poco cuando corre
+  // junto al resto de la suite, aunque sola tarda ~5s tranquila. Timeout
+  // propio más generoso en vez de aflojar el default global, que taparía
+  // hangs reales en el resto de los tests (todos unitarios y rápidos).
   it('renderiza una deuda pendiente y su botón de "Registrar pago" sin crashear', async () => {
     const { default: Deudas } = await import('../pages/Deudas/Deudas');
     render(<Deudas />);
 
     await waitFor(() => expect(screen.getByText('Distribuidora Sur')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Registrar pago' })).toBeInTheDocument();
-  });
+  }, 15000);
 });
