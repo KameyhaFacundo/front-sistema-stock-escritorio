@@ -309,6 +309,8 @@ function ModalMovimiento({ open, onClose, sucursales }) {
   const [idDestino,    setIdDestino]    = useState('');
   const [stockOrigen,       setStockOrigen]       = useState(null);
   const [cargandoStockOrigen, setCargandoStockOrigen] = useState(false);
+  const searchRef   = useRef(null);
+  const cantidadRef = useRef(null);
 
   useEffect(() => {
     if (open) setIdOrigen(user?.id_sucursal ? String(user.id_sucursal) : '');
@@ -340,6 +342,28 @@ function ModalMovimiento({ open, onClose, sucursales }) {
   [resultadosBusqueda]);
 
   const filtrados = productosParaMovimiento.filter(p => !(modo === 'transferencia' && p.esCombo));
+
+  // Único lugar donde se elige un producto (click en el dropdown o Enter con
+  // un solo resultado filtrado) — de acá se pasa el foco a Cantidad para
+  // no obligar a tocar el mouse en el flujo rápido de teclado.
+  const seleccionarProducto = (p) => {
+    setProductoSel(p); setSearchProd(p.nombre); setShowDropdown(false);
+    setTimeout(() => { cantidadRef.current?.focus(); cantidadRef.current?.select(); }, 50);
+  };
+
+  const handleSearchEnter = (e) => {
+    if (e.key !== 'Enter') return;
+    if (filtrados.length !== 1) return;
+    e.preventDefault();
+    seleccionarProducto(filtrados[0]);
+  };
+
+  const handleCantidadEnter = (e) => {
+    if (e.key !== 'Enter') return;
+    if (!puedeConfirmar() || saving) return;
+    e.preventDefault();
+    handleRegistrar();
+  };
 
   const handleClose = () => {
     setSearchProd(''); setProductoSel(null);
@@ -409,7 +433,8 @@ function ModalMovimiento({ open, onClose, sucursales }) {
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth
-      PaperProps={{ sx: modalPaperSx }}>
+      PaperProps={{ sx: modalPaperSx }}
+      TransitionProps={{ onEntered: () => searchRef.current?.focus() }}>
 
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', px: { xs: 1.5, sm: 3 }, pt: { xs: 1.75, sm: 3 } }}>
         <Box>
@@ -453,8 +478,10 @@ function ModalMovimiento({ open, onClose, sucursales }) {
         <Box data-tour="mov-modal-producto" sx={{ position: 'relative', mb: 2.5 }}>
           <TextField fullWidth placeholder="Buscar por nombre o código..."
             value={searchProd}
+            inputRef={searchRef}
             onChange={e => { setSearchProd(e.target.value); setProductoSel(null); setShowDropdown(true); }}
             onFocus={() => searchProd.trim() && setShowDropdown(true)}
+            onKeyDown={handleSearchEnter}
             sx={fieldSx}
             InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: MUTED, fontSize: 18 }} /></InputAdornment> }}
           />
@@ -466,7 +493,7 @@ function ModalMovimiento({ open, onClose, sucursales }) {
             }}>
               {filtrados.map(p => (
                 <Box key={p.id}
-                  onClick={() => { setProductoSel(p); setSearchProd(p.nombre); setShowDropdown(false); }}
+                  onClick={() => seleccionarProducto(p)}
                   sx={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     px: 2, py: 1.5, cursor: 'pointer',
@@ -516,7 +543,9 @@ function ModalMovimiento({ open, onClose, sucursales }) {
           Cantidad{esFraccionable(productoSel?.unidadMedida) ? ` (${abrevUnidad(productoSel.unidadMedida)})` : ''}
         </Typography>
         <TextField fullWidth type="number" value={cantidad}
+          inputRef={cantidadRef}
           onChange={e => setCantidad(e.target.value)}
+          onKeyDown={handleCantidadEnter}
           inputProps={{ min: 0, max: maxDisponible ?? undefined, ...(esFraccionable(productoSel?.unidadMedida) ? { step: '0.01' } : {}) }}
           error={excedeStock}
           sx={{ ...fieldSx, mb: 0.5 }} />
@@ -887,6 +916,7 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
   // modal (o navegar a otra pantalla) mientras el loop de handleConfirmar()
   // corre no lo frenaba, seguía aplicando ajustes en segundo plano.
   const cancelarRef = useRef(false);
+  const searchRef   = useRef(null);
   useEffect(() => () => { cancelarRef.current = true; }, []);
 
   const { resultados: resultadosBusqueda } = useBusquedaProductos(searchProd, { perPage: 20 });
@@ -904,6 +934,14 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
     setLineas(ls => [...ls, { id: p.id, nombre: p.nombre, codigo: p.codigo, stock: p.stock, cantidad: '1' }]);
     setSearchProd('');
     setShowDropdown(false);
+    setTimeout(() => searchRef.current?.focus(), 50);
+  };
+
+  const handleSearchEnter = (e) => {
+    if (e.key !== 'Enter') return;
+    if (filtrados.length !== 1) return;
+    e.preventDefault();
+    agregarProducto(filtrados[0]);
   };
 
   const quitarLinea = (id) => setLineas(ls => ls.filter(l => l.id !== id));
@@ -969,7 +1007,8 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
   };
 
   return (
-    <Dialog open={open} onClose={() => !aplicando && handleClose()} maxWidth="sm" fullWidth PaperProps={{ sx: modalPaperSx }}>
+    <Dialog open={open} onClose={() => !aplicando && handleClose()} maxWidth="sm" fullWidth PaperProps={{ sx: modalPaperSx }}
+      TransitionProps={{ onEntered: () => searchRef.current?.focus() }}>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', px: { xs: 1.5, sm: 3 }, pt: { xs: 1.75, sm: 3 } }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: 18 }}>Ajuste masivo</Typography>
@@ -1004,8 +1043,10 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
         <Box sx={{ position: 'relative', mb: 2 }}>
           <TextField fullWidth placeholder="Buscar por nombre o código para agregar..."
             value={searchProd}
+            inputRef={searchRef}
             onChange={e => { setSearchProd(e.target.value); setShowDropdown(true); }}
             onFocus={() => searchProd.trim() && setShowDropdown(true)}
+            onKeyDown={handleSearchEnter}
             sx={fieldSx}
             InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: MUTED, fontSize: 18 }} /></InputAdornment> }}
           />
@@ -1043,6 +1084,7 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
                 </Box>
                 <TextField type="number" size="small" value={l.cantidad}
                   onChange={e => setCantidadLinea(l.id, e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); searchRef.current?.focus(); } }}
                   inputProps={{ min: 0, style: { textAlign: 'right' } }}
                   sx={{ ...fieldSx, width: 90, flexShrink: 0, '& .MuiInputBase-input': { py: '6px', px: '8px' } }} />
                 <IconButton size="small" onClick={() => quitarLinea(l.id)} sx={{ color: MUTED, flexShrink: 0, '&:hover': { color: ERROR, bgcolor: ERROR_BG } }}>

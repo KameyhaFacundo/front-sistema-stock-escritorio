@@ -250,7 +250,7 @@ function ModalSeleccionTalle({ producto, onClose, onAgregar }) {
 // dejaba borrar. Este buffer de texto local desacopla lo que se ve mientras
 // se tipea de cuándo se confirma un número válido (mismo criterio que
 // CampoPrecio para el precio unitario).
-function CampoCantidadCarrito({ item, onCommit, style }) {
+function CampoCantidadCarrito({ item, onCommit, style, registrarRef, onEnter }) {
   const fraccionable = esUnidadFraccionable(item.unidadMedida);
   const inputRef = useRef(null);
   const [texto, setTexto] = useState(String(item.cantidad));
@@ -267,8 +267,9 @@ function CampoCantidadCarrito({ item, onCommit, style }) {
   };
 
   return (
-    <Box component="input" ref={inputRef} type="text" inputMode="decimal"
+    <Box component="input" ref={el => { inputRef.current = el; registrarRef?.(el); }} type="text" inputMode="decimal"
       value={texto} onChange={handleChange}
+      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter?.(); } }}
       onBlur={() => setTexto(String(item.cantidad))}
       style={style} />
   );
@@ -373,6 +374,11 @@ function Home() {
   const online = useOnlineStatus();
   useEffect(() => { guardarCarritoDraft(cart); }, [cart]);
   const searchRef = useRef(null);
+  // Foco de la cantidad de cada línea del carrito, por id de producto — al
+  // agregar uno (click, Enter o escáner, todos pasan por addProductToCart)
+  // el foco salta directo ahí para tipear la cantidad sin tocar el mouse;
+  // Enter en ese campo lo devuelve al buscador para seguir cargando.
+  const cantidadRefs = useRef({});
   const ejecutarConfirmarVentaRef = useRef(null);
 
   // ── Ajuste (descuento / recargo) ───────────────────────────────────
@@ -626,6 +632,12 @@ function Home() {
     playBeep('ok');
     setScanFeedback(product.nombre);
     setSearch('');
+    // Foco a la cantidad de esta línea — el setTimeout espera al re-render
+    // del carrito (la línea puede ser nueva, todavía no existe el input).
+    setTimeout(() => {
+      const el = cantidadRefs.current[product.id];
+      if (el) { el.focus(); el.select(); }
+    }, 50);
   };
 
   // Agrega una variante puntual (ya elegida en el picker de talle) con una
@@ -1275,10 +1287,11 @@ function Home() {
                     es una tarjeta de 2 líneas, no una fila de columnas */}
                 {!isMobile && (
                   <Box sx={{
-                    display: 'grid', gridTemplateColumns: '28px 1fr 90px 120px 60px 84px 32px', gap: 1, alignItems: 'center',
+                    display: 'grid', gridTemplateColumns: '28px 90px 1fr 90px 120px 60px 84px 32px', gap: 1, alignItems: 'center',
                     px: 2.5, py: 0.75, flexShrink: 0,
                   }}>
                     <Box />
+                    <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Código</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Producto</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Precio</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Cantidad</Typography>
@@ -1344,6 +1357,8 @@ function Home() {
                                 <RemoveCircleOutlineIcon sx={{ fontSize: 18 }} />
                               </IconButton>
                               <CampoCantidadCarrito item={item} onCommit={valor => updateCantidad(item.id, valor)}
+                                registrarRef={el => { cantidadRefs.current[item.id] = el; }}
+                                onEnter={() => searchRef.current?.focus()}
                                 style={{
                                   width: 42, background: 'none', border: 'none', outline: 'none',
                                   color: 'var(--ink)', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', textAlign: 'center',
@@ -1372,7 +1387,7 @@ function Home() {
                       ) : (
                       <Box sx={{
                         display: 'grid',
-                        gridTemplateColumns: '28px 1fr 90px 120px 60px 84px 32px',
+                        gridTemplateColumns: '28px 90px 1fr 90px 120px 60px 84px 32px',
                         gap: 1, alignItems: 'center',
                         bgcolor: idx % 2 === 0 ? HOVER : 'transparent',
                         borderRadius: '10px', p: 1,
@@ -1389,6 +1404,11 @@ function Home() {
                         }}>
                           <Typography sx={{ color: PRIMARY, fontSize: 11, fontWeight: 700 }}>{idx + 1}</Typography>
                         </Box>
+
+                        {/* Código */}
+                        <Typography sx={{ color: MUTED, fontSize: 12, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.codigo || '—'}
+                        </Typography>
 
                         {/* Producto */}
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
@@ -1432,6 +1452,8 @@ function Home() {
                             <RemoveCircleOutlineIcon sx={{ fontSize: 18 }} />
                           </IconButton>
                           <CampoCantidadCarrito item={item} onCommit={valor => updateCantidad(item.id, valor)}
+                            registrarRef={el => { cantidadRefs.current[item.id] = el; }}
+                            onEnter={() => searchRef.current?.focus()}
                             style={{
                               width: 32, background: 'none', border: 'none', outline: 'none',
                               color: 'var(--ink)', fontSize: 14, fontWeight: 700, fontFamily: 'inherit',

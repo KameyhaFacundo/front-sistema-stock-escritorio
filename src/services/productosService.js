@@ -160,6 +160,7 @@ export const productosService = {
       cantidad:        parseFloat(l.cantidad),
       fecha:           l.compra?.fecha,
       idCompra:        l.compra?.id,
+      idProveedor:     l.compra?.proveedor?.id || null,
       proveedorNombre: l.compra?.proveedor?.persona || 'Proveedor eliminado',
     }));
   },

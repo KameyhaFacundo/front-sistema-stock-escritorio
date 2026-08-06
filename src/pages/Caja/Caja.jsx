@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, startTransition } from 'react';
+import { useState, useEffect, useMemo, useRef, startTransition } from 'react';
 import {
   Box, Typography, Tabs, Tab,
   TextField, Button, Chip, InputAdornment,
@@ -79,6 +79,13 @@ function TabCaja({ caja, onAbrir, onCerrar, arqueoIniciado }) {
   const toast = useToast();
   const [montoInicial, setMontoInicial] = useState('');
 
+  const handleAbrir = () => {
+    const monto = Number(montoInicial);
+    if (monto <= 0) { toast('Ingresa un monto inicial mayor a cero', 'warning'); return; }
+    onAbrir(monto);
+    setMontoInicial('');
+  };
+
   if (!caja.abierta) {
     return (
       <Box>
@@ -97,13 +104,14 @@ function TabCaja({ caja, onAbrir, onCerrar, arqueoIniciado }) {
           </Box>
           <Box sx={{ width: '100%', maxWidth: 320 }}>
             <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Monto inicial en efectivo</Typography>
-            <CampoPrecio fullWidth placeholder="0" value={montoInicial}
+            <CampoPrecio fullWidth placeholder="0" value={montoInicial} autoFocus
               onChange={e => setMontoInicial(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAbrir(); } }}
               InputProps={{ startAdornment: <InputAdornment position="start"><Typography sx={{ color: MUTED, fontSize: 14 }}>$</Typography></InputAdornment> }}
               sx={fieldSx} />
           </Box>
           <Button variant="contained" startIcon={<LockOpenIcon />}
-            onClick={() => { const monto = Number(montoInicial); if (monto <= 0) { toast('Ingresa un monto inicial mayor a cero', 'warning'); return; } onAbrir(monto); setMontoInicial(''); }}
+            onClick={handleAbrir}
             sx={{ bgcolor: SUCCESS, textTransform: 'none', fontWeight: 600, fontSize: 14, px: 4, py: 1.25, borderRadius: '10px', boxShadow: `0 4px 16px ${SUCCESS}35`, '&:hover': { bgcolor: SUCCESS_HOVER } }}>
             Abrir Caja
           </Button>
@@ -177,7 +185,11 @@ function TabMovimientos({ movimientos, onAgregar, cajaAbierta, ocultarMontos }) 
   const [monto,    setMonto]    = useState('');
   const [motivo,   setMotivo]   = useState('');
   const [showForm, setShowForm] = useState(false);
+  const montoRef = useRef(null);
 
+  // El formulario queda abierto (no se cierra solo) y el foco vuelve a Monto
+  // — cargar varios movimientos seguidos no debería obligar a reabrirlo cada
+  // vez, mismo criterio que ya se usa en el carrito del POS.
   const handleAgregar = () => {
     if (!monto || Number(monto) <= 0) return;
     const now = new Date();
@@ -186,7 +198,14 @@ function TabMovimientos({ movimientos, onAgregar, cajaAbierta, ocultarMontos }) 
       motivo: motivo.trim() || (tipo === 'ingreso' ? 'Ingreso manual' : 'Egreso manual'),
       hora: now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
     });
-    setMonto(''); setMotivo(''); setMetodo('efectivo'); setShowForm(false);
+    setMonto(''); setMotivo('');
+    montoRef.current?.focus();
+  };
+
+  const handleMontoEnter = (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    handleAgregar();
   };
 
   return (
@@ -258,12 +277,13 @@ function TabMovimientos({ movimientos, onAgregar, cajaAbierta, ocultarMontos }) 
             <Box>
               <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Monto</Typography>
               <CampoPrecio fullWidth placeholder="0" value={monto} onChange={e => setMonto(e.target.value)}
+                inputRef={el => { montoRef.current = el; }} autoFocus onKeyDown={handleMontoEnter}
                 InputProps={{ startAdornment: <InputAdornment position="start"><Typography sx={{ color: MUTED, fontSize: 14 }}>$</Typography></InputAdornment> }}
                 sx={fieldSx} />
             </Box>
             <Box>
               <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Motivo (opcional)</Typography>
-              <TextField fullWidth placeholder="Ej: Retiro de caja" value={motivo} onChange={e => setMotivo(e.target.value)} sx={fieldSx} />
+              <TextField fullWidth placeholder="Ej: Retiro de caja" value={motivo} onChange={e => setMotivo(e.target.value)} onKeyDown={handleMontoEnter} sx={fieldSx} />
             </Box>
           </Box>
           <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end' }}>
@@ -404,6 +424,12 @@ function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoC
           </Typography>
           <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Efectivo contado</Typography>
           <CampoPrecio fullWidth placeholder="0" value={contado} onChange={e => setContado(e.target.value)}
+            autoFocus
+            onKeyDown={e => {
+              if (e.key !== 'Enter' || contado === '' || cerrando) return;
+              e.preventDefault();
+              onConfirmarCierre(Number(contado));
+            }}
             InputProps={{ startAdornment: <InputAdornment position="start"><Typography sx={{ color: MUTED, fontSize: 14 }}>$</Typography></InputAdornment> }}
             sx={fieldSx} />
         </Box>

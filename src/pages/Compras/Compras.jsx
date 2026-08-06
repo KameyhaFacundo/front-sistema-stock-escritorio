@@ -21,6 +21,7 @@ import VisibilityIcon   from '@mui/icons-material/Visibility';
 import EditIcon         from '@mui/icons-material/Edit';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import TableChartIcon   from '@mui/icons-material/TableChart';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import BarcodeScanner   from '../../components/shared/BarcodeScanner';
 import ConfirmDialog    from '../../components/shared/ConfirmDialog';
 
@@ -170,7 +171,12 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
   // de cero productos con talles, mostrando su propio estado vacío).
   const esIndumentaria = user?.empresa?.tipo === 'indument';
   const empty = { id_proveedor: '', lineas: [{ id_producto: '', cantidad: 1, precio_compra: '', precio_venta: '', margen: 10, fecha_vencimiento: '' }], fecha: toLocalDateStr(), estado: 'pendiente', metodo_pago: 'efectivo' };
-  const [form,         setForm]         = useState(empty);
+  // La mayoría de las compras son a los mismos 2-3 proveedores de siempre —
+  // arrancar con el último usado en vez de vacío ahorra un paso en el caso
+  // común. Se actualiza al registrar una compra nueva (ver handleRegistrar).
+  const ULTIMO_PROVEEDOR_KEY = 'kamex_ultimo_proveedor_compra';
+  const emptyConProveedorRecordado = () => ({ ...empty, id_proveedor: localStorage.getItem(ULTIMO_PROVEEDOR_KEY) || '' });
+  const [form,         setForm]         = useState(emptyConProveedorRecordado);
   const [errors,       setErrors]       = useState({});
   const [saving,       setSaving]       = useState(false);
   const [categorias,   setCategorias]   = useState([]);
@@ -192,12 +198,59 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
   const [calcularTotal,    setCalcularTotal]    = useState('');
   const cantRefs = useRef({});
   const autoRefs = useRef({});
+  const proveedorRef = useRef(null);
+  // Casi ningún producto de ferretería tiene vencimiento — mostrar esa fecha
+  // siempre en cada línea es ruido para el caso común. Arranca oculta detrás
+  // de un ícono; se muestra sola si la línea ya trae una fecha cargada (ej.
+  // al editar una compra existente que sí tenía vencimiento).
+  const [vencAbiertos, setVencAbiertos] = useState(() => new Set());
+  const vencVisible = (idx, l) => vencAbiertos.has(idx) || !!l.fecha_vencimiento;
+  const toggleVenc = (idx) => setVencAbiertos(prev => {
+    const next = new Set(prev);
+    next.has(idx) ? next.delete(idx) : next.add(idx);
+    return next;
+  });
+  // Si ya hay proveedor (recordado o de una edición/escaneo), no tiene
+  // sentido pedirlo nuevo — el siguiente paso lógico es cargar productos.
+  // Si no, el proveedor es obligatorio y es lo primero que hay que elegir.
+  const enfocarAlAbrir = () => {
+    if (form.id_proveedor) autoRefs.current[0]?.focus();
+    else proveedorRef.current?.focus();
+  };
   // Solo ferretería puede tener productos en kg/metro/litro — para el resto
   // unidadMedida siempre es 'unidad' y esto no cambia el mínimo de 1 de hoy.
   // Cada línea guarda el producto completo elegido (productoData) en vez de
   // resolverlo por id contra un array local — el catálogo entero ya no vive
   // en memoria, así que el id solo no alcanza para saber su unidad/nombre.
   const unidadDeLinea = (l) => l.productoData?.unidadMedida || 'unidad';
+
+  // Si ya se le compró este producto antes a ESTE proveedor, sugiere el
+  // último precio pagado en vez de que el usuario tenga que retipearlo cada
+  // vez — común en ferreterías, que restockean seguido a los mismos
+  // proveedores de siempre. No bloquea la selección: el costo del producto
+  // ya se aplicó al toque (ver onSeleccionar), esto solo lo refina un
+  // instante después si hay una compra previa a ese proveedor puntual.
+  const sugerirCostoDeHistorial = async (idx, idProducto, idProveedorActual) => {
+    try {
+      const historial = await productosService.getHistorialCompras(idProducto);
+      if (!historial.length) return;
+      const sugerido = (idProveedorActual && historial.find(h => h.idProveedor === idProveedorActual)) || null;
+      if (!sugerido) return;
+      setForm(f => {
+        const ls = [...f.lineas];
+        // Si mientras tardó la consulta el usuario ya cambió o borró el
+        // producto de esta línea, no le pisamos lo que haya ahora.
+        if (ls[idx]?.id_producto !== idProducto) return f;
+        const margen = Number(ls[idx].margen) || 0;
+        ls[idx] = {
+          ...ls[idx],
+          precio_compra: String(sugerido.precioCompra),
+          precio_venta: String(Math.round(sugerido.precioCompra * (1 + margen / 100) * 100) / 100),
+        };
+        return { ...f, lineas: ls };
+      });
+    } catch { /* sin historial o sin conexión — se queda con el costo del producto */ }
+  };
 
   const setPrecioCompraLinea = (idx, valor) => {
     setForm(f => {
@@ -378,8 +431,10 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
         onCreate?.(nueva);
         toast('Compra registrada correctamente', 'success');
       }
-      setForm(empty);
+      if (form.id_proveedor) localStorage.setItem(ULTIMO_PROVEEDOR_KEY, form.id_proveedor);
+      setForm(emptyConProveedorRecordado());
       setErrors({});
+      setVencAbiertos(new Set());
       setComprobanteUrl(null);
       setComprobanteFile(null);
       onClose();
@@ -391,7 +446,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
   };
 
   const resetNuevoProd = () => { setNuevoProd({ active: false, idx: null, nombre: '' }); };
-  const handleClose = () => { setForm(empty); setErrors({}); resetNuevoProd(); setComprobanteUrl(null); setComprobanteFile(null); onClose(); };
+  const handleClose = () => { setForm(emptyConProveedorRecordado()); setErrors({}); resetNuevoProd(); setComprobanteUrl(null); setComprobanteFile(null); setVencAbiertos(new Set()); onClose(); };
 
   // Agrega una línea por cada talle elegido en "Comprar por curva" — aprovecha
   // la última línea si está vacía en vez de dejarla suelta, mismo criterio
@@ -420,7 +475,8 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="xl" fullWidth
-      disableEnforceFocus PaperProps={{ sx: isMobile ? modalPaperSx : {
+      disableEnforceFocus TransitionProps={{ onEntered: enfocarAlAbrir }}
+      PaperProps={{ sx: isMobile ? modalPaperSx : {
         // Desktop necesita el ancho xl y una altura acotada con scroll interno
         // por la tabla de productos — en mobile el maxWidth no cambia nada
         // visualmente (la pantalla ya es angosta), así que se usa el mismo
@@ -475,6 +531,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
             <Box sx={{ display: 'flex', gap: 1 }}>
               <FormControl fullWidth error={!!errors.id_proveedor}>
                 <Select value={form.id_proveedor} onChange={setField('id_proveedor')} displayEmpty sx={selectFieldSx}
+                  inputRef={proveedorRef}
                   MenuProps={{ PaperProps: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, color: INK, maxHeight: 260 } } }}
                   renderValue={(v) => todosProveedores.find(p => p.id === v)?.nombre || <Box sx={{ color: MUTED, fontSize: 14 }}>Seleccionar proveedor</Box>}>
                   {todosProveedores.map(p => (
@@ -612,6 +669,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                       if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); return; }
                       setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
                       setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
+                      sugerirCostoDeHistorial(idx, val.id, form.id_proveedor);
                     }}
                     onCrear={(nombre) => setNuevoProd({ active: true, idx, nombre })}
                   />
@@ -641,7 +699,9 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                         </Tooltip>
                       )}
                     </Box>
-                    <CampoPrecio fullWidth placeholder="0" value={l.precio_compra} onChange={e => setPrecioCompraLinea(idx, e.target.value)} error={!!errors[`linea_${idx}_precio`]} sx={{ ...numberFieldSx, width: '100%' }} />
+                    <CampoPrecio fullWidth placeholder="0" value={l.precio_compra} onChange={e => setPrecioCompraLinea(idx, e.target.value)} error={!!errors[`linea_${idx}_precio`]}
+                      onKeyDown={e => { if (e.key === 'Enter' && l.id_producto) { e.preventDefault(); addLineaAndFocus(); } }}
+                      sx={{ ...numberFieldSx, width: '100%' }} />
                   </Box>
                   <Box>
                     <FieldLabel>Margen %</FieldLabel>
@@ -664,8 +724,15 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
 
                 <Box>
                   <FieldLabel>Vencimiento</FieldLabel>
-                  <TextField fullWidth type="date" value={l.fecha_vencimiento || ''} onChange={e => setLinea(idx, 'fecha_vencimiento', e.target.value)} InputLabelProps={{ shrink: true }}
-                    sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'transparent', '& fieldset': { borderColor: BORDER }, '&:hover fieldset': { borderColor: 'var(--border-hover)' }, '&.Mui-focused fieldset': { borderColor: P, borderWidth: 1 } }, '& .MuiInputBase-input': { py: '9px', px: '10px', fontSize: 13, color: INK, '&::-webkit-calendar-picker-indicator': { opacity: 0.6, cursor: 'pointer' } } }} />
+                  {vencVisible(idx, l) ? (
+                    <TextField fullWidth type="date" value={l.fecha_vencimiento || ''} onChange={e => setLinea(idx, 'fecha_vencimiento', e.target.value)} InputLabelProps={{ shrink: true }}
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'transparent', '& fieldset': { borderColor: BORDER }, '&:hover fieldset': { borderColor: 'var(--border-hover)' }, '&.Mui-focused fieldset': { borderColor: P, borderWidth: 1 } }, '& .MuiInputBase-input': { py: '9px', px: '10px', fontSize: 13, color: INK, '&::-webkit-calendar-picker-indicator': { opacity: 0.6, cursor: 'pointer' } } }} />
+                  ) : (
+                    <Button size="small" startIcon={<CalendarMonthIcon sx={{ fontSize: 15 }} />} onClick={() => toggleVenc(idx)}
+                      sx={{ color: MUTED, textTransform: 'none', fontSize: 12.5, border: `1px solid ${BORDER}`, borderRadius: '8px', py: '8px', '&:hover': { color: P, borderColor: P, bgcolor: `${P}08` } }}>
+                      Agregar fecha
+                    </Button>
+                  )}
                 </Box>
 
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 0.5, borderTop: `1px solid ${BORDER}` }}>
@@ -729,6 +796,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                           if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); return; }
                           setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
                           setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
+                          sugerirCostoDeHistorial(idx, val.id, form.id_proveedor);
                         }}
                         onCrear={(nombre) => setNuevoProd({ active: true, idx, nombre })}
                         onEnterKeyDown={async (e, query) => {
@@ -745,6 +813,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                               e.preventDefault();
                               setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: exacto.id, productoData: exacto, precio_compra: exacto.costo > 0 ? String(exacto.costo) : ls[idx].precio_compra, precio_venta: String(exacto.precioFinal ?? exacto.precio ?? '') }; return { ...f, lineas: ls }; });
                               setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
+                              sugerirCostoDeHistorial(idx, exacto.id, form.id_proveedor);
                             }
                           } catch { /* sin match — deja que el usuario elija del desplegable */ }
                         }}
@@ -767,6 +836,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
 
                     <TableCell sx={rowTdSx} align="center">
                       <CampoPrecio placeholder="0" value={l.precio_compra} onChange={e => setPrecioCompraLinea(idx, e.target.value)} error={!!errors[`linea_${idx}_precio`]}
+                        onKeyDown={e => { if (e.key === 'Enter' && l.id_producto) { e.preventDefault(); addLineaAndFocus(); } }}
                         InputProps={esFraccionable(unidadDeLinea(l)) ? { endAdornment: (
                           <Tooltip title="Cargar por monto total pagado">
                             <IconButton size="small" onClick={() => { setCalcularLineaIdx(idx); setCalcularTotal(''); }} sx={{ color: MUTED, p: '2px', '&:hover': { color: P } }}>
@@ -796,7 +866,15 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                     </TableCell>
 
                     <TableCell sx={rowTdSx} align="center">
-                      <TextField type="date" value={l.fecha_vencimiento || ''} onChange={e => setLinea(idx, 'fecha_vencimiento', e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 130, '& .MuiOutlinedInput-root': { bgcolor: 'transparent', '& fieldset': { borderColor: BORDER }, '&:hover fieldset': { borderColor: 'var(--border-hover)' }, '&.Mui-focused fieldset': { borderColor: P, borderWidth: 1 } }, '& .MuiInputBase-input': { py: '7px', px: '8px', fontSize: 12.5, color: INK, '&::-webkit-calendar-picker-indicator': { opacity: 0.6, cursor: 'pointer' } } }} />
+                      {vencVisible(idx, l) ? (
+                        <TextField type="date" value={l.fecha_vencimiento || ''} onChange={e => setLinea(idx, 'fecha_vencimiento', e.target.value)} InputLabelProps={{ shrink: true }} sx={{ width: 130, '& .MuiOutlinedInput-root': { bgcolor: 'transparent', '& fieldset': { borderColor: BORDER }, '&:hover fieldset': { borderColor: 'var(--border-hover)' }, '&.Mui-focused fieldset': { borderColor: P, borderWidth: 1 } }, '& .MuiInputBase-input': { py: '7px', px: '8px', fontSize: 12.5, color: INK, '&::-webkit-calendar-picker-indicator': { opacity: 0.6, cursor: 'pointer' } } }} />
+                      ) : (
+                        <Tooltip title="Agregar fecha de vencimiento">
+                          <IconButton size="small" onClick={() => toggleVenc(idx)} sx={{ color: MUTED, '&:hover': { color: P }, p: '4px' }}>
+                            <CalendarMonthIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
 
                     {/* Subtotal de la línea */}

@@ -1283,7 +1283,7 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
           <Box data-tour="prod-modal-nombre" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
             <Box>
               <Label required>Nombre del producto</Label>
-              <TextField fullWidth placeholder="Nombre del producto" value={form.nombre} onChange={set('nombre')} error={!!errors.nombre} helperText={errors.nombre} sx={fieldSx} />
+              <TextField fullWidth autoFocus placeholder="Nombre del producto" value={form.nombre} onChange={set('nombre')} error={!!errors.nombre} helperText={errors.nombre} sx={fieldSx} />
             </Box>
             <Box>
               <Label required={!isEdit}>Código</Label>
@@ -3099,9 +3099,13 @@ export default function Productos() {
   // Código/Estado/Stock tienen contenido corto y fijo (un código, un switch,
   // "30 u") — les viene mejor un ancho fijo chico que competir 1fr contra
   // Producto/Categoría/Proveedor, que sí necesitan lugar para texto variable.
+  // Categoría pasa a ancho fijo (los nombres son cortos, "TORNILLERIA",
+  // "ELECTRICIDAD") y se corre al lado de Estado — antes competía 1fr contra
+  // Producto, que es el que de verdad necesita el espacio (nombres largos,
+  // hoy truncados con "...").
   const COLS = mostrarStockTotal
-    ? '44px 80px minmax(0, 1fr) minmax(0, 1fr) 90px 100px 100px minmax(0, 1fr) minmax(0, 1fr) 130px 112px'
-    : '44px 80px minmax(0, 1fr) minmax(0, 1fr) 90px 100px minmax(0, 1fr) minmax(0, 1fr) 130px 112px';
+    ? '44px 80px minmax(0, 1fr) 90px 130px 100px 100px minmax(0, 1fr) minmax(0, 1fr) 130px 112px'
+    : '44px 80px minmax(0, 1fr) 90px 130px 100px minmax(0, 1fr) minmax(0, 1fr) 130px 112px';
 
   const swSx = {
     '& .MuiSwitch-switchBase.Mui-checked': { color: P },
@@ -3523,8 +3527,8 @@ export default function Productos() {
               sx={{ color: BORDER, '&.Mui-checked': { color: P }, '&.MuiCheckbox-indeterminate': { color: P }, p: 0 }} />
             <Typography sx={colTh}>Código</Typography>
             <ColSortHeader col="nombre"      label="Producto"  sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
-            <Typography sx={colTh}>Categoría</Typography>
             <Typography sx={colTh}>Estado</Typography>
+            <Typography sx={colTh}>Categoría</Typography>
             <ColSortHeader col="stock"       label="Stock"     sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
             {mostrarStockTotal && (
               <ColSortHeader col="stockTotal" label="Stock total" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
@@ -3600,15 +3604,15 @@ export default function Productos() {
                 })()}
               </Box>
             </Box>
+            <Switch checked={p.activo} size="small"
+              onChange={() => actualizarProducto(p.id, { activo: !p.activo })}
+              onClick={e => e.stopPropagation()} sx={swSx} />
             <Box>
               <Chip label={p.categoria} size="small" sx={{
                 bgcolor: p.cColor + '22', color: p.cColor, fontWeight: 600,
                 fontSize: 12, borderRadius: '6px', border: `1px solid ${p.cColor}44`,
               }} />
             </Box>
-            <Switch checked={p.activo} size="small"
-              onChange={() => actualizarProducto(p.id, { activo: !p.activo })}
-              onClick={e => e.stopPropagation()} sx={swSx} />
             <Box>
               <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700 }}>{stockDeFila(p)} {abrevUnidad(p.unidadMedida)}</Typography>
               <Typography sx={{ color: stockDeFila(p) <= p.alerta ? '#f59e0b' : MUTED, fontSize: 12 }}>Alerta: {p.alerta} {abrevUnidad(p.unidadMedida)}</Typography>

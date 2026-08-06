@@ -71,7 +71,7 @@ function aNumero(formateado) {
  * puntos), así los handlers existentes (setCosto, setMargen, etc.) no
  * necesitan tocarse.
  */
-export default function CampoPrecio({ value, onChange, ...props }) {
+export default function CampoPrecio({ value, onChange, inputRef: inputRefExterno, ...props }) {
   const inputRef = useRef(null);
   const cursorPendiente = useRef(null);
   const [texto, setTexto] = useState(() => formatearDesdeValor(value));
@@ -106,7 +106,10 @@ export default function CampoPrecio({ value, onChange, ...props }) {
   return (
     <TextField
       {...props}
-      inputRef={inputRef}
+      inputRef={el => {
+        inputRef.current = el;
+        inputRefExterno?.(el);
+      }}
       type="text"
       inputMode="decimal"
       value={texto}

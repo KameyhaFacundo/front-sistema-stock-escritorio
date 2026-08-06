@@ -66,6 +66,15 @@ const PaymentModal = memo(function PaymentModal({
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
+  // Enter en cualquiera de los campos confirma, igual que clickear el botón
+  // — mismas condiciones que lo deshabilitan (ver el Button de más abajo).
+  const handleEnter = (e) => {
+    if (e.key !== 'Enter') return;
+    if (saving || !form.monto || Number(form.monto) > saldo || Number(form.monto) <= 0) return;
+    e.preventDefault();
+    handleSubmit();
+  };
+
   const handleSubmit = async () => {
     if (!form.monto || Number(form.monto) <= 0) return;
     if (!serviceFn) { toast('Error: servicio no configurado', 'error'); return; }
@@ -164,8 +173,8 @@ const PaymentModal = memo(function PaymentModal({
               </Button>
             )}
           </Box>
-          <CampoPrecio fullWidth placeholder="0"
-            value={form.monto} onChange={set('monto')}
+          <CampoPrecio fullWidth placeholder="0" autoFocus
+            value={form.monto} onChange={set('monto')} onKeyDown={handleEnter}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -185,7 +194,7 @@ const PaymentModal = memo(function PaymentModal({
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1.2fr 2fr' }, gap: 3, mb: 3 }}>
           <Box>
             <Typography sx={labelSx}>Fecha</Typography>
-            <TextField fullWidth type="date" value={form.fecha} onChange={set('fecha')}
+            <TextField fullWidth type="date" value={form.fecha} onChange={set('fecha')} onKeyDown={handleEnter}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -233,7 +242,7 @@ const PaymentModal = memo(function PaymentModal({
         <Box sx={{ mb: 4 }}>
           <Typography sx={labelSx}>Nota (opcional)</Typography>
           <TextField fullWidth placeholder={type === 'cobro' ? 'Ej: Abono semana 1' : 'Ej: Pago cuota 1/3'}
-            value={form.nota} onChange={set('nota')}
+            value={form.nota} onChange={set('nota')} onKeyDown={handleEnter}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
