@@ -339,12 +339,12 @@ function Home() {
       {
         element: '[data-tour="pos-confirmar"]',
         title: 'Confirmar venta',
-        description: 'Cierra la venta con todo lo cargado. Atajo: F2 o Enter en la columna derecha.',
+        description: 'Abre un resumen para repasar antes de cobrar. Atajo: F2 o Enter en la columna derecha.',
       },
       {
         element: '[data-tour="pos-atajos"]',
         title: 'Atajos de teclado',
-        description: 'Lista completa de atajos: F1 buscar, Enter agregar, F2 cobrar, F3 escanear, Esc cerrar ventanas. Vende sin tocar el mouse.',
+        description: 'Lista completa de atajos: F1 buscar, Enter agregar, F4 ir a Cliente, flechas para elegir el pago, F2 abrir el resumen, F3 escanear, Esc cerrar ventanas. Vende sin tocar el mouse.',
       },
     ]);
   }, [isMobile]);
@@ -425,6 +425,16 @@ function Home() {
   // Enter en ese campo lo devuelve al buscador para seguir cargando.
   const cantidadRefs = useRef({});
   const ejecutarConfirmarVentaRef = useRef(null);
+  const abrirConfirmacionRef = useRef(null);
+  // Flujo de confirmación 100% por teclado: F4 → Cliente → Enter → Métodos
+  // de pago (flechas + Enter) → Recibido (si es efectivo) → Enter →
+  // Descuento → Enter → abre el modal de confirmación, nunca cobra directo.
+  const clienteInputRef = useRef(null);
+  const [clienteDropdownOpen, setClienteDropdownOpen] = useState(false);
+  const metodoPagoRefs = useRef({});
+  const recibidoRef = useRef(null);
+  const descuentoRef = useRef(null);
+  const [openConfirmarModal, setOpenConfirmarModal] = useState(false);
 
   // ── Ajuste (descuento / recargo) ───────────────────────────────────
   const [ajuste, setAjuste] = useState({ activo: false, tipo: 'descuento', calculo: 'porcentaje', valor: '' });
@@ -606,11 +616,12 @@ function Home() {
       if (e.key === 'F1') { e.preventDefault(); searchRef.current?.focus(); }
       if (e.key === 'F2' && cart.length > 0 && caja.abierta) {
         e.preventDefault();
-        ejecutarConfirmarVentaRef.current?.();
+        abrirConfirmacionRef.current?.();
       }
       if (e.key === 'F3') { e.preventDefault(); setOpenScanner(true); }
+      if (e.key === 'F4' && cart.length > 0 && caja.abierta) { e.preventDefault(); clienteInputRef.current?.focus(); }
       if (e.key === 'Escape') {
-        setOpenMonto(false); setOpenPrecio(false); setOpenScanner(false);
+        setOpenMonto(false); setOpenPrecio(false); setOpenScanner(false); setOpenConfirmarModal(false);
       }
     };
     window.addEventListener('keydown', handler);
@@ -1009,9 +1020,94 @@ function Home() {
     else if (!variosPagos && metodoPago === 'qr' && qrDisponible) handleConfirmarVentaQr();
     else handleConfirmarVenta();
   };
-  // Ref siempre actualizada para que el atajo F3 (registrado más arriba, antes de
-  // que esta función exista) llame siempre a la versión más reciente.
+  // Último paso del flujo por teclado (y del botón "Confirmar Venta") — abre
+  // el modal de repaso en vez de cobrar directo, así el cajero ve un resumen
+  // antes de que la venta se termine de registrar de verdad.
+  const abrirConfirmacion = () => {
+    if (cart.length === 0 || !caja.abierta || confirmarVentaDisabled) return;
+    setOpenConfirmarModal(true);
+  };
+  // Refs siempre actualizadas para que los atajos (registrados más arriba,
+  // antes de que estas funciones existan) llamen siempre a la versión
+  // más reciente, con el cart/caja/ajuste actuales.
   useEffect(() => { ejecutarConfirmarVentaRef.current = ejecutarConfirmarVenta; });
+  useEffect(() => { abrirConfirmacionRef.current = abrirConfirmacion; });
+
+  // Mismo array que se renderiza como botones de Métodos de Pago más abajo —
+  // hoisteado acá para que la navegación con flechas (avanzarMetodoPago) use
+  // el mismo orden y la misma lista de "disponible" sin duplicar la lógica.
+  const metodosPagoOpciones = [
+    { key: 'efectivo',      label: 'Efectivo',       Icon: LocalAtmIcon,    color: MONEY },
+    {
+      key: 'tarjeta', label: 'Tarjeta', Icon: CreditCardIcon, color: GOLD,
+      badge: 'manual', badgeColor: MUTED,
+      nota: 'Registro manual: no verifica el cobro con el banco.',
+    },
+    {
+      key: 'transferencia', label: 'Transferencia', Icon: PhoneIphoneIcon, color: PURPLE,
+      badge: 'manual', badgeColor: MUTED,
+      nota: 'Registro manual: no verifica que la transferencia haya llegado.',
+    },
+    {
+      key: 'qr', label: 'QR', Icon: QrCodeIcon, color: ORANGE,
+      badge: qrDisponible ? 'con MP' : null,
+      disponible: true,
+    },
+    {
+      key: 'fiado', label: 'Fiado', Icon: HandshakeIcon, color: P_HOVER,
+      disponible: clienteId !== null,
+      motivo: 'Elegí un cliente para vender a cuenta corriente',
+    },
+    ...(POINT_HABILITADO ? [{
+      key: 'point', label: 'Point', Icon: PointOfSaleIcon, color: GOLD,
+      disponible: pointDisponible,
+      motivo: !mpConectado ? 'Conectá tu cuenta de Mercado Pago en Configuración → Cobros'
+        : !mpDeviceId ? 'Elegí un dispositivo Point en Configuración → Cobros'
+        : ajuste.activo ? 'Point no soporta descuentos/recargos todavía'
+        : cartTieneManual ? 'Point no soporta montos manuales todavía'
+        : '',
+    }] : []),
+  ];
+
+  const seleccionarMetodoPago = (key) => {
+    setMetodoPago(key);
+    // El cobro real (Point / QR con MP) no admite combinarse con otros pagos
+    if (key === 'point' || (key === 'qr' && qrDisponible)) { setVariosPagos(false); setPagosAplicados([]); }
+  };
+
+  const focusPrimerMetodoPago = () => {
+    const primero = metodosPagoOpciones.find(o => o.disponible !== false);
+    if (primero) metodoPagoRefs.current[primero.key]?.focus();
+  };
+
+  const avanzarMetodoPago = (e, key) => {
+    const disponibles = metodosPagoOpciones.filter(o => o.disponible !== false).map(o => o.key);
+    const idx = disponibles.indexOf(key);
+    if (idx === -1) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      metodoPagoRefs.current[disponibles[(idx + 1) % disponibles.length]]?.focus();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      metodoPagoRefs.current[disponibles[(idx - 1 + disponibles.length) % disponibles.length]]?.focus();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      seleccionarMetodoPago(key);
+      avanzarDesdeMetodoPago(key);
+    }
+  };
+
+  const avanzarDesdeMetodoPago = (key) => {
+    if (!variosPagos && key === 'efectivo') { recibidoRef.current?.focus(); return; }
+    if (puedeAplicarDescuento) { descuentoRef.current?.focus(); return; }
+    abrirConfirmacion();
+  };
+
+  const avanzarDesdeRecibido = () => {
+    if (puedeAplicarDescuento) { descuentoRef.current?.focus(); return; }
+    abrirConfirmacion();
+  };
 
   // ── Polling del cobro con Point o QR ─────────────────────────────────
   const intentoActivo = pointEstado === 'esperando' ? pointIntentoId : qrEstado === 'esperando' ? qrIntentoId : null;
@@ -1144,7 +1240,10 @@ function Home() {
               {[
                 ['F1', 'Ir al buscador de productos'],
                 ['Enter', 'Agregar el producto encontrado'],
-                ['F2', 'Cobrar / confirmar venta'],
+                ['F4', 'Ir a Cliente'],
+                ['Enter', 'En Cliente/Pago/Recibido/Descuento: pasar al siguiente paso'],
+                ['↑↓←→', 'En Métodos de Pago: elegir cómo paga'],
+                ['F2', 'Abrir el resumen para confirmar la venta'],
                 ['F3', 'Escanear codigo de barras'],
                 ['Esc', 'Cerrar cualquier ventana'],
               ].map(([key, desc], i) => (
@@ -1160,6 +1259,26 @@ function Home() {
               ))}
             </Box>
           </Popover>
+        </Box>
+
+        {/* Atajos siempre visibles, no solo en el popover a demanda — para
+            que el flujo 100% por teclado (F4 Cliente → Enter → Métodos de
+            pago → Enter → Recibido/Descuento → Enter → confirmar) se pueda
+            aprender de un vistazo sin tener que abrir "Atajos" cada vez. */}
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1.25, mt: 1 }}>
+          {[
+            ['F1', 'Buscar'],
+            ['F4', 'Cliente'],
+            ['F2', 'Cobrar'],
+            ['F3', 'Escanear'],
+          ].map(([key, label]) => (
+            <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.625, bgcolor: `${PRIMARY}12`, border: `1px solid ${PRIMARY}35`, borderRadius: '7px', pl: 0.5, pr: 1, py: 0.4 }}>
+              <Box sx={{ bgcolor: PRIMARY, color: '#fff', borderRadius: '5px', px: 0.75, py: 0.15 }}>
+                <Typography sx={{ fontSize: 10.5, fontFamily: 'monospace', fontWeight: 800 }}>{key}</Typography>
+              </Box>
+              <Typography sx={{ color: INK2, fontSize: 12, fontWeight: 600 }}>{label}</Typography>
+            </Box>
+          ))}
         </Box>
       </Box>
 
@@ -1642,7 +1761,13 @@ function Home() {
         {(!isMobile || mobileTab === 1) && (
         <Box sx={{ flex: 1, minWidth: { xs: 0, md: 380 }, maxWidth: { md: 420 }, display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 1.25 }, overflowY: 'auto', p: { xs: 2, md: 0 }, pb: { md: 1.5 } }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') { e.preventDefault(); ejecutarConfirmarVenta(); }
+            // Catch-all: los campos con un paso siguiente definido (Cliente,
+            // Métodos de Pago, Recibido, Descuento) frenan la propagación del
+            // propio Enter con e.stopPropagation() y avanzan solos — este
+            // handler solo se dispara para un Enter "suelto" en cualquier
+            // otro lugar de la columna, y abre el modal de repaso en vez de
+            // cobrar directo.
+            if (e.key === 'Enter') { e.preventDefault(); abrirConfirmacion(); }
           }}>
 
           {/* Cliente */}
@@ -1663,6 +1788,9 @@ function Home() {
                 value={clientesOpts.find(c => c.id === clienteId) ?? null}
                 getOptionLabel={(opt) => opt.nombre || ''}
                 isOptionEqualToValue={(opt, val) => opt.id === val?.id}
+                open={clienteDropdownOpen}
+                onOpen={() => setClienteDropdownOpen(true)}
+                onClose={() => setClienteDropdownOpen(false)}
                 filterOptions={(options, { inputValue }) => {
                   const q = inputValue.trim().toLowerCase();
                   const filtered = q ? options.filter(o => o.nombre.toLowerCase().includes(q)) : options;
@@ -1688,6 +1816,17 @@ function Home() {
                 }}
                 renderInput={(params) => (
                   <TextField {...params} placeholder="Consumidor Final (buscar o crear cliente...)"
+                    inputRef={el => { params.inputRef?.(el); clienteInputRef.current = el; }}
+                    onKeyDown={(e) => {
+                      // El primer Enter (con el desplegable abierto) lo maneja el propio
+                      // Autocomplete (selecciona la opción resaltada) — recién cuando ya
+                      // está cerrado, este segundo Enter avanza a Métodos de Pago.
+                      if (e.key === 'Enter' && !clienteDropdownOpen) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        focusPrimerMetodoPago();
+                      }
+                    }}
                     sx={{
                       ...inputSx,
                       '& .MuiInputBase-root': { py: 0, pr: '9px !important' },
@@ -1740,53 +1879,18 @@ function Home() {
             </Box>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5 }}>
-              {[
-                { key: 'efectivo',      label: 'Efectivo',       Icon: LocalAtmIcon,    color: MONEY },
-                {
-                  key: 'tarjeta', label: 'Tarjeta', Icon: CreditCardIcon, color: GOLD,
-                  badge: 'manual', badgeColor: MUTED,
-                  nota: 'Registro manual: no verifica el cobro con el banco.',
-                },
-                {
-                  key: 'transferencia', label: 'Transferencia', Icon: PhoneIphoneIcon, color: PURPLE,
-                  badge: 'manual', badgeColor: MUTED,
-                  nota: 'Registro manual: no verifica que la transferencia haya llegado.',
-                },
-                {
-                  key: 'qr', label: 'QR', Icon: QrCodeIcon, color: ORANGE,
-                  badge: qrDisponible ? 'con MP' : null,
-                  disponible: true,
-                },
-                {
-                  key: 'fiado', label: 'Fiado', Icon: HandshakeIcon, color: P_HOVER,
-                  disponible: clienteId !== null,
-                  motivo: 'Elegí un cliente para vender a cuenta corriente',
-                },
-                // Point deshabilitado temporalmente a pedido — sacado del todo del
-                // selector (no solo deshabilitado) para no confundir. Se controla
-                // con VITE_POINT_HABILITADO (ver src/config/brand.js o .env); para
-                // reactivarlo, poner esa variable en "true" en el .env de este build.
-                ...(POINT_HABILITADO ? [{
-                  key: 'point', label: 'Point', Icon: PointOfSaleIcon, color: GOLD,
-                  disponible: pointDisponible,
-                  motivo: !mpConectado ? 'Conectá tu cuenta de Mercado Pago en Configuración → Cobros'
-                    : !mpDeviceId ? 'Elegí un dispositivo Point en Configuración → Cobros'
-                    : ajuste.activo ? 'Point no soporta descuentos/recargos todavía'
-                    : cartTieneManual ? 'Point no soporta montos manuales todavía'
-                    : '',
-                }] : []),
-              ].map(opt => {
+              {/* Point deshabilitado temporalmente a pedido — ver metodosPagoOpciones
+                  más arriba, controlado por VITE_POINT_HABILITADO. */}
+              {metodosPagoOpciones.map(opt => {
                 const disponible = opt.disponible !== false;
                 const isActive = metodoPago === opt.key;
                 const activeBg = `${opt.color}26`;
 
                 const boton = (
                   <Button key={opt.key} fullWidth disabled={!disponible}
-                    onClick={() => {
-                      setMetodoPago(opt.key);
-                      // El cobro real (Point / QR con MP) no admite combinarse con otros pagos
-                      if (opt.key === 'point' || (opt.key === 'qr' && qrDisponible)) { setVariosPagos(false); setPagosAplicados([]); }
-                    }}
+                    ref={el => { metodoPagoRefs.current[opt.key] = el; }}
+                    onClick={() => { seleccionarMetodoPago(opt.key); }}
+                    onKeyDown={(e) => avanzarMetodoPago(e, opt.key)}
                     sx={{
                       py: 0.875, flexDirection: 'column', gap: 0.375, textTransform: 'none', borderRadius: '10px',
                       border: `1px solid ${isActive ? opt.color + '60' : BORDER}`,
@@ -1862,6 +1966,10 @@ function Home() {
                       placeholder={String(total)}
                       value={efectivoRecibido}
                       onChange={e => setEfectivoRecibido(e.target.value)}
+                      inputRef={el => { recibidoRef.current = el; }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); avanzarDesdeRecibido(); }
+                      }}
                       InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: MUTED }}>$</InputAdornment> }}
                       sx={{ '& .MuiOutlinedInput-root': { bgcolor: MODAL, color: INK, '& fieldset': { borderColor: BORDER }, '&.Mui-focused fieldset': { borderColor: PRIMARY } }, '& .MuiInputBase-input::placeholder': { color: MUTED, opacity: 1 } }}
                     />
@@ -1911,10 +2019,14 @@ function Home() {
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <TextField size="small" type="number" fullWidth placeholder="0"
+                    inputRef={descuentoRef}
                     value={ajuste.valor}
                     onChange={e => {
                       const valor = e.target.value;
                       setAjuste(a => ({ ...a, valor, tipo: 'descuento', activo: Number(valor) > 0 }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); abrirConfirmacion(); }
                     }}
                     onWheel={e => e.target.blur()}
                     InputProps={{ endAdornment: <InputAdornment position="end" sx={{ color: MUTED }}>{ajuste.calculo === 'porcentaje' ? '%' : '$'}</InputAdornment> }}
@@ -2029,7 +2141,7 @@ function Home() {
                   variant="contained" fullWidth
                   startIcon={<PointOfSaleIcon />}
                   disabled={cart.length === 0 || !caja.abierta || confirmarVentaDisabled}
-                  onClick={ejecutarConfirmarVenta}
+                  onClick={abrirConfirmacion}
                   sx={{
                     py: 1.25, fontSize: 15, fontWeight: 700,
                     textTransform: 'none', borderRadius: '12px',
@@ -2211,6 +2323,74 @@ function Home() {
             Cancelar cobro
           </Button>
         </Box>
+      </Dialog>
+
+      {/* ── Modal: Confirmar Venta — último paso del flujo por teclado (y del
+          botón principal), antes de que la venta se registre de verdad. ── */}
+      <Dialog open={openConfirmarModal} onClose={() => setOpenConfirmarModal(false)} maxWidth="xs" fullWidth
+        PaperProps={{ sx: { ...modalPaperSx, borderRadius: '16px' } }}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 3, pt: 2.5, pb: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PointOfSaleIcon sx={{ color: PRIMARY, fontSize: 20 }} />
+            <Typography sx={{ color: INK, fontWeight: 700, fontSize: 17 }}>Confirmar venta</Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setOpenConfirmarModal(false)} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        <DialogContent sx={{ px: 3, pb: 3, pt: 0 }}>
+          <Box sx={{ bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '10px', p: 1.75, mb: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography sx={{ color: MUTED, fontSize: 13 }}>Cliente</Typography>
+              <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600 }}>{clienteNombre}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography sx={{ color: MUTED, fontSize: 13 }}>Método de pago</Typography>
+              <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600 }}>
+                {variosPagos ? 'Varios' : METODO_LABELS[metodoPago] || metodoPago}
+              </Typography>
+            </Box>
+            {!variosPagos && metodoPago === 'efectivo' && efectivoNum > 0 && (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography sx={{ color: MUTED, fontSize: 13 }}>Recibido</Typography>
+                  <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600 }}>{fmtMoney(efectivoNum)}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography sx={{ color: vuelto >= 0 ? SUCCESS : ERROR, fontSize: 13 }}>{vuelto >= 0 ? 'Vuelto' : 'Falta'}</Typography>
+                  <Typography sx={{ color: vuelto >= 0 ? SUCCESS : ERROR, fontSize: 13, fontWeight: 700 }}>{fmtMoney(Math.abs(vuelto))}</Typography>
+                </Box>
+              </>
+            )}
+            {ajuste.activo && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography sx={{ color: ajuste.tipo === 'descuento' ? SUCCESS : ERROR, fontSize: 13 }}>
+                  {ajuste.tipo === 'descuento' ? 'Descuento' : 'Recargo'}
+                </Typography>
+                <Typography sx={{ color: ajuste.tipo === 'descuento' ? SUCCESS : ERROR, fontSize: 13, fontWeight: 700 }}>
+                  {ajuste.tipo === 'descuento' ? '-' : '+'}{fmtMoney(montoAjuste)}
+                </Typography>
+              </Box>
+            )}
+            <Divider sx={{ borderColor: BORDER, my: 1 }} />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography sx={{ color: INK, fontSize: 15, fontWeight: 700 }}>Total</Typography>
+              <Typography sx={{ color: PRIMARY, fontSize: 20, fontWeight: 800 }}>{fmtMoney(total)}</Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button fullWidth variant="outlined" onClick={() => setOpenConfirmarModal(false)}
+              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: HOVER } }}>
+              Cancelar
+            </Button>
+            <Button fullWidth autoFocus variant="contained"
+              onClick={() => { setOpenConfirmarModal(false); ejecutarConfirmarVenta(); }}
+              sx={{ bgcolor: PRIMARY, textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: P_HOVER } }}>
+              Confirmar venta
+            </Button>
+          </Box>
+        </DialogContent>
       </Dialog>
 
       {/* ── Modal: Venta Procesada ── */}
