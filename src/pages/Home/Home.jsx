@@ -52,6 +52,7 @@ import { registerTour } from '../../utils/tour';
 import { useVentas } from '../../context/VentasContextBase';
 import { useCaja } from '../../context/CajaContextBase';
 import { useToast } from '../../context/ToastContext';
+import { useApp } from '../../context/AppContextBase';
 import { fmtMoney, fmtDate, toLocalDateStr } from '../../utils/format';
 import { productosService } from '../../services/productosService';
 import useBusquedaProductos from '../../hooks/useBusquedaProductos';
@@ -284,6 +285,7 @@ function Home() {
   const { registrarVenta, confirmarVentaPoint } = useVentas();
   const { caja } = useCaja();
   const toast = useToast();
+  const { recargarDashboardStats } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const { checkPermisos } = useHasPermiso();
@@ -896,6 +898,10 @@ function Home() {
       setEfectivoRecibido('');
       setClienteId(null);
       setOpenVentaOk(true);
+      // "Ventas hoy"/alertas de stock del Dashboard y la campana solo se
+      // pedían una vez, al abrir la app — sin esto, quedaban pegadas en lo
+      // que había al arrancar aunque se hicieran ventas nuevas en el medio.
+      recargarDashboardStats();
     } catch (e) {
       toast(e.response?.data?.message || e.response?.data?.error || 'Error al registrar la venta', 'error');
     } finally {
@@ -1051,6 +1057,7 @@ function Home() {
           setAutoImprimir(true);
       setOpenVentaOk(true);
       playBeep('ok');
+      recargarDashboardStats();
         } else if (estado === 'cancelado') {
           toast('El cobro fue cancelado', 'info');
         } else {
