@@ -34,6 +34,7 @@ export function mapProducto(p) {
     // Fecha del último cambio de precio/costo (ver HistorialPrecio) — null si
     // nunca se modificó desde que se creó el producto.
     ultimaModificacionPrecio: p.ultima_modificacion_precio || null,
+    fechaCreacion: p.created_at || null,
     id_categoria:     p.id_categoria,
     fechaVencimiento: p.fecha_vencimiento || null,
     esCombo:          p.es_combo ?? false,

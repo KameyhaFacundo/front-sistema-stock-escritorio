@@ -52,7 +52,7 @@ import { registerTour } from '../../utils/tour';
 import { useVentas } from '../../context/VentasContextBase';
 import { useCaja } from '../../context/CajaContextBase';
 import { useToast } from '../../context/ToastContext';
-import { fmtMoney, toLocalDateStr } from '../../utils/format';
+import { fmtMoney, fmtDate, toLocalDateStr } from '../../utils/format';
 import { productosService } from '../../services/productosService';
 import useBusquedaProductos from '../../hooks/useBusquedaProductos';
 import useDropdownKeyboardNav from '../../hooks/useDropdownKeyboardNav';
@@ -80,6 +80,10 @@ function aProductoPos(p) {
     id: p.id, codigo: p.codigo, codigoBarras: p.codigoBarras, nombre: p.nombre,
     categoria: p.categoria, stock: p.stock, precio: p.precioFinal,
     unidadMedida: p.unidadMedida,
+    // Última modificación de precio/costo — si nunca se tocó desde que se
+    // creó, se muestra la fecha de creación en su lugar (ver el buscador
+    // del POS, resaltado en rojo al lado del stock).
+    ultimaModificacion: p.ultimaModificacionPrecio || p.fechaCreacion || null,
     // Solo indumentaria tiene esto — un producto con variantes no se agrega
     // directo al carrito, primero hay que elegir el talle (ver intentarAgregar).
     tieneVariantes: p.tieneVariantes,
@@ -1254,19 +1258,26 @@ function Home() {
                               <Typography sx={{ color: MUTED, fontSize: 11 }}>{product.categoria}</Typography>
                             </Box>
                           </Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0, ml: 1 }}>
-                            <Chip label={product.stock === 0 ? 'Sin stock' : `Stock: ${product.stock}`} size="small"
-                              sx={{
-                                fontSize: 10, height: 20, fontWeight: 600,
-                                bgcolor: product.stock === 0 ? ERROR_BG : `${MONEY}18`,
-                                color: product.stock === 0 ? ERROR : MONEY,
-                                border: `1px solid ${product.stock === 0 ? ERROR_BORDER : `${MONEY}30`}`,
-                                '& .MuiChip-label': { px: 1 },
-                              }}
-                            />
-                            <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15, minWidth: 70, textAlign: 'right' }}>
-                              {fmtMoney(product.precio)}
-                            </Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5, flexShrink: 0, ml: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                              <Chip label={product.stock === 0 ? 'Sin stock' : `Stock: ${product.stock}`} size="small"
+                                sx={{
+                                  fontSize: 10, height: 20, fontWeight: 600,
+                                  bgcolor: product.stock === 0 ? ERROR_BG : `${MONEY}18`,
+                                  color: product.stock === 0 ? ERROR : MONEY,
+                                  border: `1px solid ${product.stock === 0 ? ERROR_BORDER : `${MONEY}30`}`,
+                                  '& .MuiChip-label': { px: 1 },
+                                }}
+                              />
+                              <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15, minWidth: 70, textAlign: 'right' }}>
+                                {fmtMoney(product.precio)}
+                              </Typography>
+                            </Box>
+                            {product.ultimaModificacion && (
+                              <Typography sx={{ color: ERROR, fontSize: 10.5, fontWeight: 700 }}>
+                                {fmtDate(product.ultimaModificacion)}
+                              </Typography>
+                            )}
                           </Box>
                         </Box>
                       </motion.div>
