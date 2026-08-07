@@ -635,7 +635,21 @@ function Home() {
   const removeItem  = (id) => setCart(c => c.filter(i => i.id !== id));
   const updatePrecio = (id, precio) => {
     const n = parseFloat(String(precio).replace(',', '.'));
-    if (!isNaN(n) && n >= 0) setCart(c => c.map(i => i.id === id ? { ...i, precio: n } : i));
+    // Editar el precio a mano pisa cualquier descuento por línea que hubiera
+    // — si no, quedaba "colgado" un % aplicado sobre un precio de lista viejo
+    // y el precio final no coincidía con lo que el cajero acababa de tipear.
+    if (!isNaN(n) && n >= 0) setCart(c => c.map(i => i.id === id ? { ...i, precio: n, precioOriginal: n, descuento: 0 } : i));
+  };
+  const updateDescuento = (id, valor) => {
+    const n = Math.max(0, Math.min(100, parseFloat(String(valor).replace(',', '.')) || 0));
+    // precioOriginal es el precio de lista sin descontar — se fija la primera
+    // vez que se toca este campo, así aplicar 10% y después 20% descuenta
+    // siempre sobre el mismo precio base y no compone un descuento sobre otro.
+    setCart(c => c.map(i => {
+      if (i.id !== id) return i;
+      const base = i.precioOriginal ?? i.precio;
+      return { ...i, descuento: n, precioOriginal: base, precio: round2(base * (1 - n / 100)) };
+    }));
   };
   const updateCantidad = (id, valor) => {
     setCart(c => c.map(i => {
@@ -1262,7 +1276,9 @@ function Home() {
                               <Typography sx={{ color: INK, fontWeight: 600, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {product.nombre}
                               </Typography>
-                              <Typography sx={{ color: MUTED, fontSize: 11 }}>{product.categoria}</Typography>
+                              <Typography sx={{ color: MUTED, fontSize: 11 }}>
+                                {product.categoria}{product.codigo ? ` · ${product.codigo}` : ''}
+                              </Typography>
                             </Box>
                           </Box>
                           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5, flexShrink: 0, ml: 1 }}>
@@ -1347,16 +1363,17 @@ function Home() {
                     es una tarjeta de 2 líneas, no una fila de columnas */}
                 {!isMobile && (
                   <Box sx={{
-                    display: 'grid', gridTemplateColumns: '28px 90px 1fr 90px 120px 60px 84px 32px', gap: 1, alignItems: 'center',
+                    display: 'grid', gridTemplateColumns: '28px 90px 1fr 120px 80px 70px 84px 60px 32px', gap: 1, alignItems: 'center',
                     px: 2.5, py: 0.75, flexShrink: 0,
                   }}>
                     <Box />
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Código</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Producto</Typography>
-                    <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Precio</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Cantidad</Typography>
-                    <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Stock</Typography>
+                    <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Precio</Typography>
+                    <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Desc.</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Subtotal</Typography>
+                    <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Stock</Typography>
                     <Box />
                   </Box>
                 )}
@@ -1402,14 +1419,23 @@ function Home() {
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
                               <Typography sx={{ color: MUTED, fontSize: 12 }}>$</Typography>
-                              <Box component="input" type="number" value={item.precio}
+                              <Box component="input" type="number" value={item.precioOriginal ?? item.precio}
                                 onChange={e => updatePrecio(item.id, e.target.value)}
                                 onWheel={e => e.target.blur()}
                                 style={{
-                                  width: 52, background: 'none', border: 'none', outline: 'none',
+                                  width: 46, background: 'none', border: 'none', outline: 'none',
                                   color: 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
                                   borderBottom: '1px dashed var(--border)', padding: '0 2px', textAlign: 'left',
                                 }} />
+                              <Box component="input" type="number" min={0} max={100} value={item.descuento || ''} placeholder="0"
+                                onChange={e => updateDescuento(item.id, e.target.value)}
+                                onWheel={e => e.target.blur()}
+                                style={{
+                                  width: 26, background: 'none', border: 'none', outline: 'none',
+                                  color: item.descuento ? ORANGE : 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
+                                  borderBottom: '1px dashed var(--border)', padding: '0 2px', textAlign: 'right',
+                                }} />
+                              <Typography sx={{ color: MUTED, fontSize: 11 }}>%</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
                               <IconButton size="small" onClick={() => removeQty(item.id)}
@@ -1447,7 +1473,7 @@ function Home() {
                       ) : (
                       <Box sx={{
                         display: 'grid',
-                        gridTemplateColumns: '28px 90px 1fr 90px 120px 60px 84px 32px',
+                        gridTemplateColumns: '28px 90px 1fr 120px 80px 70px 84px 60px 32px',
                         gap: 1, alignItems: 'center',
                         bgcolor: idx % 2 === 0 ? HOVER : 'transparent',
                         borderRadius: '10px', p: 1,
@@ -1481,24 +1507,6 @@ function Home() {
                                 sx={{ height: 17, fontSize: 9.5, fontWeight: 700, bgcolor: `${ORANGE}18`, color: ORANGE, border: `1px solid ${ORANGE}30`, flexShrink: 0, '& .MuiChip-label': { px: 0.75 } }} />
                             </Tooltip>
                           )}
-                        </Box>
-
-                        {/* Precio unitario */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.25 }}>
-                          <Typography sx={{ color: MUTED, fontSize: 12 }}>$</Typography>
-                          <Box
-                            component="input"
-                            type="number"
-                            value={item.precio}
-                            onChange={e => updatePrecio(item.id, e.target.value)}
-                            onWheel={e => e.target.blur()}
-                            style={{
-                              width: 56, background: 'none', border: 'none', outline: 'none',
-                              color: 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
-                              borderBottom: '1px dashed var(--border)',
-                              padding: '0 2px', textAlign: 'left',
-                            }}
-                          />
                         </Box>
 
                         {/* Cantidad — alineado a la izquierda (no centrado) y con el input
@@ -1537,6 +1545,53 @@ function Home() {
                           )}
                         </Box>
 
+                        {/* Precio unitario — se edita el precio de lista; si había un
+                            descuento por línea cargado, se muestra ese precio base (sin
+                            descontar), no el precio final ya rebajado. */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.25 }}>
+                          <Typography sx={{ color: MUTED, fontSize: 12 }}>$</Typography>
+                          <Box
+                            component="input"
+                            type="number"
+                            value={item.precioOriginal ?? item.precio}
+                            onChange={e => updatePrecio(item.id, e.target.value)}
+                            onWheel={e => e.target.blur()}
+                            style={{
+                              width: 50, background: 'none', border: 'none', outline: 'none',
+                              color: 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
+                              borderBottom: '1px dashed var(--border)',
+                              padding: '0 2px', textAlign: 'left',
+                            }}
+                          />
+                        </Box>
+
+                        {/* Descuento por línea, en % sobre el precio de lista de esta fila */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.25 }}>
+                          <Box
+                            component="input"
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={item.descuento || ''}
+                            placeholder="0"
+                            onChange={e => updateDescuento(item.id, e.target.value)}
+                            onWheel={e => e.target.blur()}
+                            style={{
+                              width: 34, background: 'none', border: 'none', outline: 'none',
+                              color: item.descuento ? ORANGE : 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
+                              borderBottom: '1px dashed var(--border)',
+                              padding: '0 2px', textAlign: 'right',
+                            }}
+                          />
+                          <Typography sx={{ color: MUTED, fontSize: 12 }}>%</Typography>
+                        </Box>
+
+                        {/* Subtotal — ya refleja el descuento de línea, item.precio es
+                            siempre el precio final por unidad (ver updateDescuento) */}
+                        <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700, textAlign: 'right' }}>
+                          {fmtMoney(item.precio * item.cantidad)}
+                        </Typography>
+
                         {/* Stock disponible */}
                         <Tooltip title={isFinite(item.stock) ? `Stock disponible: ${item.stock}` : 'Sin control de stock'}>
                           <Typography sx={{
@@ -1546,11 +1601,6 @@ function Home() {
                             {isFinite(item.stock) ? item.stock : '—'}
                           </Typography>
                         </Tooltip>
-
-                        {/* Subtotal */}
-                        <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700, textAlign: 'right' }}>
-                          {fmtMoney(item.precio * item.cantidad)}
-                        </Typography>
 
                         {/* Delete */}
                         <Tooltip title="Quitar">
@@ -1565,6 +1615,23 @@ function Home() {
                   ))}
                 </AnimatePresence>
                 </Box>
+              </Box>
+            )}
+
+            {/* Total fijo abajo del todo del carrito — visible sin scrollear
+                aunque haya muchos productos cargados; distinto del "Total a
+                cobrar" de la columna de pago, que ya suma ajuste/puntos. */}
+            {cart.length > 0 && (
+              <Box sx={{
+                borderTop: `1px solid ${BORDER}`, px: 3, py: 1.25, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <Typography sx={{ color: MUTED, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Total carrito
+                </Typography>
+                <Typography sx={{ color: INK, fontWeight: 800, fontSize: 19 }}>
+                  {fmtMoney(subtotal)}
+                </Typography>
               </Box>
             )}
           </Box>
