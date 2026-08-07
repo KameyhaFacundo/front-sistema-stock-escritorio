@@ -28,6 +28,8 @@ import SwapHorizIcon        from '@mui/icons-material/SwapHoriz';
 import QrCode2Icon          from '@mui/icons-material/QrCode2';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import WhatsAppIcon         from '@mui/icons-material/WhatsApp';
+import CloudDoneIcon        from '@mui/icons-material/CloudDone';
+import CloudUploadIcon      from '@mui/icons-material/CloudUpload';
 // import WifiIcon             from '@mui/icons-material/Wifi'; // Solo usado por "Conectar otra caja", comentado más abajo.
 import {
   CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, HOVER, INPUT, TABLE_HEADER, DROPDOWN,
@@ -299,6 +301,14 @@ function TabNegocio() {
   const [saving, setSaving] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [subiendoLogo, setSubiendoLogo] = useState(false);
+  // Backup en la nube (Google Drive) — 100% opcional, ver electron/gdrive.js.
+  // window.electronAPI solo existe en la app de escritorio empaquetada, así
+  // que esta sección entera queda oculta en `pnpm dev`/demo/acceso por
+  // navegador de una segunda PC.
+  const [driveDisponible, setDriveDisponible] = useState(false);
+  const [driveConectado, setDriveConectado] = useState(false);
+  const [driveCargando, setDriveCargando] = useState(true);
+  const [driveConectando, setDriveConectando] = useState(false);
   // Estado de "Conectar otra caja" — comentado junto con el botón/modal más
   // abajo, descomentar los tres si se reactiva.
   // const [lanModal, setLanModal] = useState(false);
@@ -310,6 +320,33 @@ function TabNegocio() {
   useEffect(() => {
     setForm(formFromEmpresa(user?.empresa));
   }, [user?.empresa]);
+
+  useEffect(() => {
+    if (!window.electronAPI?.driveConectado) { setDriveCargando(false); return; }
+    setDriveDisponible(true);
+    window.electronAPI.driveConectado().then(setDriveConectado).finally(() => setDriveCargando(false));
+  }, []);
+
+  const conectarDrive = async () => {
+    setDriveConectando(true);
+    try {
+      const res = await window.electronAPI.driveConectar();
+      if (res.ok) {
+        setDriveConectado(true);
+        toast('Google Drive conectado — los próximos backups se van a subir solos', 'success');
+      } else {
+        toast(res.error || 'No se pudo conectar con Google Drive', 'error');
+      }
+    } finally {
+      setDriveConectando(false);
+    }
+  };
+
+  const desconectarDrive = async () => {
+    await window.electronAPI.driveDesconectar();
+    setDriveConectado(false);
+    toast('Google Drive desconectado — los backups siguen guardándose local, nomás', 'info');
+  };
 
   const descargarBackup = async () => {
     setDescargando(true);
@@ -665,6 +702,53 @@ function TabNegocio() {
           </Button>
         </Tooltip>
       </Box>
+
+      {/* Backup automático en Google Drive — 100% opcional, oculto fuera de
+          la app de escritorio empaquetada (no existe window.electronAPI en
+          pnpm dev/demo/acceso por navegador). Si nunca se conecta, no cambia
+          nada de lo que ya hay: el backup local automático sigue solo. */}
+      {driveDisponible && (
+        <Box sx={{ ...card, p: 2.5, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{
+              width: 36, height: 36, borderRadius: '10px', flexShrink: 0,
+              bgcolor: driveConectado ? SUCCESS_BG : HOVER,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {driveConectado
+                ? <CloudDoneIcon sx={{ color: SUCCESS, fontSize: 18 }} />
+                : <CloudUploadIcon sx={{ color: MUTED, fontSize: 18 }} />}
+            </Box>
+            <Box>
+              <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>Backup en Google Drive</Typography>
+              <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 0.25 }}>
+                {driveConectado
+                  ? 'Conectado — el backup diario se sube solo a tu Drive, además de guardarse local.'
+                  : 'Conectá tu propia cuenta de Google para que el backup diario, además de local, quede a salvo en tu Drive.'}
+              </Typography>
+            </Box>
+          </Box>
+          {driveConectado ? (
+            <Button
+              variant="outlined"
+              onClick={desconectarDrive}
+              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '8px', whiteSpace: 'nowrap', '&:hover': { bgcolor: HOVER, borderColor: ERROR, color: ERROR } }}
+            >
+              Desconectar
+            </Button>
+          ) : (
+            <Button
+              variant="outlined"
+              onClick={conectarDrive}
+              disabled={driveCargando || driveConectando}
+              startIcon={driveConectando ? <CircularProgress size={14} /> : <CloudUploadIcon sx={{ fontSize: 16 }} />}
+              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '8px', whiteSpace: 'nowrap', '&:hover': { bgcolor: HOVER }, '&.Mui-disabled': { opacity: 0.6 } }}
+            >
+              {driveConectando ? 'Abrí el navegador y aprobá el acceso...' : 'Conectar Google Drive'}
+            </Button>
+          )}
+        </Box>
+      )}
 
       {/* "Conectar otra caja" comentado a pedido — no hace falta multi-caja por
           ahora. Ojo: esto solo oculta el atajo de la UI, NO cierra el acceso
