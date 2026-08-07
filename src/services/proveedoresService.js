@@ -5,6 +5,7 @@ export function mapProveedor(p) {
   return {
     id:        p.id,
     nombre:    p.persona,
+    codigo:    p.codigo || '',
     cuit:      p.cuit || '',
     direccion: p.direccion || '',
     telefono:  p.telefono || '',

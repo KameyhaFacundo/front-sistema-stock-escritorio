@@ -54,7 +54,7 @@ function exportarCSVProveedores(rows) {
 /* ── Modal nuevo proveedor ── */
 export function ModalNuevoProveedor({ open, onClose, onCrear }) {
   const toast = useToast();
-  const empty = { persona: '', cuit: '', telefono: '', email: '', direccion: '' };
+  const empty = { persona: '', codigo: '', cuit: '', telefono: '', email: '', direccion: '' };
   const [form, setForm]     = useState(empty);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -117,9 +117,15 @@ export function ModalNuevoProveedor({ open, onClose, onCrear }) {
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
           <Box>
+            <Typography sx={labelSx}>Código</Typography>
+            <TextField fullWidth placeholder="AA223, 111..." value={form.codigo} onChange={set('codigo')} sx={fieldSxSm} />
+          </Box>
+          <Box>
             <Typography sx={labelSx}>Teléfono</Typography>
             <TextField fullWidth placeholder="11-1234-5678" value={form.telefono} onChange={set('telefono')} sx={fieldSxSm} />
           </Box>
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
           <Box>
             <Typography sx={labelSx}>Email</Typography>
             <TextField fullWidth placeholder="contacto@empresa.com" value={form.email} onChange={set('email')} sx={fieldSxSm} />
@@ -144,7 +150,7 @@ export function ModalNuevoProveedor({ open, onClose, onCrear }) {
 /* ── Modal editar proveedor ── */
 function ModalEditarProveedor({ open, onClose, onActualizar, proveedor }) {
   const toast = useToast();
-  const empty = { persona: '', cuit: '', telefono: '', email: '', direccion: '' };
+  const empty = { persona: '', codigo: '', cuit: '', telefono: '', email: '', direccion: '' };
   const [form, setForm]     = useState(empty);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -153,6 +159,7 @@ function ModalEditarProveedor({ open, onClose, onActualizar, proveedor }) {
     if (proveedor) {
       setForm({
         persona:   proveedor.nombre    || '',
+        codigo:    proveedor.codigo    || '',
         cuit:      proveedor.cuit      || '',
         telefono:  proveedor.telefono  || '',
         email:     proveedor.email     || '',
@@ -211,9 +218,15 @@ function ModalEditarProveedor({ open, onClose, onActualizar, proveedor }) {
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
           <Box>
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Código</Typography>
+            <TextField fullWidth placeholder="AA223, 111..." value={form.codigo} onChange={set('codigo')} sx={fieldSx} />
+          </Box>
+          <Box>
             <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Teléfono</Typography>
             <TextField fullWidth placeholder="11-1234-5678" value={form.telefono} onChange={set('telefono')} sx={fieldSx} />
           </Box>
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
           <Box>
             <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Email</Typography>
             <TextField fullWidth placeholder="contacto@empresa.com" value={form.email} onChange={set('email')} sx={fieldSx} />
