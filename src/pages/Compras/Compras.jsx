@@ -22,6 +22,7 @@ import EditIcon         from '@mui/icons-material/Edit';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import TableChartIcon   from '@mui/icons-material/TableChart';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import BarcodeScanner   from '../../components/shared/BarcodeScanner';
 import ConfirmDialog    from '../../components/shared/ConfirmDialog';
 
@@ -72,6 +73,29 @@ function FieldLabel({ children, required }) {
     <Typography component="label" sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>
       {children}{required && <Box component="span" sx={{ color: P }}> *</Box>}
     </Typography>
+  );
+}
+
+// Aviso de que este mismo producto ya se compró a OTROS proveedores — se
+// muestra antes de confirmar la compra, para decidir si conviene más
+// comprarlo en otro lado (ver sugerirCostoDeHistorial en ModalNuevaCompra).
+function ComparativaProveedoresChip({ comparativa }) {
+  if (!comparativa?.length) return null;
+  return (
+    <Tooltip title={
+      <Box sx={{ py: 0.25 }}>
+        <Typography sx={{ fontSize: 12, fontWeight: 700, mb: 0.5 }}>También se compró a:</Typography>
+        {comparativa.map(c => (
+          <Typography key={c.idProveedor} sx={{ fontSize: 12 }}>
+            {c.proveedorNombre}: {fmtMoney(c.precioCompra)}
+          </Typography>
+        ))}
+      </Box>
+    }>
+      <IconButton size="small" sx={{ color: WARNING, p: '2px', mb: '2px', '&:hover': { bgcolor: `${WARNING}18` } }}>
+        <CompareArrowsIcon sx={{ fontSize: 14 }} />
+      </IconButton>
+    </Tooltip>
   );
 }
 
@@ -196,6 +220,12 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
   // línea, y calcula el costo por unidad solo (evita la división a mano).
   const [calcularLineaIdx, setCalcularLineaIdx] = useState(null);
   const [calcularTotal,    setCalcularTotal]    = useState('');
+  // Si el producto de esta línea se le compró antes a OTROS proveedores
+  // (no el elegido para esta compra), se guarda acá esa comparación —
+  // así se ve antes de confirmar si conviene más comprarlo a otro lado.
+  // idx -> [{ idProveedor, proveedorNombre, precioCompra }] ordenado de
+  // más barato a más caro, ver sugerirCostoDeHistorial().
+  const [comparativas, setComparativas] = useState({});
   const cantRefs = useRef({});
   const autoRefs = useRef({});
   const proveedorRef = useRef(null);
@@ -231,24 +261,42 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
   // ya se aplicó al toque (ver onSeleccionar), esto solo lo refina un
   // instante después si hay una compra previa a ese proveedor puntual.
   const sugerirCostoDeHistorial = async (idx, idProducto, idProveedorActual) => {
+    setComparativas(prev => { const n = { ...prev }; delete n[idx]; return n; });
     try {
       const historial = await productosService.getHistorialCompras(idProducto);
       if (!historial.length) return;
       const sugerido = (idProveedorActual && historial.find(h => h.idProveedor === idProveedorActual)) || null;
-      if (!sugerido) return;
-      setForm(f => {
-        const ls = [...f.lineas];
-        // Si mientras tardó la consulta el usuario ya cambió o borró el
-        // producto de esta línea, no le pisamos lo que haya ahora.
-        if (ls[idx]?.id_producto !== idProducto) return f;
-        const margen = Number(ls[idx].margen) || 0;
-        ls[idx] = {
-          ...ls[idx],
-          precio_compra: String(sugerido.precioCompra),
-          precio_venta: String(Math.round(sugerido.precioCompra * (1 + margen / 100) * 100) / 100),
-        };
-        return { ...f, lineas: ls };
-      });
+      if (sugerido) {
+        setForm(f => {
+          const ls = [...f.lineas];
+          // Si mientras tardó la consulta el usuario ya cambió o borró el
+          // producto de esta línea, no le pisamos lo que haya ahora.
+          if (ls[idx]?.id_producto !== idProducto) return f;
+          const margen = Number(ls[idx].margen) || 0;
+          ls[idx] = {
+            ...ls[idx],
+            precio_compra: String(sugerido.precioCompra),
+            precio_venta: String(Math.round(sugerido.precioCompra * (1 + margen / 100) * 100) / 100),
+          };
+          return { ...f, lineas: ls };
+        });
+      }
+
+      // Este mismo producto, comprado antes a OTROS proveedores — el precio
+      // más reciente de cada uno (el historial ya viene ordenado del más
+      // nuevo al más viejo, ver ProductosController::historialCompras). Se
+      // muestra igual aunque no haya un proveedor elegido todavía.
+      const vistos = new Set();
+      const otros = [];
+      for (const h of historial) {
+        if (!h.idProveedor || h.idProveedor === idProveedorActual || vistos.has(h.idProveedor)) continue;
+        vistos.add(h.idProveedor);
+        otros.push({ idProveedor: h.idProveedor, proveedorNombre: h.proveedorNombre, precioCompra: h.precioCompra });
+      }
+      if (otros.length) {
+        otros.sort((a, b) => a.precioCompra - b.precioCompra);
+        setComparativas(prev => ({ ...prev, [idx]: otros }));
+      }
     } catch { /* sin historial o sin conexión — se queda con el costo del producto */ }
   };
 
@@ -437,6 +485,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
       setVencAbiertos(new Set());
       setComprobanteUrl(null);
       setComprobanteFile(null);
+      setComparativas({});
       onClose();
     } catch (e) {
       toast(e.response?.data?.message || 'Error al procesar la compra', 'error');
@@ -446,7 +495,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
   };
 
   const resetNuevoProd = () => { setNuevoProd({ active: false, idx: null, nombre: '' }); };
-  const handleClose = () => { setForm(emptyConProveedorRecordado()); setErrors({}); resetNuevoProd(); setComprobanteUrl(null); setComprobanteFile(null); setVencAbiertos(new Set()); onClose(); };
+  const handleClose = () => { setForm(emptyConProveedorRecordado()); setErrors({}); resetNuevoProd(); setComprobanteUrl(null); setComprobanteFile(null); setVencAbiertos(new Set()); setComparativas({}); onClose(); };
 
   // Agrega una línea por cada talle elegido en "Comprar por curva" — aprovecha
   // la última línea si está vacía en vez de dejarla suelta, mismo criterio
@@ -666,7 +715,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                     error={!!errors[`linea_${idx}_prod`]}
                     sx={{ flex: 1, minWidth: 0 }}
                     onSeleccionar={(val) => {
-                      if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); return; }
+                      if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); setComparativas(prev => { const n = { ...prev }; delete n[idx]; return n; }); return; }
                       setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
                       setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
                       sugerirCostoDeHistorial(idx, val.id, form.id_proveedor);
@@ -690,14 +739,17 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                   <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <FieldLabel>Costo</FieldLabel>
-                      {esFraccionable(unidadDeLinea(l)) && (
-                        <Tooltip title="Cargar por monto total pagado">
-                          <IconButton size="small" onClick={() => { setCalcularLineaIdx(idx); setCalcularTotal(''); }}
-                            sx={{ color: MUTED, p: '2px', mb: '2px', '&:hover': { color: P } }}>
-                            <CalculateIcon sx={{ fontSize: 14 }} />
-                          </IconButton>
-                        </Tooltip>
-                      )}
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <ComparativaProveedoresChip comparativa={comparativas[idx]} />
+                        {esFraccionable(unidadDeLinea(l)) && (
+                          <Tooltip title="Cargar por monto total pagado">
+                            <IconButton size="small" onClick={() => { setCalcularLineaIdx(idx); setCalcularTotal(''); }}
+                              sx={{ color: MUTED, p: '2px', mb: '2px', '&:hover': { color: P } }}>
+                              <CalculateIcon sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
                     </Box>
                     <CampoPrecio fullWidth placeholder="0" value={l.precio_compra} onChange={e => setPrecioCompraLinea(idx, e.target.value)} error={!!errors[`linea_${idx}_precio`]}
                       onKeyDown={e => { if (e.key === 'Enter' && l.id_producto) { e.preventDefault(); addLineaAndFocus(); } }}
@@ -793,7 +845,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                         error={!!errors[`linea_${idx}_prod`]}
                         registrarInputRef={el => { autoRefs.current[idx] = el; }}
                         onSeleccionar={(val) => {
-                          if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); return; }
+                          if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); setComparativas(prev => { const n = { ...prev }; delete n[idx]; return n; }); return; }
                           setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
                           setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
                           sugerirCostoDeHistorial(idx, val.id, form.id_proveedor);
@@ -840,16 +892,19 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                     </TableCell>
 
                     <TableCell sx={rowTdSx} align="center">
-                      <CampoPrecio placeholder="0" value={l.precio_compra} onChange={e => setPrecioCompraLinea(idx, e.target.value)} error={!!errors[`linea_${idx}_precio`]}
-                        onKeyDown={e => { if (e.key === 'Enter' && l.id_producto) { e.preventDefault(); addLineaAndFocus(); } }}
-                        InputProps={esFraccionable(unidadDeLinea(l)) ? { endAdornment: (
-                          <Tooltip title="Cargar por monto total pagado">
-                            <IconButton size="small" onClick={() => { setCalcularLineaIdx(idx); setCalcularTotal(''); }} sx={{ color: MUTED, p: '2px', '&:hover': { color: P } }}>
-                              <CalculateIcon sx={{ fontSize: 14 }} />
-                            </IconButton>
-                          </Tooltip>
-                        ) } : undefined}
-                        sx={numberFieldSx} />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, justifyContent: 'center' }}>
+                        <CampoPrecio placeholder="0" value={l.precio_compra} onChange={e => setPrecioCompraLinea(idx, e.target.value)} error={!!errors[`linea_${idx}_precio`]}
+                          onKeyDown={e => { if (e.key === 'Enter' && l.id_producto) { e.preventDefault(); addLineaAndFocus(); } }}
+                          InputProps={esFraccionable(unidadDeLinea(l)) ? { endAdornment: (
+                            <Tooltip title="Cargar por monto total pagado">
+                              <IconButton size="small" onClick={() => { setCalcularLineaIdx(idx); setCalcularTotal(''); }} sx={{ color: MUTED, p: '2px', '&:hover': { color: P } }}>
+                                <CalculateIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Tooltip>
+                          ) } : undefined}
+                          sx={numberFieldSx} />
+                        <ComparativaProveedoresChip comparativa={comparativas[idx]} />
+                      </Box>
                     </TableCell>
 
                     <TableCell sx={rowTdSx} align="center">
