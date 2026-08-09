@@ -13,7 +13,6 @@ import MenuIcon                  from '@mui/icons-material/Menu';
 import { AuthContext } from '../auth/AuthContextBase';
 import { ConfigModal } from './ConfigModal';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/useAppTheme';
 import { useApp } from '../context/AppContextBase';
 import CommandPalette  from '../components/shared/CommandPalette';
 import ConfirmDialog   from '../components/shared/ConfirmDialog';
@@ -21,7 +20,7 @@ import AsistenteIA     from '../components/shared/AsistenteIA';
 import useNotificaciones from '../hooks/useNotificaciones';
 import {
   BG, CARD, BORDER, INK, MUTED, P, HOVER, DROPDOWN,
-  SUCCESS, ERROR, WARNING, ERROR_BG,
+  SUCCESS, ERROR, WARNING,
 } from '../theme/tokens';
 import { fmtMoney } from '../utils/format';
 import { APP_NAME } from '../config/brand';

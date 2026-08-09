@@ -22,7 +22,6 @@ import { useToast } from '../../context/ToastContext';
 import { registerTour } from '../../utils/tour';
 import AyudaButton from '../../components/shared/AyudaButton';
 import { useIsMobile } from '../../utils/responsive';
-import usePlan from '../../hooks/usePlan';
 import './Etiquetas.css';
 
 const CM      = 37.8;
@@ -100,7 +99,6 @@ function PaginaA4({ items, config, scale, numero, total }) {
 }
 
 export default function Etiquetas() {
-  const { tieneEtiquetas } = usePlan();
   const [searchText, setSearchText]       = useState('');
   const [resultados, setResultados]       = useState([]);
   const [buscando, setBuscando]           = useState(false);
@@ -441,22 +439,7 @@ export default function Etiquetas() {
               <Box sx={{ maxHeight: 200, overflow: 'auto', px: 1.5, pb: 1.5, display: 'flex', flexDirection: 'column', gap: 0.4 }}>
                 {cola.map(item => {
                   const info = etiquetasCache[item.id];
-  if (!tieneEtiquetas) return (
-    <Box sx={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', bgcolor:BG, gap:2, px:2 }}>
-      <LocalPrintshopIcon sx={{ fontSize:56, color:`${P}40` }} />
-      <Typography sx={{ color:INK, fontWeight:700, fontSize:18, textAlign:'center' }}>
-        Las etiquetas son parte del Plan Pro
-      </Typography>
-      <Typography sx={{ color:MUTED, fontSize:14, textAlign:'center', maxWidth:400 }}>
-        Actualizá tu plan para imprimir etiquetas de precio profesionales con diseño personalizado, código de barras y talle.
-      </Typography>
-      <Button variant="contained" href="/planes" sx={{ bgcolor:P, textTransform:'none', fontWeight:700, borderRadius:2, px:3 }}>
-        Ver planes
-      </Button>
-    </Box>
-  );
-
-  return (
+                  return (
                     <Box key={item.id} sx={{
                       display: 'flex', alignItems: 'center', gap: 0.5,
                       px: 1, py: 0.6, borderRadius: 1.5,
