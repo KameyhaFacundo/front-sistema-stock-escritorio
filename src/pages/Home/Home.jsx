@@ -439,6 +439,10 @@ function Home() {
   // ── Ajuste (descuento / recargo) ───────────────────────────────────
   const [ajuste, setAjuste] = useState({ activo: false, tipo: 'descuento', calculo: 'porcentaje', valor: '' });
   const clearAjuste = () => setAjuste({ activo: false, tipo: 'descuento', calculo: 'porcentaje', valor: '' });
+  // Motivo del descuento/recargo/monto libre — el backend lo exige (ver
+  // VentasController::store()) cada vez que la venta se aparta del precio
+  // de lista, aunque el cajero tenga permiso para hacerlo.
+  const [motivoDescuento, setMotivoDescuento] = useState('');
 
   // ── Puntos del cliente seleccionado ────────────────────────────────
   const puntosActivo = Boolean(user?.empresa?.puntos_activo);
@@ -543,11 +547,15 @@ function Home() {
   }, [facturaResuelta, toast]);
 
   const cartTieneManual = cart.some(i => String(i.id).startsWith('manual-'));
+  // Igual que el ajuste global: un descuento por línea también exige el
+  // motivo por escrito (ver VentasController::store() en el backend), y
+  // Point/QR no tienen dónde pedirlo — mismo criterio que cartTieneManual.
+  const cartTieneDescuentoLinea = cart.some(i => Number(i.descuento) > 0);
   // Point deshabilitado temporalmente a pedido, vía VITE_POINT_HABILITADO en
   // .env (default false) — sacado del selector de métodos de pago y de
   // Configuración → Cobros. QR no se ve afectado, sigue funcionando igual.
-  const pointDisponible = POINT_HABILITADO && mpConectado && !!mpDeviceId && !ajuste.activo && !cartTieneManual;
-  const qrDisponible    = mpConectado && !ajuste.activo && !cartTieneManual;
+  const pointDisponible = POINT_HABILITADO && mpConectado && !!mpDeviceId && !ajuste.activo && !cartTieneManual && !cartTieneDescuentoLinea;
+  const qrDisponible    = mpConectado && !ajuste.activo && !cartTieneManual && !cartTieneDescuentoLinea;
 
   const handleEmitirFactura = async () => {
     if (!lastVentaData) return;
@@ -876,6 +884,7 @@ function Home() {
         total: ventaTotal,
         subtotal,
         ajuste: ajuste.activo ? { ...ajuste } : null,
+        motivoDescuento: requiereMotivoDescuento ? motivoDescuento.trim() : null,
         puntosCanjeados: ventaPuntosCanjeados,
         pagos: variosPagos ? pagosAplicados : [{ metodo, monto: ventaTotal }],
       });
@@ -1013,6 +1022,9 @@ function Home() {
   };
 
   const confirmarVentaDisabled = procesando || (variosPagos && pagosAplicados.reduce((a, p) => a + p.monto, 0) < total * 0.99);
+  // Mismo criterio que el backend (ValidaPreciosLinea::hayDescuentoEnLineas)
+  // para saber si hace falta pedir el motivo antes de dejar confirmar.
+  const requiereMotivoDescuento = ajuste.activo || cartTieneManual || cartTieneDescuentoLinea;
 
   const ejecutarConfirmarVenta = () => {
     if (confirmarVentaDisabled) return;
@@ -1025,6 +1037,7 @@ function Home() {
   // antes de que la venta se termine de registrar de verdad.
   const abrirConfirmacion = () => {
     if (cart.length === 0 || !caja.abierta || confirmarVentaDisabled) return;
+    setMotivoDescuento('');
     setOpenConfirmarModal(true);
   };
   // Refs siempre actualizadas para que los atajos (registrados más arriba,
@@ -1328,10 +1341,15 @@ function Home() {
                 sx={{ ...outlinedBtn, flex: 1, whiteSpace: 'nowrap', py: 0.6, borderRadius: '8px', fontSize: 13 }}>
                 Consultar Precio
               </Button>
-              <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setOpenMonto(true)}
-                sx={{ ...outlinedBtn, flex: 1, whiteSpace: 'nowrap', py: 0.6, borderRadius: '8px', fontSize: 13 }}>
-                Agregar Monto
-              </Button>
+              {/* Monto libre no descuenta stock de ningún producto — sin este gate,
+                  cualquiera podía entregar un producto real y cobrarlo como un
+                  monto suelto sin dejar ningún rastro de qué salió de verdad. */}
+              {puedeAplicarDescuento && (
+                <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setOpenMonto(true)}
+                  sx={{ ...outlinedBtn, flex: 1, whiteSpace: 'nowrap', py: 0.6, borderRadius: '8px', fontSize: 13 }}>
+                  Agregar Monto
+                </Button>
+              )}
             </Box>
 
             {scanFeedback && (
@@ -1539,20 +1557,26 @@ function Home() {
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
                               <Typography sx={{ color: MUTED, fontSize: 12 }}>$</Typography>
                               <Box component="input" type="number" value={item.precioOriginal ?? item.precio}
+                                disabled={!puedeAplicarDescuento}
+                                title={!puedeAplicarDescuento ? 'No tenés permiso para cambiar el precio' : undefined}
                                 onChange={e => updatePrecio(item.id, e.target.value)}
                                 onWheel={e => e.target.blur()}
                                 style={{
                                   width: 46, background: 'none', border: 'none', outline: 'none',
                                   color: 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
                                   borderBottom: '1px dashed var(--border)', padding: '0 2px', textAlign: 'left',
+                                  opacity: puedeAplicarDescuento ? 1 : 0.5, cursor: puedeAplicarDescuento ? 'text' : 'not-allowed',
                                 }} />
                               <Box component="input" type="number" min={0} max={100} value={item.descuento || ''} placeholder="0"
+                                disabled={!puedeAplicarDescuento}
+                                title={!puedeAplicarDescuento ? 'No tenés permiso para aplicar descuentos' : undefined}
                                 onChange={e => updateDescuento(item.id, e.target.value)}
                                 onWheel={e => e.target.blur()}
                                 style={{
                                   width: 26, background: 'none', border: 'none', outline: 'none',
                                   color: item.descuento ? ORANGE : 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
                                   borderBottom: '1px dashed var(--border)', padding: '0 2px', textAlign: 'right',
+                                  opacity: puedeAplicarDescuento ? 1 : 0.5, cursor: puedeAplicarDescuento ? 'text' : 'not-allowed',
                                 }} />
                               <Typography sx={{ color: MUTED, fontSize: 11 }}>%</Typography>
                             </Box>
@@ -1673,6 +1697,8 @@ function Home() {
                             component="input"
                             type="number"
                             value={item.precioOriginal ?? item.precio}
+                            disabled={!puedeAplicarDescuento}
+                            title={!puedeAplicarDescuento ? 'No tenés permiso para cambiar el precio' : undefined}
                             onChange={e => updatePrecio(item.id, e.target.value)}
                             onWheel={e => e.target.blur()}
                             style={{
@@ -1680,6 +1706,7 @@ function Home() {
                               color: 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
                               borderBottom: '1px dashed var(--border)',
                               padding: '0 2px', textAlign: 'left',
+                              opacity: puedeAplicarDescuento ? 1 : 0.5, cursor: puedeAplicarDescuento ? 'text' : 'not-allowed',
                             }}
                           />
                         </Box>
@@ -1693,6 +1720,8 @@ function Home() {
                             max={100}
                             value={item.descuento || ''}
                             placeholder="0"
+                            disabled={!puedeAplicarDescuento}
+                            title={!puedeAplicarDescuento ? 'No tenés permiso para aplicar descuentos' : undefined}
                             onChange={e => updateDescuento(item.id, e.target.value)}
                             onWheel={e => e.target.blur()}
                             style={{
@@ -1700,6 +1729,7 @@ function Home() {
                               color: item.descuento ? ORANGE : 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
                               borderBottom: '1px dashed var(--border)',
                               padding: '0 2px', textAlign: 'right',
+                              opacity: puedeAplicarDescuento ? 1 : 0.5, cursor: puedeAplicarDescuento ? 'text' : 'not-allowed',
                             }}
                           />
                           <Typography sx={{ color: MUTED, fontSize: 12 }}>%</Typography>
@@ -2379,14 +2409,30 @@ function Home() {
               <Typography sx={{ color: PRIMARY, fontSize: 20, fontWeight: 800 }}>{fmtMoney(total)}</Typography>
             </Box>
           </Box>
+
+          {/* Exigido por el backend (ver ValidaPreciosLinea::hayDescuentoEnLineas)
+              cada vez que la venta se aparta del precio de lista — tener permiso
+              para descontar no alcanza, hay que dejar por escrito por qué acá. */}
+          {requiereMotivoDescuento && (
+            <Box sx={{ mb: 2 }}>
+              <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 600, mb: 0.75 }}>
+                Motivo del descuento / recargo / monto libre
+              </Typography>
+              <TextField fullWidth size="small" autoFocus placeholder="Ej: cliente frecuente, producto con detalle, servicio a domicilio..."
+                value={motivoDescuento} onChange={e => setMotivoDescuento(e.target.value)}
+                sx={{ '& .MuiOutlinedInput-root': { bgcolor: MODAL, color: INK, '& fieldset': { borderColor: BORDER }, '&.Mui-focused fieldset': { borderColor: PRIMARY } } }} />
+            </Box>
+          )}
+
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button fullWidth variant="outlined" onClick={() => setOpenConfirmarModal(false)}
               sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: HOVER } }}>
               Cancelar
             </Button>
-            <Button fullWidth autoFocus variant="contained"
+            <Button fullWidth autoFocus={!requiereMotivoDescuento} variant="contained"
+              disabled={requiereMotivoDescuento && !motivoDescuento.trim()}
               onClick={() => { setOpenConfirmarModal(false); ejecutarConfirmarVenta(); }}
-              sx={{ bgcolor: PRIMARY, textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: P_HOVER } }}>
+              sx={{ bgcolor: PRIMARY, textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { opacity: 0.5 } }}>
               Confirmar venta
             </Button>
           </Box>

@@ -43,6 +43,7 @@ export function VentasProvider({ children, onError, onRecargarFiados }) {
       // (ajuste se perdía en el camino y el backend cobraba precio de lista
       // completo, ignorando el descuento que el cajero aplicó en pantalla).
       ajuste: ventaLocal.ajuste ?? null,
+      motivo_descuento: ventaLocal.motivoDescuento || undefined,
       puntos_canjeados: ventaLocal.puntosCanjeados || undefined,
     };
 
