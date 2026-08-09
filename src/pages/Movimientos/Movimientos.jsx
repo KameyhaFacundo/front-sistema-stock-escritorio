@@ -51,6 +51,10 @@ async function crearAjusteDirecto(producto, cantidad, nota) {
     codigo: producto.codigo || '',
     tipo: 'ajuste',
     subTipo: nota.trim() || 'Ajuste manual',
+    // El backend exige esto (no subTipo) para las bajas — ver
+    // MovimientosController::store(). subTipo se queda con el fallback
+    // genérico solo para categorizar en listados/reportes.
+    nota: nota.trim(),
     cantidad,
     fecha: toLocalDateStr(),
     hora: nowHora(),
@@ -1092,9 +1096,15 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
           </Box>
         )}
 
-        <Typography sx={{ color: INK, fontWeight: 600, fontSize: 13.5, mb: 1 }}>Nota (opcional)</Typography>
+        {/* Obligatoria solo para baja — una suba de stock no oculta ningún
+            faltante, así que ahí se deja libre como antes (ver
+            MovimientosController::store, mismo criterio del lado del backend). */}
+        <Typography sx={{ color: INK, fontWeight: 600, fontSize: 13.5, mb: 1 }}>
+          Nota {modo === 'baja' ? '(obligatoria)' : '(opcional)'}
+        </Typography>
         <TextField fullWidth placeholder="Motivo del ajuste..." value={nota}
           onChange={e => setNota(e.target.value)}
+          error={modo === 'baja' && !nota.trim()}
           sx={{ ...fieldSx, mb: 3 }} />
 
         {aplicando ? (
@@ -1121,7 +1131,7 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
               sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '10px', py: 1.25, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
               Cancelar
             </Button>
-            <Button fullWidth variant="contained" disabled={lineasValidas.length === 0} onClick={handleConfirmar}
+            <Button fullWidth variant="contained" disabled={lineasValidas.length === 0 || (modo === 'baja' && !nota.trim())} onClick={handleConfirmar}
               sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '10px', py: 1.25, '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { bgcolor: P, opacity: 0.4, color: '#fff' } }}>
               {`Aplicar y exportar (${lineasValidas.length})`}
             </Button>

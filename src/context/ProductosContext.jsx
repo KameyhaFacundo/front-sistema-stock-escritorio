@@ -61,6 +61,10 @@ export function ProductosProvider({ children, onError }) {
         codigo: producto.codigo || '',
         tipo: 'ajuste',
         subTipo: nota.trim() || 'Ajuste manual',
+        // El backend exige esto (no subTipo) para las bajas — ver
+        // MovimientosController::store(). subTipo se queda con el fallback
+        // genérico solo para categorizar en listados/reportes.
+        nota: nota.trim(),
         cantidad,
         fecha: toLocalDateStr(),
         hora: nowHora(),
