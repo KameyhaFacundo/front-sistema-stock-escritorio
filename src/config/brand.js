@@ -39,3 +39,12 @@ export const PRIMARY_HOVER = validHex(import.meta.env.VITE_PRIMARY_HOVER, '#4a5c
 // en el .env de este build (y POINT_HABILITADO=true en el .env del backend,
 // ver PagoPointController::crearIntento).
 export const POINT_HABILITADO = import.meta.env.VITE_POINT_HABILITADO === 'true';
+
+// Módulo opcional, apagado por default — el ejemplo de referencia para
+// "este cliente puntual quiere ver un módulo que otros no": no hace falta
+// tocar código ni tener una base compartida con flags por empresa, alcanza
+// con poner VITE_CATALOGO_HABILITADO=true en el .env de ESE build (ver
+// clients/README.md). El backend (CatalogoController) y la ruta pública
+// /catalogo/:slug ya funcionan siempre — esto solo prende el acceso desde
+// Configuración para poder activarlo/copiar el link.
+export const CATALOGO_HABILITADO = import.meta.env.VITE_CATALOGO_HABILITADO === 'true';

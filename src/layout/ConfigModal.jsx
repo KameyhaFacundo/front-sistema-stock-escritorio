@@ -15,8 +15,8 @@ import WarningAmberIcon     from '@mui/icons-material/WarningAmber';
 import ReceiptLongIcon      from '@mui/icons-material/ReceiptLong';
 import CheckCircleIcon      from '@mui/icons-material/CheckCircle';
 import PointOfSaleIcon      from '@mui/icons-material/PointOfSale';
-// Solo usados por TabCatalogo/TabSucursales, comentadas junto con ellas más abajo.
-// import StorefrontIcon       from '@mui/icons-material/Storefront';
+import StorefrontIcon       from '@mui/icons-material/Storefront';
+// Solo usadas por TabSucursales, comentada junto con ella más abajo.
 // import AddIcon              from '@mui/icons-material/Add';
 // import EditIcon             from '@mui/icons-material/Edit';
 // import DeleteIcon           from '@mui/icons-material/Delete';
@@ -36,7 +36,7 @@ import {
   ERROR, ERROR_BG, ERROR_BORDER, SUCCESS, SUCCESS_BG, WARNING, ORANGE, modalPaperSx,
 } from '../theme/tokens';
 import QRCode from 'qrcode';
-import { COMPANY_NAME, POINT_HABILITADO } from '../config/brand';
+import { COMPANY_NAME, POINT_HABILITADO, CATALOGO_HABILITADO } from '../config/brand';
 import { mercadopagoService } from '../services/mercadopagoService';
 import { empresaService } from '../services/empresaService';
 // import { sistemaService } from '../services/sistemaService'; // Solo usado por "Conectar otra caja", comentado más abajo.
@@ -849,13 +849,11 @@ function TabNegocio() {
 }
 
 /* ─────────────────────────── TAB CATÁLOGO ─────────────────────────── */
-// Catálogo online desactivado por ahora a pedido — comentado, no borrado.
-// Para reactivarlo: descomentar esta función y su línea en el array `tabs`
-// más abajo (buscar "Catálogo online desactivado" en este mismo archivo).
-/*
+// Módulo opcional por cliente — ver CATALOGO_HABILITADO en config/brand.js.
+// Ya no depende de ningún plan (build local de un solo comercio, ver
+// ChecksPlanLimits::planTieneFuncion en el backend, siempre true).
 function TabCatalogo() {
   const toast = useToast();
-  const navigate = useNavigate();
   const [config, setConfig] = useState(null); // null = cargando
   const [guardando, setGuardando] = useState(false);
   const [qrImagen, setQrImagen] = useState(null);
@@ -909,20 +907,7 @@ function TabCatalogo() {
         Una página pública, sin login, con tus productos activos — compartila con tus clientes.
       </Typography>
 
-      {!config.disponible_en_plan && (
-        <Box sx={{ ...card, p: 2.5, mb: 2.5, bgcolor: `${P}0c`, border: `1px solid ${P}40` }}>
-          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14, mb: 0.5 }}>Disponible desde el plan Pro</Typography>
-          <Typography sx={{ color: MUTED, fontSize: 12.5, mb: 1.5 }}>
-            El catálogo online (y poder subirle fotos a tus productos) es parte de los planes Pro e IA.
-          </Typography>
-          <Button variant="contained" onClick={() => navigate('/planes')}
-            sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
-            Ver planes →
-          </Button>
-        </Box>
-      )}
-
-      <Box sx={{ ...card, p: 2.5, mb: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, opacity: config.disponible_en_plan ? 1 : 0.5 }}>
+      <Box sx={{ ...card, p: 2.5, mb: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box sx={{ width: 40, height: 40, borderRadius: '10px', bgcolor: `${P}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <StorefrontIcon sx={{ color: P, fontSize: 20 }} />
@@ -936,7 +921,7 @@ function TabCatalogo() {
             </Typography>
           </Box>
         </Box>
-        <Switch checked={config.activo} disabled={guardando || !config.disponible_en_plan} onChange={(_, v) => handleToggle(v)}
+        <Switch checked={config.activo} disabled={guardando} onChange={(_, v) => handleToggle(v)}
           sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: P }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: P } }} />
       </Box>
 
@@ -967,7 +952,6 @@ function TabCatalogo() {
     </Box>
   );
 }
-*/
 
 /* ─────────────────────────── TAB SUCURSALES ─────────────────────────── */
 // Comentada junto con su entrada en `tabs` más arriba — ver esa nota.
@@ -1740,10 +1724,8 @@ export function ConfigModal({ open, onClose }) {
   const tabs = useMemo(() => [
     { label: 'Mi perfil', render: () => <TabPerfil /> },
     ...(puedeConfigurar ? [{ label: 'Negocio', render: () => <TabNegocio /> }] : []),
-    // Catálogo online desactivado por ahora a pedido — comentado, no borrado:
-    // descomentar esta línea alcanza para reactivarlo (TabCatalogo, CatalogoController
-    // y la ruta pública /catalogo/:slug siguen intactos, solo queda sin acceso desde acá).
-    // ...(puedeConfigurar ? [{ label: 'Catálogo', render: () => <TabCatalogo /> }] : []),
+    // Módulo opcional por cliente — ver CATALOGO_HABILITADO en config/brand.js.
+    ...(puedeConfigurar && CATALOGO_HABILITADO ? [{ label: 'Catálogo', render: () => <TabCatalogo /> }] : []),
     // Gestión de sucursales desactivada por ahora a pedido — comentado, no
     // borrado. El negocio sigue operando con la única sucursal ("Casa
     // Central") creada al instalar; el resto del sistema (stock, turnos,

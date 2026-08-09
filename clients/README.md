@@ -49,3 +49,24 @@ primario, y las rutas del logo (`VITE_LOGO_URL`/`VITE_LOGO_URL_DARK`).
 Todo lo demás (routing, permisos, lógica) es el mismo código para todos los
 clientes — eso es a propósito, es lo que evita mantener N versiones del
 sistema.
+
+## Módulos opcionales por cliente ("este cliente quiere ver algo que otros no")
+
+Mismo mecanismo que el resto: una variable `VITE_<MODULO>_HABILITADO` en el
+`.env` de ESE cliente puntual, sin tocar código ni ramas. Ver
+`src/config/brand.js` para cómo se leen y `VITE_CATALOGO_HABILITADO` como
+ejemplo de referencia (catálogo online, apagado por default).
+
+Para agregar un módulo nuevo con este mismo patrón:
+1. Agregar `export const X_HABILITADO = import.meta.env.VITE_X_HABILITADO === 'true';`
+   en `src/config/brand.js`.
+2. Usarlo para ocultar/mostrar lo que corresponda (menú, ruta, tab de
+   Configuración — buscar `CATALOGO_HABILITADO` o `POINT_HABILITADO` como
+   ejemplo de cada caso).
+3. Agregar la variable a `.env.example` (documentada, default `false`) y al
+   `.env` de cada `clients/<cliente>/` que sí lo quiera, en `true`.
+
+No hace falta ninguna base de datos compartida ni un panel de flags — cada
+cliente es su propia instalación con su propio build, así que "prender un
+módulo para un cliente" es, literalmente, una línea en su `.env` antes de
+compilarlo.
