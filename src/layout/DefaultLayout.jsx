@@ -2,6 +2,7 @@ import { useContext, useState, useEffect, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Chip, CircularProgress, IconButton, Badge, Popover,
+  Dialog, DialogContent, Button, InputAdornment,
 } from '@mui/material';
 import CloseIcon                 from '@mui/icons-material/Close';
 import NotificationsIcon         from '@mui/icons-material/Notifications';
@@ -10,13 +11,17 @@ import CheckCircleOutlineIcon    from '@mui/icons-material/CheckCircleOutline';
 import HandshakeIcon             from '@mui/icons-material/Handshake';
 import BusinessIcon              from '@mui/icons-material/Business';
 import MenuIcon                  from '@mui/icons-material/Menu';
+import LockOpenIcon              from '@mui/icons-material/LockOpen';
 import { AuthContext } from '../auth/AuthContextBase';
 import { ConfigModal } from './ConfigModal';
 import { useToast } from '../context/ToastContext';
 import { useApp } from '../context/AppContextBase';
+import { useCaja } from '../context/CajaContextBase';
+import useHasPermiso from '../hooks/useHasPermiso';
 import CommandPalette  from '../components/shared/CommandPalette';
 import ConfirmDialog   from '../components/shared/ConfirmDialog';
 import AsistenteIA     from '../components/shared/AsistenteIA';
+import CampoPrecio     from '../components/shared/CampoPrecio';
 import useNotificaciones from '../hooks/useNotificaciones';
 import {
   BG, CARD, BORDER, INK, MUTED, P, HOVER, DROPDOWN,
@@ -36,6 +41,8 @@ export default function DefaultLayout() {
   const toast = useToast();
   const logoSrc = useLogo();
   const { alertas } = useApp();
+  const { caja, isLoading: cajaCargando, abrirCaja } = useCaja();
+  const { checkPermisos } = useHasPermiso();
   const stockBajoCount = alertas?.stockBajo?.length || 0;
   const location = useLocation();
   const navigate = useNavigate();
@@ -45,6 +52,22 @@ export default function DefaultLayout() {
   const [openPalette,     setOpenPalette]     = useState(false);
   const [alertasAnchor,   setAlertasAnchor]   = useState(null);
   const [confirmarLogout, setConfirmarLogout] = useState(false);
+  const [recordatorioCajaOculto, setRecordatorioCajaOculto] = useState(false);
+  const [montoAperturaCaja, setMontoAperturaCaja] = useState('');
+
+  // Recordatorio de "abrí la caja" apenas entra al sistema — antes solo se
+  // enteraba si llegaba hasta el POS o Caja; con el turno cerrado F2/F4 del
+  // POS ni siquiera funcionan, así que el aviso tiene que aparecer antes.
+  // Se muestra una sola vez por sesión (se puede posponer con "Ahora no") y
+  // se cierra solo apenas la caja queda abierta.
+  const mostrarRecordatorioCaja = checkPermisos('gestionarCaja') && !cajaCargando && !caja.abierta && !recordatorioCajaOculto;
+
+  const handleAbrirCajaRapido = () => {
+    const monto = Number(montoAperturaCaja);
+    if (monto <= 0) { toast('Ingresá un monto inicial mayor a cero', 'warning'); return; }
+    abrirCaja(monto);
+    setMontoAperturaCaja('');
+  };
 
   useEffect(() => {
     recargarPermisos();
@@ -275,6 +298,42 @@ export default function DefaultLayout() {
 
       {/* ── ASISTENTE DE IA ── */}
       <AsistenteIA />
+
+      {/* ── RECORDATORIO: ABRIR CAJA ── */}
+      <Dialog open={mostrarRecordatorioCaja} onClose={() => setRecordatorioCajaOculto(true)}
+        maxWidth="xs" fullWidth PaperProps={{ sx: { bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px' } }}>
+        <DialogContent sx={{ p: 3, textAlign: 'center' }}>
+          <Box sx={{
+            width: 52, height: 52, borderRadius: '14px', mx: 'auto', mb: 2,
+            bgcolor: `${P}14`, border: `1px solid ${P}30`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <LockOpenIcon sx={{ fontSize: 26, color: P }} />
+          </Box>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 17, mb: 0.5 }}>
+            Todavía no abriste la caja
+          </Typography>
+          <Typography sx={{ color: MUTED, fontSize: 13.5, mb: 2.5 }}>
+            Sin la caja abierta no vas a poder cobrar ventas. Abrila ahora o hacelo más tarde desde Caja.
+          </Typography>
+          <Box sx={{ maxWidth: 240, mx: 'auto', mb: 2.5 }}>
+            <CampoPrecio fullWidth placeholder="Monto inicial" value={montoAperturaCaja} autoFocus
+              onChange={e => setMontoAperturaCaja(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAbrirCajaRapido(); } }}
+              InputProps={{ startAdornment: <InputAdornment position="start"><Typography sx={{ color: MUTED, fontSize: 14 }}>$</Typography></InputAdornment> }} />
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'center' }}>
+            <Button onClick={() => setRecordatorioCajaOculto(true)}
+              sx={{ color: MUTED, textTransform: 'none', fontWeight: 600 }}>
+              Ahora no
+            </Button>
+            <Button variant="contained" onClick={handleAbrirCajaRapido}
+              sx={{ bgcolor: P, textTransform: 'none', fontWeight: 700, px: 3, borderRadius: '10px', '&:hover': { bgcolor: P } }}>
+              Abrir caja
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }
