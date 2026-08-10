@@ -495,6 +495,10 @@ export default function Usuarios() {
   const isMobile = useIsMobile();
   const toast = useToast();
   const { checkPermisos } = useHasPermiso();
+  const puedeCrear = checkPermisos('crearUsuario');
+  const puedeEditar = checkPermisos('gestionarUsuarios');
+  const puedeEliminar = checkPermisos('eliminarUsuario');
+  const puedeAsignarPermisos = checkPermisos('asignarPermisos');
   const { data: sucursales = [] } = useSucursales({ enabled: checkPermisos('list-sucursales') });
   const [usuarios,  setUsuarios]  = useState([]);
   const [roles,     setRoles]     = useState([]);
@@ -560,12 +564,14 @@ export default function Usuarios() {
           <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{usuarios.length} usuarios registrados</Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Tooltip title="Agregar Usuario">
-            <Button data-tour="usr-agregar" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
-              sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Agregar Usuario</Box>
-            </Button>
-          </Tooltip>
+          {puedeCrear && (
+            <Tooltip title="Agregar Usuario">
+              <Button data-tour="usr-agregar" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
+                sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Agregar Usuario</Box>
+              </Button>
+            </Tooltip>
+          )}
           <AyudaButton />
         </Box>
       </Box>
@@ -594,10 +600,12 @@ export default function Usuarios() {
               </Box>
               <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>No hay usuarios</Typography>
               <Typography sx={{ color: MUTED, fontSize: 14 }}>Aún no has agregado ningún usuario.</Typography>
-              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
-                sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
-                Agregar primer usuario
-              </Button>
+              {puedeCrear && (
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
+                  sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
+                  Agregar primer usuario
+                </Button>
+              )}
             </Box>
           ) : isMobile ? (
             <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -622,24 +630,30 @@ export default function Usuarios() {
                         </Box>
                       </Box>
                       <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-                        <Tooltip title="Editar">
-                          <IconButton size="small" onClick={() => setUsuarioEditar(u)}
-                            sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: BORDER }, borderRadius: '6px' }}>
-                            <EditIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Permisos">
-                          <IconButton size="small" onClick={() => setUsuarioPermisos(u)}
-                            sx={{ color: MUTED, '&:hover': { color: P, bgcolor: P + '18' }, borderRadius: '6px' }}>
-                            <VpnKeyIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Eliminar">
-                          <IconButton size="small" onClick={() => setConfirmandoEliminar(u.id)}
-                            sx={{ color: MUTED, '&:hover': { color: '#f87171', bgcolor: '#f8717118' }, borderRadius: '6px' }}>
-                            <DeleteIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
+                        {puedeEditar && (
+                          <Tooltip title="Editar">
+                            <IconButton size="small" onClick={() => setUsuarioEditar(u)}
+                              sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: BORDER }, borderRadius: '6px' }}>
+                              <EditIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {puedeAsignarPermisos && (
+                          <Tooltip title="Permisos">
+                            <IconButton size="small" onClick={() => setUsuarioPermisos(u)}
+                              sx={{ color: MUTED, '&:hover': { color: P, bgcolor: P + '18' }, borderRadius: '6px' }}>
+                              <VpnKeyIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {puedeEliminar && (
+                          <Tooltip title="Eliminar">
+                            <IconButton size="small" onClick={() => setConfirmandoEliminar(u.id)}
+                              sx={{ color: MUTED, '&:hover': { color: '#f87171', bgcolor: '#f8717118' }, borderRadius: '6px' }}>
+                              <DeleteIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Box>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, mt: 1.25, alignItems: 'center' }}>
@@ -685,24 +699,30 @@ export default function Usuarios() {
                     <Chip label={u.rol || 'Sin rol'} size="small" sx={{ bgcolor: rolColor.bg, color: rolColor.fg, fontWeight: 600, fontSize: 12, borderRadius: '6px', border: `1px solid ${rolColor.border}`, width: 'fit-content' }} />
                     <Typography sx={{ color: INK2, fontSize: 14 }}>{u.createdAt ? fmtDate(u.createdAt) : '—'}</Typography>
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                      <Tooltip title="Editar">
-                        <IconButton size="small" onClick={() => setUsuarioEditar(u)}
-                          sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: BORDER }, borderRadius: '6px' }}>
-                          <EditIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Permisos">
-                        <IconButton size="small" onClick={() => setUsuarioPermisos(u)}
-                          sx={{ color: MUTED, '&:hover': { color: P, bgcolor: P + '18' }, borderRadius: '6px' }}>
-                          <VpnKeyIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Eliminar">
-                        <IconButton size="small" onClick={() => setConfirmandoEliminar(u.id)}
-                          sx={{ color: MUTED, '&:hover': { color: '#f87171', bgcolor: '#f8717118' }, borderRadius: '6px' }}>
-                          <DeleteIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
+                      {puedeEditar && (
+                        <Tooltip title="Editar">
+                          <IconButton size="small" onClick={() => setUsuarioEditar(u)}
+                            sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: BORDER }, borderRadius: '6px' }}>
+                            <EditIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {puedeAsignarPermisos && (
+                        <Tooltip title="Permisos">
+                          <IconButton size="small" onClick={() => setUsuarioPermisos(u)}
+                            sx={{ color: MUTED, '&:hover': { color: P, bgcolor: P + '18' }, borderRadius: '6px' }}>
+                            <VpnKeyIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {puedeEliminar && (
+                        <Tooltip title="Eliminar">
+                          <IconButton size="small" onClick={() => setConfirmandoEliminar(u.id)}
+                            sx={{ color: MUTED, '&:hover': { color: '#f87171', bgcolor: '#f8717118' }, borderRadius: '6px' }}>
+                            <DeleteIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </Box>
                   </Box>
                 );

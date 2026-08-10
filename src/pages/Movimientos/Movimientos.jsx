@@ -1155,6 +1155,7 @@ export default function Movimientos() {
 
   // Sin el permiso ver-filtros-fechas, el filtro queda forzado al día de hoy.
   const puedeFiltrarFechas = checkPermisos('verFiltrosFechas');
+  const puedeGestionar = checkPermisos('gestionarMovimientos');
   const hoy = toLocalDateStr();
   const effDesde = puedeFiltrarFechas ? filtroDesde : hoy;
   const effHasta = puedeFiltrarFechas ? filtroHasta : hoy;
@@ -1231,24 +1232,30 @@ export default function Movimientos() {
           <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{movimientos.length} movimientos registrados</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          <Tooltip title="Ajuste masivo (varios productos + exportar Excel)">
-            <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={() => setOpenAjusteMasivo(true)}
-              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { bgcolor: HOVER, borderColor: 'var(--border-hover)' } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Ajuste masivo</Box>
-            </Button>
-          </Tooltip>
-          <Tooltip title="Importar Excel (sumar o restar stock)">
-            <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setOpenImportar(true)}
-              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { bgcolor: HOVER, borderColor: 'var(--border-hover)' } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar Excel</Box>
-            </Button>
-          </Tooltip>
-          <Tooltip title="Registrar movimiento">
-            <Button data-tour="mov-registrar" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
-              sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { bgcolor: P_HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Registrar movimiento</Box>
-            </Button>
-          </Tooltip>
+          {puedeGestionar && (
+            <Tooltip title="Ajuste masivo (varios productos + exportar Excel)">
+              <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={() => setOpenAjusteMasivo(true)}
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { bgcolor: HOVER, borderColor: 'var(--border-hover)' } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Ajuste masivo</Box>
+              </Button>
+            </Tooltip>
+          )}
+          {puedeGestionar && (
+            <Tooltip title="Importar Excel (sumar o restar stock)">
+              <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setOpenImportar(true)}
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { bgcolor: HOVER, borderColor: 'var(--border-hover)' } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar Excel</Box>
+              </Button>
+            </Tooltip>
+          )}
+          {puedeGestionar && (
+            <Tooltip title="Registrar movimiento">
+              <Button data-tour="mov-registrar" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
+                sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { bgcolor: P_HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Registrar movimiento</Box>
+              </Button>
+            </Tooltip>
+          )}
           <AyudaButton />
         </Box>
       </Box>

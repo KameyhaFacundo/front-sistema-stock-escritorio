@@ -144,6 +144,10 @@ function Label({ children, required }) {
 ────────────────────────────────────────────── */
 function ModalCategorias({ open, onClose, categorias, setCategorias }) {
   const toast = useToast();
+  const { checkPermisos } = useHasPermiso();
+  const puedeCrear = checkPermisos('crearCategoria');
+  const puedeEditar = checkPermisos('actualizarCategoria');
+  const puedeEliminar = checkPermisos('eliminarCategoria');
   const [nombre,     setNombre]     = useState('');
   const [color,      setColor]      = useState(P);
   const [loading,    setLoading]    = useState(false);
@@ -272,36 +276,40 @@ function ModalCategorias({ open, onClose, categorias, setCategorias }) {
       </DialogTitle>
 
       <DialogContent sx={{ pt: 1 }}>
-        {/* Nueva categoría */}
-        <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 1 }}>Nueva categoría</Typography>
-        <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
-          <TextField fullWidth placeholder="Nombre de la categoría" value={nombre} onChange={e => setNombre(e.target.value)}
-            sx={{ ...fieldSx, flex: 1 }} size="small" onKeyDown={e => e.key === 'Enter' && crear()} />
-          <Box component="input" type="color" value={color} onChange={e => setColor(e.target.value)}
-            sx={{ width: 44, height: 44, borderRadius: '8px', border: `1px solid ${BORDER}`, cursor: 'pointer', bgcolor: INPUT, p: 0.5 }} />
-        </Box>
-        <Button fullWidth variant="contained" startIcon={<AddIcon />} onClick={crear} disabled={loading}
-          sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mb: 1.5, '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { opacity: 0.6 } }}>
-          {loading ? 'Creando...' : 'Crear'}
-        </Button>
+        {puedeCrear && (
+          <>
+            {/* Nueva categoría */}
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 1 }}>Nueva categoría</Typography>
+            <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+              <TextField fullWidth placeholder="Nombre de la categoría" value={nombre} onChange={e => setNombre(e.target.value)}
+                sx={{ ...fieldSx, flex: 1 }} size="small" onKeyDown={e => e.key === 'Enter' && crear()} />
+              <Box component="input" type="color" value={color} onChange={e => setColor(e.target.value)}
+                sx={{ width: 44, height: 44, borderRadius: '8px', border: `1px solid ${BORDER}`, cursor: 'pointer', bgcolor: INPUT, p: 0.5 }} />
+            </Box>
+            <Button fullWidth variant="contained" startIcon={<AddIcon />} onClick={crear} disabled={loading}
+              sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mb: 1.5, '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { opacity: 0.6 } }}>
+              {loading ? 'Creando...' : 'Crear'}
+            </Button>
 
-        {/* CSV */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1, mb: 1 }}>
-          <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={exportarCSV}
-            sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 12, borderRadius: '8px', '&:hover': { bgcolor: HOVER } }}>
-            Exportar Excel
-          </Button>
-          <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => fileInputRef.current?.click()}
-            sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 12, borderRadius: '8px', '&:hover': { bgcolor: HOVER } }}>
-            Importar
-          </Button>
-          <Box component="input" ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={importarCSV} sx={{ display: 'none' }} />
-        </Box>
-        <Button fullWidth variant="outlined" startIcon={<FileDownloadIcon />} onClick={descargarPlantilla}
-          sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', mb: 0.5, '&:hover': { bgcolor: HOVER } }}>
-          Descargar plantilla
-        </Button>
-        <Typography sx={{ color: MUTED, fontSize: 12, mb: 2 }}>Descarga la plantilla para empezar.</Typography>
+            {/* CSV */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1, mb: 1 }}>
+              <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={exportarCSV}
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 12, borderRadius: '8px', '&:hover': { bgcolor: HOVER } }}>
+                Exportar Excel
+              </Button>
+              <Button variant="outlined" startIcon={<FileUploadIcon />} onClick={() => fileInputRef.current?.click()}
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 12, borderRadius: '8px', '&:hover': { bgcolor: HOVER } }}>
+                Importar
+              </Button>
+              <Box component="input" ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={importarCSV} sx={{ display: 'none' }} />
+            </Box>
+            <Button fullWidth variant="outlined" startIcon={<FileDownloadIcon />} onClick={descargarPlantilla}
+              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', mb: 0.5, '&:hover': { bgcolor: HOVER } }}>
+              Descargar plantilla
+            </Button>
+            <Typography sx={{ color: MUTED, fontSize: 12, mb: 2 }}>Descarga la plantilla para empezar.</Typography>
+          </>
+        )}
 
         {/* Existentes */}
         <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 600, mb: 1 }}>Categorías existentes</Typography>
@@ -333,12 +341,16 @@ function ModalCategorias({ open, onClose, categorias, setCategorias }) {
                 </>
               ) : (
                 <>
-                  <IconButton size="small" onClick={() => iniciarEdicion(cat)} sx={{ color: MUTED, '&:hover': { color: INK } }}>
-                    <EditIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                  <IconButton size="small" onClick={() => setCategoriaAEliminar(cat)} sx={{ color: ERROR, '&:hover': { bgcolor: ERROR_BG } }}>
-                    <DeleteIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
+                  {puedeEditar && (
+                    <IconButton size="small" onClick={() => iniciarEdicion(cat)} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+                      <EditIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  )}
+                  {puedeEliminar && (
+                    <IconButton size="small" onClick={() => setCategoriaAEliminar(cat)} sx={{ color: ERROR, '&:hover': { bgcolor: ERROR_BG } }}>
+                      <DeleteIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  )}
                 </>
               )}
             </Box>
@@ -361,6 +373,10 @@ function ModalCategorias({ open, onClose, categorias, setCategorias }) {
 ────────────────────────────────────────────── */
 function ModalProveedores({ open, onClose, proveedores, setProveedores }) {
   const toast = useToast();
+  const { checkPermisos } = useHasPermiso();
+  const puedeCrear = checkPermisos('crearProveedor');
+  const puedeEditar = checkPermisos('actualizarProveedor');
+  const puedeEliminar = checkPermisos('eliminarProveedor');
   const empty = { persona: '', cuit: '', telefono: '', email: '', direccion: '' };
   const [form,       setForm]       = useState(empty);
   const [loading,    setLoading]    = useState(false);
@@ -429,20 +445,24 @@ function ModalProveedores({ open, onClose, proveedores, setProveedores }) {
       </DialogTitle>
 
       <DialogContent sx={{ pt: 1 }}>
-        {/* Nuevo proveedor */}
-        <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 1 }}>Nuevo proveedor</Typography>
-        <TextField fullWidth placeholder="Nombre / Razón social" value={form.persona} onChange={set('persona')}
-          sx={{ ...fieldSx, mb: 1 }} size="small" onKeyDown={e => e.key === 'Enter' && crear()} />
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
-          <TextField placeholder="CUIT" value={form.cuit} onChange={set('cuit')} sx={fieldSx} size="small" />
-          <TextField placeholder="Teléfono" value={form.telefono} onChange={set('telefono')} sx={fieldSx} size="small" />
-        </Box>
-        <TextField fullWidth placeholder="Email" value={form.email} onChange={set('email')} sx={{ ...fieldSx, mb: 1 }} size="small" />
-        <TextField fullWidth placeholder="Dirección" value={form.direccion} onChange={set('direccion')} sx={{ ...fieldSx, mb: 1.5 }} size="small" />
-        <Button fullWidth variant="contained" startIcon={<AddIcon />} onClick={crear} disabled={loading || !form.persona.trim()}
-          sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mb: 2, '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { opacity: 0.6 } }}>
-          {loading ? 'Creando...' : 'Crear'}
-        </Button>
+        {puedeCrear && (
+          <>
+            {/* Nuevo proveedor */}
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 1 }}>Nuevo proveedor</Typography>
+            <TextField fullWidth placeholder="Nombre / Razón social" value={form.persona} onChange={set('persona')}
+              sx={{ ...fieldSx, mb: 1 }} size="small" onKeyDown={e => e.key === 'Enter' && crear()} />
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
+              <TextField placeholder="CUIT" value={form.cuit} onChange={set('cuit')} sx={fieldSx} size="small" />
+              <TextField placeholder="Teléfono" value={form.telefono} onChange={set('telefono')} sx={fieldSx} size="small" />
+            </Box>
+            <TextField fullWidth placeholder="Email" value={form.email} onChange={set('email')} sx={{ ...fieldSx, mb: 1 }} size="small" />
+            <TextField fullWidth placeholder="Dirección" value={form.direccion} onChange={set('direccion')} sx={{ ...fieldSx, mb: 1.5 }} size="small" />
+            <Button fullWidth variant="contained" startIcon={<AddIcon />} onClick={crear} disabled={loading || !form.persona.trim()}
+              sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mb: 2, '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { opacity: 0.6 } }}>
+              {loading ? 'Creando...' : 'Crear'}
+            </Button>
+          </>
+        )}
 
         {/* Existentes */}
         <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 600, mb: 1 }}>Proveedores existentes</Typography>
@@ -474,12 +494,16 @@ function ModalProveedores({ open, onClose, proveedores, setProveedores }) {
                 </>
               ) : (
                 <>
-                  <IconButton size="small" onClick={() => iniciarEdicion(p)} sx={{ color: MUTED, '&:hover': { color: INK } }}>
-                    <EditIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                  <IconButton size="small" onClick={() => setProveedorAEliminar(p)} sx={{ color: ERROR, '&:hover': { bgcolor: ERROR_BG } }}>
-                    <DeleteIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
+                  {puedeEditar && (
+                    <IconButton size="small" onClick={() => iniciarEdicion(p)} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+                      <EditIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  )}
+                  {puedeEliminar && (
+                    <IconButton size="small" onClick={() => setProveedorAEliminar(p)} sx={{ color: ERROR, '&:hover': { bgcolor: ERROR_BG } }}>
+                      <DeleteIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  )}
                 </>
               )}
             </Box>
@@ -616,6 +640,9 @@ function TallesEditor({ grupo, onTallesChange }) {
 
 function ModalGruposTalles({ open, onClose, grupos, setGrupos }) {
   const toast = useToast();
+  const { checkPermisos } = useHasPermiso();
+  const puedeCrear = checkPermisos('crearProducto');
+  const puedeEliminar = checkPermisos('eliminarProducto');
   const [nombre, setNombre] = useState('');
   const [loading, setLoading] = useState(false);
   const [expandido, setExpandido] = useState(null);
@@ -660,15 +687,19 @@ function ModalGruposTalles({ open, onClose, grupos, setGrupos }) {
           Cada grupo es una curva de talles (ej. &quot;Ropa&quot;: S/M/L/XL, &quot;Calzado&quot;: 36 a 45) — un producto con variantes elige uno al crearse.
         </Typography>
 
-        <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 1 }}>Nuevo grupo</Typography>
-        <Box sx={{ display: 'flex', gap: 1, mb: 2.5 }}>
-          <TextField fullWidth placeholder="Ej: Ropa, Calzado" value={nombre} onChange={e => setNombre(e.target.value)}
-            sx={{ ...fieldSx, flex: 1 }} size="small" onKeyDown={e => e.key === 'Enter' && crearGrupo()} />
-          <Button variant="contained" startIcon={<AddIcon />} onClick={crearGrupo} disabled={loading}
-            sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', flexShrink: 0, '&:hover': { bgcolor: P_HOVER } }}>
-            Crear
-          </Button>
-        </Box>
+        {puedeCrear && (
+          <>
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 1 }}>Nuevo grupo</Typography>
+            <Box sx={{ display: 'flex', gap: 1, mb: 2.5 }}>
+              <TextField fullWidth placeholder="Ej: Ropa, Calzado" value={nombre} onChange={e => setNombre(e.target.value)}
+                sx={{ ...fieldSx, flex: 1 }} size="small" onKeyDown={e => e.key === 'Enter' && crearGrupo()} />
+              <Button variant="contained" startIcon={<AddIcon />} onClick={crearGrupo} disabled={loading}
+                sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', flexShrink: 0, '&:hover': { bgcolor: P_HOVER } }}>
+                Crear
+              </Button>
+            </Box>
+          </>
+        )}
 
         <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 600, mb: 1 }}>Grupos existentes</Typography>
         {grupos.length === 0 ? (
@@ -683,9 +714,11 @@ function ModalGruposTalles({ open, onClose, grupos, setGrupos }) {
                     <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600 }}>{g.nombre}</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 11.5 }}>{g.talles.length} talle{g.talles.length !== 1 ? 's' : ''}</Typography>
                   </Box>
-                  <IconButton size="small" onClick={e => { e.stopPropagation(); setGrupoAEliminar(g); }} sx={{ color: ERROR, '&:hover': { bgcolor: ERROR_BG } }}>
-                    <DeleteIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
+                  {puedeEliminar && (
+                    <IconButton size="small" onClick={e => { e.stopPropagation(); setGrupoAEliminar(g); }} sx={{ color: ERROR, '&:hover': { bgcolor: ERROR_BG } }}>
+                      <DeleteIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  )}
                   {expandido === g.id ? <ExpandLessIcon sx={{ color: MUTED }} /> : <ExpandMoreIcon sx={{ color: MUTED }} />}
                 </Box>
                 <Collapse in={expandido === g.id}>
@@ -2008,6 +2041,8 @@ function DetalleItem({ label, value }) {
 
 function ModalDetalleProducto({ open, onClose, producto: productoInicial, onVerHistorial, onVerHistorialCompras, actualizarProducto }) {
   const toast = useToast();
+  const { checkPermisos } = useHasPermiso();
+  const puedeEditarProducto = checkPermisos('gestionarProductos');
   const [varianteADesactivar, setVarianteADesactivar] = useState(null);
   // Copia local en vez de leer directo del array de productos del padre (ya
   // no existe un array completo en memoria) — se resincroniza con la prop al
@@ -2162,18 +2197,20 @@ function ModalDetalleProducto({ open, onClose, producto: productoInicial, onVerH
           );
         })()}
 
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
-          <Button fullWidth startIcon={<HistoryIcon sx={{ fontSize: 16 }} />} onClick={onVerHistorial}
-            sx={{ color: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', border: `1px solid ${BORDER}`, py: 1,
-              '&:hover': { bgcolor: `${P}0c`, borderColor: P } }}>
-            Ver historial de precios
-          </Button>
-          <Button fullWidth startIcon={<HistoryIcon sx={{ fontSize: 16 }} />} onClick={onVerHistorialCompras}
-            sx={{ color: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', border: `1px solid ${BORDER}`, py: 1,
-              '&:hover': { bgcolor: `${P}0c`, borderColor: P } }}>
-            Ver compras por proveedor
-          </Button>
-        </Box>
+        {puedeEditarProducto && (
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
+            <Button fullWidth startIcon={<HistoryIcon sx={{ fontSize: 16 }} />} onClick={onVerHistorial}
+              sx={{ color: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', border: `1px solid ${BORDER}`, py: 1,
+                '&:hover': { bgcolor: `${P}0c`, borderColor: P } }}>
+              Ver historial de precios
+            </Button>
+            <Button fullWidth startIcon={<HistoryIcon sx={{ fontSize: 16 }} />} onClick={onVerHistorialCompras}
+              sx={{ color: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', border: `1px solid ${BORDER}`, py: 1,
+                '&:hover': { bgcolor: `${P}0c`, borderColor: P } }}>
+              Ver compras por proveedor
+            </Button>
+          </Box>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -2879,6 +2916,9 @@ export default function Productos() {
   // Ver el mismo criterio (y el porqué del nombre) en NuevoProducto() más arriba.
   const esFerreteria = user?.empresa?.tipo !== 'indument';
   const { checkPermisos } = useHasPermiso();
+  const puedeCrearProducto = checkPermisos('crearProducto');
+  const puedeEditarProducto = checkPermisos('gestionarProductos');
+  const puedeEliminarProducto = checkPermisos('eliminarProducto');
   const { data: sucursales = [] } = useSucursales({ enabled: checkPermisos('list-sucursales') });
   const mostrarStockTotal = sucursales.length > 1;
   // Un producto con variantes no tiene stock propio (vive en cada talle) — para
@@ -3434,18 +3474,22 @@ export default function Productos() {
           <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{totalGeneral?.total ?? '...'} productos en inventario</Typography>
         </Box>
         <Box data-tour="prod-opciones" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Tooltip title="Actualizar precios">
-            <Button variant="outlined" startIcon={<TrendingUpIcon sx={{ fontSize: 15 }} />} onClick={() => setOpenActualizar(true)}
-              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, fontWeight: 600, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Actualizar precios</Box>
-            </Button>
-          </Tooltip>
-          <Tooltip title="Promoción">
-            <Button variant="outlined" startIcon={<Inventory2Icon sx={{ fontSize: 15 }} />} onClick={() => setOpenCombo(true)}
-              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, fontWeight: 600, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Promoción</Box>
-            </Button>
-          </Tooltip>
+          {puedeEditarProducto && (
+            <Tooltip title="Actualizar precios">
+              <Button variant="outlined" startIcon={<TrendingUpIcon sx={{ fontSize: 15 }} />} onClick={() => setOpenActualizar(true)}
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, fontWeight: 600, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Actualizar precios</Box>
+              </Button>
+            </Tooltip>
+          )}
+          {puedeCrearProducto && (
+            <Tooltip title="Promoción">
+              <Button variant="outlined" startIcon={<Inventory2Icon sx={{ fontSize: 15 }} />} onClick={() => setOpenCombo(true)}
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, fontWeight: 600, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Promoción</Box>
+              </Button>
+            </Tooltip>
+          )}
           {esIndumentaria && (
             <Tooltip title="Grupos de talles">
               <Button variant="outlined" startIcon={<CheckroomIcon sx={{ fontSize: 15 }} />} onClick={() => setModalGrupos(true)}
@@ -3454,12 +3498,14 @@ export default function Productos() {
               </Button>
             </Tooltip>
           )}
-          <Tooltip title="Nuevo Producto">
-            <Button data-tour="prod-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => setVista('nuevo')}
-              sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Nuevo Producto</Box>
-            </Button>
-          </Tooltip>
+          {puedeCrearProducto && (
+            <Tooltip title="Nuevo Producto">
+              <Button data-tour="prod-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => setVista('nuevo')}
+                sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Nuevo Producto</Box>
+              </Button>
+            </Tooltip>
+          )}
           <AyudaButton />
         </Box>
       </Box>
@@ -3578,13 +3624,15 @@ export default function Productos() {
                 </IconButton>
               ))}
             </Box>
-            <Tooltip title={analizandoImport ? 'Analizando archivo…' : 'Importar Excel o CSV'}>
-              <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />} disabled={analizandoImport}
-                onClick={() => csvRef.current?.click()}
-                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER }, '&.Mui-disabled': { opacity: 0.6 } }}>
-                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{analizandoImport ? 'Analizando…' : 'Importar'}</Box>
-              </Button>
-            </Tooltip>
+            {puedeCrearProducto && (
+              <Tooltip title={analizandoImport ? 'Analizando archivo…' : 'Importar Excel o CSV'}>
+                <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />} disabled={analizandoImport}
+                  onClick={() => csvRef.current?.click()}
+                  sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER }, '&.Mui-disabled': { opacity: 0.6 } }}>
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{analizandoImport ? 'Analizando…' : 'Importar'}</Box>
+                </Button>
+              </Tooltip>
+            )}
             <Tooltip title="Exportar Excel">
               <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
                 onClick={handleExportarCSV} disabled={exportando}
@@ -3592,16 +3640,18 @@ export default function Productos() {
                 <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
               </Button>
             </Tooltip>
-            <Tooltip title="Eliminar seleccionados">
-              <Button variant="outlined" startIcon={<DeleteIcon sx={{ fontSize: 15 }} />}
-                disabled={seleccionados.length === 0 || elimSelLoading}
-                onClick={() => setConfirmBulkElim(true)}
-                sx={{ color: seleccionados.length ? ERROR : MUTED, borderColor: seleccionados.length ? ERROR : BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, opacity: seleccionados.length === 0 ? 0.5 : 1, '&:hover': { borderColor: seleccionados.length ? ERROR : 'var(--border-hover)', bgcolor: seleccionados.length ? ERROR_BG : HOVER } }}>
-                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{elimSelLoading ? 'Eliminando...' : 'Eliminar'}</Box>
-                {seleccionados.length > 0 && <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>{seleccionados.length}</Box>}
-                {seleccionados.length > 0 && <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{` (${seleccionados.length})`}</Box>}
-              </Button>
-            </Tooltip>
+            {puedeEliminarProducto && (
+              <Tooltip title="Eliminar seleccionados">
+                <Button variant="outlined" startIcon={<DeleteIcon sx={{ fontSize: 15 }} />}
+                  disabled={seleccionados.length === 0 || elimSelLoading}
+                  onClick={() => setConfirmBulkElim(true)}
+                  sx={{ color: seleccionados.length ? ERROR : MUTED, borderColor: seleccionados.length ? ERROR : BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, opacity: seleccionados.length === 0 ? 0.5 : 1, '&:hover': { borderColor: seleccionados.length ? ERROR : 'var(--border-hover)', bgcolor: seleccionados.length ? ERROR_BG : HOVER } }}>
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{elimSelLoading ? 'Eliminando...' : 'Eliminar'}</Box>
+                  {seleccionados.length > 0 && <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>{seleccionados.length}</Box>}
+                  {seleccionados.length > 0 && <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{` (${seleccionados.length})`}</Box>}
+                </Button>
+              </Tooltip>
+            )}
             <Tooltip title="Descargar PDF para contar el stock físico">
               <Button
                 variant="outlined"
@@ -3695,12 +3745,14 @@ export default function Productos() {
                           <VisibilityIcon sx={{ fontSize: 15 }} />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Editar">
-                        <IconButton size="small" onClick={e => { e.stopPropagation(); p.esCombo ? setComboEditar(p) : setProductoEditar(p); }}
-                          sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: BORDER }, borderRadius: '6px' }}>
-                          <EditIcon sx={{ fontSize: 15 }} />
-                        </IconButton>
-                      </Tooltip>
+                      {puedeEditarProducto && (
+                        <Tooltip title="Editar">
+                          <IconButton size="small" onClick={e => { e.stopPropagation(); p.esCombo ? setComboEditar(p) : setProductoEditar(p); }}
+                            sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: BORDER }, borderRadius: '6px' }}>
+                            <EditIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </Box>
                   </Box>
                 </Box>
@@ -3791,12 +3843,16 @@ export default function Productos() {
                           <VisibilityIcon sx={{ fontSize: 16 }} />
                         </IconButton>
                       </Tooltip>
-                      <IconButton size="small" onClick={() => p.esCombo ? setComboEditar(p) : setProductoEditar(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: HOVER }, borderRadius: '6px' }}>
-                        <EditIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => setProductoElim(p)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
-                        <DeleteIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
+                      {puedeEditarProducto && (
+                        <IconButton size="small" onClick={() => p.esCombo ? setComboEditar(p) : setProductoEditar(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: HOVER }, borderRadius: '6px' }}>
+                          <EditIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      )}
+                      {puedeEliminarProducto && (
+                        <IconButton size="small" onClick={() => setProductoElim(p)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
+                          <DeleteIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      )}
                     </Box>
                   </Box>
                 </Box>
@@ -3926,17 +3982,23 @@ export default function Productos() {
                   <VisibilityIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Historial de precios">
-                <IconButton size="small" onClick={() => setHistorialProducto(p)} sx={{ color: MUTED, '&:hover': { color: '#8b5cf6', bgcolor: '#8b5cf618' }, borderRadius: '6px' }}>
-                  <HistoryIcon sx={{ fontSize: 16 }} />
+              {puedeEditarProducto && (
+                <Tooltip title="Historial de precios">
+                  <IconButton size="small" onClick={() => setHistorialProducto(p)} sx={{ color: MUTED, '&:hover': { color: '#8b5cf6', bgcolor: '#8b5cf618' }, borderRadius: '6px' }}>
+                    <HistoryIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {puedeEditarProducto && (
+                <IconButton size="small" onClick={() => p.esCombo ? setComboEditar(p) : setProductoEditar(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: HOVER }, borderRadius: '6px' }}>
+                  <EditIcon sx={{ fontSize: 16 }} />
                 </IconButton>
-              </Tooltip>
-              <IconButton size="small" onClick={() => p.esCombo ? setComboEditar(p) : setProductoEditar(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: HOVER }, borderRadius: '6px' }}>
-                <EditIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-              <IconButton size="small" onClick={() => setProductoElim(p)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
-                <DeleteIcon sx={{ fontSize: 16 }} />
-              </IconButton>
+              )}
+              {puedeEliminarProducto && (
+                <IconButton size="small" onClick={() => setProductoElim(p)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
+                  <DeleteIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              )}
             </Box>
           </Box>
         ))}

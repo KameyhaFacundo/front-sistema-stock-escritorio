@@ -27,6 +27,7 @@ import WarningAmberIcon   from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon    from '@mui/icons-material/CheckCircle';
 import { COMPANY_NAME, PRIMARY_COLOR }   from '../../config/brand';
 import { AuthContext } from '../../auth/AuthContextBase';
+import useHasPermiso from '../../hooks/useHasPermiso';
 
 import { BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, HOVER, INPUT, TABLE_HEADER, fieldSx, modalPaperSx,
          SUCCESS, SUCCESS_BG, SUCCESS_BORDER, SUCCESS_LIGHT, SUCCESS_HOVER,
@@ -507,6 +508,9 @@ function ModalSaldarTodo({ open, onClose, deudas, onSaldado }) {
 /* ── Fila de cliente ── */
 function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
   const { user } = useContext(AuthContext);
+  const { checkPermisos } = useHasPermiso();
+  const puedeEditar = checkPermisos('actualizarCliente');
+  const puedeEliminar = checkPermisos('eliminarCliente');
   const isMobile = useIsMobile();
   const [expanded,        setExpanded]        = useState(false);
   const [deudas,          setDeudas]          = useState([]);
@@ -659,12 +663,16 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
                 <VisibilityIcon sx={{ fontSize: 17 }} />
               </IconButton>
             </Tooltip>
-            <IconButton size="small" onClick={() => onEditar(cliente)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: HOVER }, borderRadius: '6px' }}>
-              <EditIcon sx={{ fontSize: 17 }} />
-            </IconButton>
-            <IconButton size="small" onClick={() => onEliminar(cliente.id)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
-              <DeleteIcon sx={{ fontSize: 17 }} />
-            </IconButton>
+            {puedeEditar && (
+              <IconButton size="small" onClick={() => onEditar(cliente)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: HOVER }, borderRadius: '6px' }}>
+                <EditIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            )}
+            {puedeEliminar && (
+              <IconButton size="small" onClick={() => onEliminar(cliente.id)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
+                <DeleteIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            )}
           </Box>
         </Box>
       ) : (
@@ -740,16 +748,20 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
               <VisibilityIcon sx={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Editar">
-            <IconButton size="small" onClick={() => onEditar(cliente)} sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: BORDER }, borderRadius: '6px' }}>
-              <EditIcon sx={{ fontSize: 16 }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Eliminar">
-            <IconButton size="small" onClick={() => onEliminar(cliente.id)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
-              <DeleteIcon sx={{ fontSize: 16 }} />
-            </IconButton>
-          </Tooltip>
+          {puedeEditar && (
+            <Tooltip title="Editar">
+              <IconButton size="small" onClick={() => onEditar(cliente)} sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: BORDER }, borderRadius: '6px' }}>
+                <EditIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+          {puedeEliminar && (
+            <Tooltip title="Eliminar">
+              <IconButton size="small" onClick={() => onEliminar(cliente.id)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
+                <DeleteIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       </Box>
       )}
@@ -1114,6 +1126,8 @@ const colTh = { color: MUTED, fontSize: 12, fontWeight: 600, textTransform: 'upp
 export default function Clientes() {
   const isMobile = useIsMobile();
   const toast = useToast();
+  const { checkPermisos } = useHasPermiso();
+  const puedeCrear = checkPermisos('crearCliente');
   const [clientes,     setClientes]     = useState([]);
   const [deudaResumen, setDeudaResumen] = useState([]);
   const [search,       setSearch]       = useState('');
@@ -1287,13 +1301,15 @@ export default function Clientes() {
               <Typography sx={{ color: ERROR, fontWeight: 800, fontSize: 18 }}>{fmtMoney(totalDeuda)}</Typography>
             </Box>
           )}
-          <Tooltip title="Importar Excel o CSV">
-            <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />}
-              onClick={() => csvRef.current?.click()}
-              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar</Box>
-            </Button>
-          </Tooltip>
+          {puedeCrear && (
+            <Tooltip title="Importar Excel o CSV">
+              <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />}
+                onClick={() => csvRef.current?.click()}
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar</Box>
+              </Button>
+            </Tooltip>
+          )}
           <Tooltip title="Exportar Excel">
             <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
               onClick={() => exportarCSVClientes(filtered)}
@@ -1301,12 +1317,14 @@ export default function Clientes() {
               <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
             </Button>
           </Tooltip>
-          <Tooltip title="Nuevo Cliente">
-            <Button data-tour="cli-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
-              sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Nuevo Cliente</Box>
-            </Button>
-          </Tooltip>
+          {puedeCrear && (
+            <Tooltip title="Nuevo Cliente">
+              <Button data-tour="cli-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
+                sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Nuevo Cliente</Box>
+              </Button>
+            </Tooltip>
+          )}
           <AyudaButton />
         </Box>
       </Box>
@@ -1337,10 +1355,12 @@ export default function Clientes() {
               </Box>
               <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>No hay clientes</Typography>
               <Typography sx={{ color: MUTED, fontSize: 14 }}>Registrá tu primer cliente para empezar.</Typography>
-              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
-                sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
-                Registrar primer cliente
-              </Button>
+              {puedeCrear && (
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
+                  sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
+                  Registrar primer cliente
+                </Button>
+              )}
             </Box>
           ) : isMobile ? (
             <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>

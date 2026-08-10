@@ -32,6 +32,26 @@ const PERMISOS_MAP = {
   verConfiguracion: 'view-configuracion',
   verEtiquetas: 'view-etiquetas',
   verCarritosVaciados: 'list-carritos-vaciados',
+  // Antes solo se usaban permisos "list"/"create" para decidir si mostrar
+  // toda una sección — el lápiz/tacho de cada fila (editar/eliminar un
+  // registro puntual) se mostraba siempre, sin importar el permiso real.
+  // El backend igual los rechazaba (403), pero el botón quedaba ahí
+  // invitando a tocarlo. Estos completan esa granularidad fila-por-fila.
+  crearProducto: 'create-productos',
+  eliminarProducto: 'delete-productos',
+  crearCategoria: 'create-categorias',
+  actualizarCategoria: 'update-categorias',
+  eliminarCategoria: 'delete-categorias',
+  crearProveedor: 'create-proveedores',
+  actualizarProveedor: 'update-proveedores',
+  eliminarProveedor: 'delete-proveedores',
+  crearCliente: 'create-clientes',
+  actualizarCliente: 'update-clientes',
+  eliminarCliente: 'delete-clientes',
+  crearUsuario: 'create-usuarios',
+  eliminarUsuario: 'delete-usuarios',
+  asignarPermisos: 'assign-permisos',
+  actualizarCompra: 'update-compras',
 };
 
 export default function useHasPermiso() {

@@ -1553,6 +1553,8 @@ export default function Compras() {
   const puedeAnular = checkPermisos('anularCompra');
   const puedeDevolver = checkPermisos('devolverCompra');
   const puedeFiltrarFechas = checkPermisos('verFiltrosFechas');
+  const puedeCrear = checkPermisos('gestionarCompras');
+  const puedeEditar = checkPermisos('actualizarCompra');
   const hoy = toLocalDateStr();
   const { tieneIA } = usePlan();
   const { recargarProductos, crearProducto } = useProductos();
@@ -1865,18 +1867,22 @@ export default function Compras() {
               </Button>
             </Tooltip>
           )}
-          <Tooltip title="Importar desde Excel">
-            <Button startIcon={<TableChartIcon sx={{ fontSize: 15 }} />} onClick={() => setOpenImportExcel(true)}
-              sx={{ color: INK2, borderColor: BORDER, border: '1px solid', textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: HOVER, borderColor: 'var(--border-hover)' } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar Excel</Box>
-            </Button>
-          </Tooltip>
-          <Tooltip title="Nueva Compra">
-            <Button data-tour="compras-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => { setScanData(null); setOpenModal(true); }}
-              sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Nueva Compra</Box>
-            </Button>
-          </Tooltip>
+          {puedeCrear && (
+            <Tooltip title="Importar desde Excel">
+              <Button startIcon={<TableChartIcon sx={{ fontSize: 15 }} />} onClick={() => setOpenImportExcel(true)}
+                sx={{ color: INK2, borderColor: BORDER, border: '1px solid', textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: HOVER, borderColor: 'var(--border-hover)' } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar Excel</Box>
+              </Button>
+            </Tooltip>
+          )}
+          {puedeCrear && (
+            <Tooltip title="Nueva Compra">
+              <Button data-tour="compras-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => { setScanData(null); setOpenModal(true); }}
+                sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Nueva Compra</Box>
+              </Button>
+            </Tooltip>
+          )}
           <AyudaButton />
         </Box>
       </Box>
@@ -1958,10 +1964,12 @@ export default function Compras() {
             <Typography sx={{ fontSize: 40 }}>🛒</Typography>
             <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>No hay compras</Typography>
             <Typography sx={{ color: MUTED, fontSize: 14 }}>Aún no has registrado ninguna compra.</Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
-              sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
-              Registrar primer compra
-            </Button>
+            {puedeCrear && (
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
+                sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
+                Registrar primer compra
+              </Button>
+            )}
           </Box>
         ) : (
           <>
@@ -1972,7 +1980,7 @@ export default function Compras() {
               sort={{ col: sortCol, dir: sortDir, onChange: toggleSort }}
               actions={{
                 onView: handleVerDetalle,
-                onEdit: handleEditar,
+                onEdit: puedeEditar ? handleEditar : undefined,
                 extra: (c) => (
                   <>
                     {c.estado === 'confirmada' && puedeAnular && (
@@ -2025,9 +2033,11 @@ export default function Compras() {
                           </IconButton>
                         </Tooltip>
                       )}
-                      <IconButton size="small" onClick={() => handleEditar(c)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: HOVER }, borderRadius: '6px' }}>
-                        <EditIcon sx={{ fontSize: 17 }} />
-                      </IconButton>
+                      {puedeEditar && (
+                        <IconButton size="small" onClick={() => handleEditar(c)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: HOVER }, borderRadius: '6px' }}>
+                          <EditIcon sx={{ fontSize: 17 }} />
+                        </IconButton>
+                      )}
                       <Tooltip title="Excel">
                         <IconButton size="small" onClick={() => exportarCompraExcel(c)} sx={{ color: MUTED, '&:hover': { color: '#22c55e' }, borderRadius: '6px' }}>
                           <FileDownloadIcon sx={{ fontSize: 17 }} />

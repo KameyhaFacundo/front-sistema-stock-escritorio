@@ -32,6 +32,7 @@ import { registerTour } from '../../utils/tour';
 import { proveedoresService } from '../../services/proveedoresService';
 import { deudasService }      from '../../services/deudasService';
 import DEUDA_COLORS from '../../constants/deudaStatus';
+import useHasPermiso from '../../hooks/useHasPermiso';
 
 const METODO_LABELS = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', qr: 'QR', cuenta_corriente: 'Cuenta corriente' };
 
@@ -413,6 +414,10 @@ const PROV_COLUMNS = [
 
 export default function Proveedores() {
   const toast = useToast();
+  const { checkPermisos } = useHasPermiso();
+  const puedeCrear = checkPermisos('crearProveedor');
+  const puedeEditar = checkPermisos('actualizarProveedor');
+  const puedeEliminar = checkPermisos('eliminarProveedor');
   const [proveedores,  setProveedores]  = useState([]);
   const [deudaResumen, setDeudaResumen] = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -591,13 +596,15 @@ export default function Proveedores() {
               <Typography sx={{ color: ERROR, fontWeight: 800, fontSize: 18 }}>{fmtMoney(totalDeuda)}</Typography>
             </Box>
           )}
-          <Tooltip title="Importar Excel o CSV">
-            <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />}
-              onClick={() => csvRef.current?.click()}
-              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar</Box>
-            </Button>
-          </Tooltip>
+          {puedeCrear && (
+            <Tooltip title="Importar Excel o CSV">
+              <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />}
+                onClick={() => csvRef.current?.click()}
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar</Box>
+              </Button>
+            </Tooltip>
+          )}
           <Tooltip title="Exportar Excel">
             <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
               onClick={() => exportarCSVProveedores(filtered)}
@@ -605,12 +612,14 @@ export default function Proveedores() {
               <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
             </Button>
           </Tooltip>
-          <Tooltip title="Nuevo Proveedor">
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
-              sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Nuevo Proveedor</Box>
-            </Button>
-          </Tooltip>
+          {puedeCrear && (
+            <Tooltip title="Nuevo Proveedor">
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
+                sx={{ bgcolor: P, textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2.5 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Nuevo Proveedor</Box>
+              </Button>
+            </Tooltip>
+          )}
           <AyudaButton />
         </Box>
       </Box>
@@ -641,10 +650,12 @@ export default function Proveedores() {
             </Box>
             <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>No hay proveedores</Typography>
             <Typography sx={{ color: MUTED, fontSize: 14 }}>Registrá tu primer proveedor para empezar.</Typography>
-          <Button data-tour="prov-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
+          {puedeCrear && (
+            <Button data-tour="prov-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}
               sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', mt: 0.5, '&:hover': { bgcolor: P_HOVER } }}>
               Registrar primer proveedor
             </Button>
+          )}
           </Box>
         ) : (
           <>
@@ -652,7 +663,12 @@ export default function Proveedores() {
               columns={PROV_COLUMNS}
               rows={pagedEnriched}
               loading={loading}
-              actions={{ onView: setProveedorVer, onEdit: setProveedorEditar, onDelete: setConfirmandoEliminar, deleteLoading: eliminandoId }}
+              actions={{
+                onView: setProveedorVer,
+                onEdit: puedeEditar ? setProveedorEditar : undefined,
+                onDelete: puedeEliminar ? setConfirmandoEliminar : undefined,
+                deleteLoading: eliminandoId,
+              }}
               actionsTourId="prov-acciones"
               emptyMessage="Sin proveedores"
               mobileCard={(p, acts) => (
