@@ -1557,9 +1557,20 @@ export default function Compras() {
   const { tieneIA } = usePlan();
   const { recargarProductos, crearProducto } = useProductos();
   const [compras,    setCompras]    = useState([]);
+  // total/totalPaginas vienen del backend — a diferencia de compras.length
+  // (que ahora es solo el tamaño de la página actual), esto sí refleja el
+  // total real filtrado, aunque haya más compras que las que se ven acá.
+  const [totalCompras, setTotalCompras] = useState(0);
+  const [totalPaginasBackend, setTotalPaginasBackend] = useState(1);
   const [proveedores, setProveedores] = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [search,     setSearch]     = useState('');
+  // Debounced: no dispara un pedido al backend por cada tecla tipeada.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
   const [sortCol,    setSortCol]    = useState('fecha');
   const [sortDir,    setSortDir]    = useState('desc');
   const [openModal,    setOpenModal]    = useState(false);
@@ -1580,19 +1591,58 @@ export default function Compras() {
   const [compraAAnular, setCompraAAnular] = useState(null);
   const [anulando,      setAnulando]      = useState(false);
   const [modalDevolucion, setModalDevolucion] = useState(false);
+  const [pendientesViejasList, setPendientesViejasList] = useState([]);
 
-  const cargar = useCallback(async () => {
+  const cargarProveedores = useCallback(async () => {
+    try { setProveedores(await proveedoresService.getAll()); }
+    catch { toast('Error al cargar los proveedores', 'error'); }
+  }, []);
+
+  // Compras "pendiente" con más de 7 días — para el banner de aviso. Se pide
+  // aparte (no del array de la página actual, que ahora es solo un puñado de
+  // filas) filtrando por estado en el backend: son naturalmente pocas — la
+  // mayoría termina confirmándose — así que no hace falta paginar esto.
+  const cargarPendientesViejas = useCallback(async () => {
+    try {
+      const { items } = await comprasService.getAllPaginado({ estado: 'pendiente', per_page: 200 });
+      setPendientesViejasList(calcularPendientesViejas(items));
+    } catch { /* el banner es informativo, no bloquea nada si falla */ }
+  }, []);
+
+  useEffect(() => { cargarProveedores(); cargarPendientesViejas(); }, [cargarProveedores, cargarPendientesViejas]);
+
+  // Cualquier cambio de búsqueda/filtro/orden vuelve a la página 1 — quedarse
+  // en una página que puede ya no existir para el nuevo filtro mostraría
+  // vacío en vez de los resultados reales.
+  useEffect(() => { setPagina(1); }, [debouncedSearch, filtroEstado, effDesde, effHasta, sortCol, sortDir]);
+
+  // La búsqueda/filtros/orden/página ahora se piden al backend (que ya
+  // soporta todos estos params) en vez de traer como mucho PAGE_SIZES.DEFAULT
+  // compras una sola vez y filtrar ese array capado del lado del cliente —
+  // con más compras que eso en el historial, las más viejas quedaban
+  // invisibles para cualquier búsqueda/filtro.
+  const cargarCompras = useCallback(async () => {
     setLoading(true);
     try {
-      const [c, p] = await Promise.all([comprasService.getAll(), proveedoresService.getAll()]);
-      setCompras(c);
-      setProveedores(p);
+      const { items, total, lastPage } = await comprasService.getAllPaginado({
+        page: pagina,
+        per_page: pageSize,
+        sort: sortCol,
+        dir: sortDir,
+        ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        ...(filtroEstado ? { estado: filtroEstado } : {}),
+        ...(effDesde ? { fecha_desde: effDesde } : {}),
+        ...(effHasta ? { fecha_hasta: effHasta } : {}),
+      });
+      setCompras(items);
+      setTotalCompras(total);
+      setTotalPaginasBackend(lastPage);
     } catch { toast('Error al cargar las compras', 'error'); } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pagina, pageSize, sortCol, sortDir, debouncedSearch, filtroEstado, effDesde, effHasta]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => { cargarCompras(); }, [cargarCompras]);
 
   useEffect(() => {
     registerTour('/compras', [
@@ -1613,33 +1663,27 @@ export default function Compras() {
   const toggleSort = (col) => {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortCol(col); setSortDir('asc'); }
-    setPagina(1);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let list = [...compras];
-    if (q) list = list.filter(c => (c.proveedor || '').toLowerCase().includes(q) || c.estado.includes(q) || c.fecha.includes(q));
-    if (filtroEstado) list = list.filter(c => c.estado === filtroEstado);
-    if (effDesde) list = list.filter(c => c.fecha >= effDesde);
-    if (effHasta) list = list.filter(c => c.fecha <= effHasta);
-    list.sort((a, b) => {
-      const va = sortCol === 'total' ? a.total : sortCol === 'fecha' ? a.fecha : (a.proveedor || '').toLowerCase();
-      const vb = sortCol === 'total' ? b.total : sortCol === 'fecha' ? b.fecha : (b.proveedor || '').toLowerCase();
-      return sortDir === 'asc' ? (va < vb ? -1 : va > vb ? 1 : 0) : (va > vb ? -1 : va < vb ? 1 : 0);
-    });
-    return list;
-  }, [compras, search, filtroEstado, effDesde, effHasta, sortCol, sortDir]);
+  // compras ya es la página actual, ordenada/filtrada por el backend — no
+  // hace falta filtrar/ordenar/paginar de nuevo acá.
+  const totalPages = totalPaginasBackend;
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paged      = filtered.slice((pagina - 1) * pageSize, pagina * pageSize);
+  const pendientesViejas = pendientesViejasList;
 
-  const pendientesViejas = useMemo(() => calcularPendientesViejas(compras), [compras]);
+  // Recargan la página actual desde el backend en vez de insertar/pisar a
+  // mano en el array local — con paginado real, dónde cae una fila nueva o
+  // editada depende del orden/filtro vigente, no siempre es "al principio".
+  const handleCrear = () => {
+    setPagina(1);
+    cargarCompras();
+    cargarPendientesViejas();
+    recargarProductos();
+  };
 
-  const handleCrear = (nueva) => { setCompras(cs => [nueva, ...cs]); setPagina(1); recargarProductos(); };
-
-  const handleActualizar = (updated) => {
-    setCompras(cs => cs.map(c => c.id === updated.id ? updated : c));
+  const handleActualizar = () => {
+    cargarCompras();
+    cargarPendientesViejas();
     recargarProductos();
   };
 
@@ -1810,7 +1854,7 @@ export default function Compras() {
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.2 }}>Compras</Typography>
-          <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{compras.length} compras registradas</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{totalCompras} compras registradas</Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           {tieneIA && (
@@ -1906,10 +1950,10 @@ export default function Compras() {
       <Box data-tour="compras-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
         <Box sx={{ px: 3, py: 2.5, borderBottom: `1px solid ${BORDER}` }}>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>Historial de Compras</Typography>
-          <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>{compras.length} compras registradas</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>{totalCompras} compras registradas</Typography>
         </Box>
 
-        {!loading && paged.length === 0 ? (
+        {!loading && compras.length === 0 ? (
           <Box sx={{ py: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
             <Typography sx={{ fontSize: 40 }}>🛒</Typography>
             <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>No hay compras</Typography>
@@ -1923,7 +1967,7 @@ export default function Compras() {
           <>
             <DataTable
               columns={COLUMNS}
-              rows={paged}
+              rows={compras}
               loading={loading}
               sort={{ col: sortCol, dir: sortDir, onChange: toggleSort }}
               actions={{
@@ -2000,7 +2044,7 @@ export default function Compras() {
               }}
             />
             {!loading && (
-              <TablePagination pagina={pagina} totalPages={totalPages} pageSize={pageSize} totalItems={filtered.length} label="compras" onPageChange={setPagina} onPageSizeChange={(s) => { setPageSize(s); setPagina(1); }} />
+              <TablePagination pagina={pagina} totalPages={totalPages} pageSize={pageSize} totalItems={totalCompras} label="compras" onPageChange={setPagina} onPageSizeChange={(s) => { setPageSize(s); setPagina(1); }} />
             )}
           </>
         )}

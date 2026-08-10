@@ -48,6 +48,24 @@ export const comprasService = {
     return items.map(mapCompra);
   },
 
+  // Igual que getAll(), pero conserva la metadata de paginación (total,
+  // página actual/última) en vez de descartarla — Compras.jsx la necesita
+  // para paginar/buscar/filtrar de verdad contra el backend en vez de traer
+  // como mucho PAGE_SIZES.DEFAULT compras y filtrar ese array capado del
+  // lado del cliente (con más compras que eso en el historial, las más
+  // viejas quedaban invisibles para cualquier búsqueda/filtro).
+  async getAllPaginado(params = {}) {
+    const res = await api.get('compras', { params });
+    const body = res.data.data;
+    const items = body?.data ?? [];
+    return {
+      items: items.map(mapCompra),
+      total: body?.total ?? items.length,
+      currentPage: body?.current_page ?? 1,
+      lastPage: body?.last_page ?? 1,
+    };
+  },
+
   async getById(id) {
     const res = await api.get(`compras/${id}`);
     return mapCompra(res.data.data);
