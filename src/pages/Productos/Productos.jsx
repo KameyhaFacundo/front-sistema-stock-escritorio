@@ -3725,7 +3725,7 @@ export default function Productos() {
                 <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 0.4, flex: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
                     <Chip label={p.categoria} size="small" sx={{ bgcolor: p.cColor + '22', color: p.cColor, fontWeight: 600, fontSize: 10.5, borderRadius: '6px', border: `1px solid ${p.cColor}44` }} />
-                    <Switch checked={p.activo} size="small" onChange={() => actualizarProducto(p.id, { activo: !p.activo })}
+                    <Switch checked={p.activo} size="small" disabled={!puedeEditarProducto} onChange={() => actualizarProducto(p.id, { activo: !p.activo })}
                       sx={{ flexShrink: 0, mt: -0.5, mr: -0.5, '& .MuiSwitch-switchBase.Mui-checked': { color: P }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: P }, '& .MuiSwitch-track': { bgcolor: BORDER } }} />
                   </Box>
                   <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700, lineHeight: 1.3, mt: 0.25 }} noWrap>{p.nombre}</Typography>
@@ -3813,7 +3813,7 @@ export default function Productos() {
                       </Box>
                       <Typography sx={{ color: MUTED, fontSize: 12 }}>{p.codigo}</Typography>
                     </Box>
-                    <Switch checked={p.activo} size="small" onClick={e => e.stopPropagation()}
+                    <Switch checked={p.activo} size="small" disabled={!puedeEditarProducto} onClick={e => e.stopPropagation()}
                       onChange={() => actualizarProducto(p.id, { activo: !p.activo })} sx={{ ...swSx, flexShrink: 0 }} />
                   </Box>
 
@@ -3943,7 +3943,7 @@ export default function Productos() {
                 })()}
               </Box>
             </Box>
-            <Switch checked={p.activo} size="small"
+            <Switch checked={p.activo} size="small" disabled={!puedeEditarProducto}
               onChange={() => actualizarProducto(p.id, { activo: !p.activo })}
               onClick={e => e.stopPropagation()} sx={swSx} />
             <Box>
