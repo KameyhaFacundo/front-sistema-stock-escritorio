@@ -16,7 +16,19 @@
     <title>%VITE_APP_NAME%</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Splash estático: se ve desde el primer instante, antes de que cargue
+         cualquier JS. React lo reemplaza al montar (createRoot().render() en
+         main.jsx pisa los hijos de #root) — usa el mismo look que el
+         <Loading> de App.jsx (fallback del Suspense de rutas) a propósito,
+         para que no se note el cambio ni haya un parpadeo en el medio. Sin
+         esto, quedaba un instante en blanco que un cliente podía confundir
+         con que la app se colgó. -->
+    <div id="root">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;height:100dvh;background:#111010;color:#a09a99;font-family:Geist, ui-sans-serif, system-ui, sans-serif;font-size:14px;">
+        <img src="%VITE_LOGO_URL_DARK%" alt="%VITE_APP_NAME%" style="height:48px;width:auto;" />
+        Cargando...
+      </div>
+    </div>
     <script src="/theme-init.js"></script>
     <script type="module" src="/src/main.jsx"></script>
     <script src="/sw-register.js"></script>

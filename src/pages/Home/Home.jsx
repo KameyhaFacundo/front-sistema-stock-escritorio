@@ -105,8 +105,9 @@ function cartALineas(cart) {
     : { id_producto: i.id, precio_venta: i.precio, cantidad: i.cantidad });
 }
 
-// Sugiere hasta 3 montos redondos por encima del total (billetes típicos) para
-// no tener que escribir el monto recibido a mano en cada venta en efectivo.
+// Sugiere hasta 2 montos redondos por encima del total (billetes típicos) para
+// no tener que escribir el monto recibido a mano en cada venta en efectivo —
+// junto con el chip "Exacto" quedan 3 en total, no más.
 function sugerirMontosRapidos(total) {
   if (!(total > 0)) return [];
   const redondeos = [500, 1000, 2000, 5000, 10000];
@@ -115,7 +116,7 @@ function sugerirMontosRapidos(total) {
     const candidato = Math.ceil(total / r) * r;
     if (candidato > total) candidatos.add(candidato);
   });
-  return Array.from(candidatos).sort((a, b) => a - b).slice(0, 3);
+  return Array.from(candidatos).sort((a, b) => a - b).slice(0, 2);
 }
 
 const METODO_LABELS = {
