@@ -3010,55 +3010,83 @@ export default function Productos() {
     // crearía una categoría/proveedor duplicado por cada fila.
     const catsNuevas = new Map();
     const provsNuevos = new Map();
-    for (const f of importPreview) {
+
+    // Fase 1: resolver categoría/proveedor NUEVOS antes de crear ningún
+    // producto — son pocos valores únicos (no uno por fila), así que esto es
+    // rápido aunque sea secuencial, y deja cada fila lista con su catId/provId
+    // real para poder paralelizar la fase 2 sin arriesgar altas duplicadas.
+    // Guardado aparte (no mutando los objetos de importPreview, que viven en
+    // estado de React) en un array paralelo por índice.
+    const resueltos = new Array(importPreview.length);
+    for (let idx = 0; idx < importPreview.length; idx++) {
       if (cancelarImportRef.current) { cancelado = true; break; }
+      const f = importPreview[idx];
+      const info = { catId: f.catId, provId: f.provId, error: false };
       try {
-        let catId = f.catId;
-        if (!catId && f.catNombre) {
+        if (!info.catId && f.catNombre) {
           const key = f.catNombre.toLowerCase();
           if (catsNuevas.has(key)) {
-            catId = catsNuevas.get(key);
+            info.catId = catsNuevas.get(key);
           } else {
             const nueva = await categoriasService.create(f.catNombre.trim());
-            catId = nueva.id;
-            catsNuevas.set(key, catId);
+            info.catId = nueva.id;
+            catsNuevas.set(key, info.catId);
             setCategorias(prev => [...prev, nueva]);
           }
         }
-        let provId = f.provId;
-        if (!provId && f.provNombre) {
+        if (!info.provId && f.provNombre) {
           const key = f.provNombre.toLowerCase();
           if (provsNuevos.has(key)) {
-            provId = provsNuevos.get(key);
+            info.provId = provsNuevos.get(key);
           } else {
             const nuevo = await proveedoresService.create({ persona: f.provNombre.trim(), estado: true });
-            provId = nuevo.id;
-            provsNuevos.set(key, provId);
+            info.provId = nuevo.id;
+            provsNuevos.set(key, info.provId);
             setProveedores(prev => [...prev, nuevo]);
           }
         }
-        // productosService.create() directo, no crearProducto() del contexto:
-        // ese pasa por React Query y en cada llamada invalida (y refetchea)
-        // la lista completa de productos apenas termina — con miles de filas
-        // eso duplica los pedidos al backend durante el import (una carga +
-        // un refetch por cada fila). Acá alcanza con refrescar una sola vez
-        // al final, ver recargarProductos() más abajo.
-        await productosService.create({
-          producto: f.nombre,
-          codigo: f.codigo || undefined,
-          precio: f.precio,
-          costo: f.costo,
-          stock: f.stock,
-          id_categoria: catId,
-          id_proveedor: provId,
-          unidad_medida: esFerreteria ? f.unidadMedida : 'unidad',
-          ...(f.grupo ? { tiene_variantes: true, id_grupo_talle: f.grupo.id } : {}),
-          ...(f.talle ? { id_talle: f.talle.id } : {}),
-        });
-        ok++;
-      } catch { fallas++; }
-      setImportProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
+      } catch { info.error = true; }
+      resueltos[idx] = info;
     }
+
+    // Fase 2: crear los productos de a lotes chicos EN PARALELO (mismo patrón
+    // que el chequeo de duplicados más arriba) — antes era un create() por
+    // fila esperado uno a la vez, minutos para un archivo de miles de filas.
+    if (!cancelado) {
+      const LOTE = 8;
+      for (let i = 0; i < importPreview.length; i += LOTE) {
+        if (cancelarImportRef.current) { cancelado = true; break; }
+        const indices = Array.from({ length: Math.min(LOTE, importPreview.length - i) }, (_, k) => i + k);
+        await Promise.all(indices.map(async (idx) => {
+          const f = importPreview[idx];
+          const info = resueltos[idx];
+          if (info.error) { fallas++; setImportProgreso(p => ({ ...p, hecho: p.hecho + 1 })); return; }
+          try {
+            // productosService.create() directo, no crearProducto() del contexto:
+            // ese pasa por React Query y en cada llamada invalida (y refetchea)
+            // la lista completa de productos apenas termina — con miles de filas
+            // eso duplica los pedidos al backend durante el import (una carga +
+            // un refetch por cada fila). Acá alcanza con refrescar una sola vez
+            // al final, ver recargarProductos() más abajo.
+            await productosService.create({
+              producto: f.nombre,
+              codigo: f.codigo || undefined,
+              precio: f.precio,
+              costo: f.costo,
+              stock: f.stock,
+              id_categoria: info.catId,
+              id_proveedor: info.provId,
+              unidad_medida: esFerreteria ? f.unidadMedida : 'unidad',
+              ...(f.grupo ? { tiene_variantes: true, id_grupo_talle: f.grupo.id } : {}),
+              ...(f.talle ? { id_talle: f.talle.id } : {}),
+            });
+            ok++;
+          } catch { fallas++; }
+          setImportProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
+        }));
+      }
+    }
+
     if (ok > 0) recargarProductos();
     setImportando(false);
     setCancelandoImport(false);

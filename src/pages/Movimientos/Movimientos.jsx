@@ -735,17 +735,23 @@ function ModalImportarMovimientos({ open, onClose, onCompletado }) {
     setAplicando(true);
     setProgreso({ hecho: 0, total: encontrados.length });
     let ok = 0, fallidos = 0, cancelado = false;
-    for (const f of encontrados) {
+    // De a lotes chicos en paralelo, no una fila a la vez esperada — mismo
+    // motivo que resolverProductoAsync() más arriba.
+    const LOTE = 8;
+    for (let i = 0; i < encontrados.length; i += LOTE) {
       if (cancelarRef.current) { cancelado = true; break; }
-      try {
-        // El signo viene directo del Excel: una cantidad negativa resta del
-        // stock, una positiva suma — no hace falta elegir un modo aparte.
-        await crearAjusteDirecto(f.producto, f.cantidad, 'Importado desde Excel');
-        ok++;
-      } catch {
-        fallidos++;
-      }
-      setProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
+      const lote = encontrados.slice(i, i + LOTE);
+      await Promise.all(lote.map(async (f) => {
+        try {
+          // El signo viene directo del Excel: una cantidad negativa resta del
+          // stock, una positiva suma — no hace falta elegir un modo aparte.
+          await crearAjusteDirecto(f.producto, f.cantidad, 'Importado desde Excel');
+          ok++;
+        } catch {
+          fallidos++;
+        }
+        setProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
+      }));
     }
     setAplicando(false);
     setCancelando(false);
@@ -960,20 +966,27 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
     setProgreso({ hecho: 0, total: lineasValidas.length });
     let ok = 0, fallidos = 0, cancelado = false;
     const aplicadas = [];
-    for (const l of lineasValidas) {
+    // De a lotes chicos EN PARALELO, no una línea a la vez esperada — antes
+    // un ajuste de cientos de productos tardaba minutos por ser N pedidos
+    // secuenciales (mismo patrón que la importación masiva de Productos.jsx).
+    const LOTE = 8;
+    for (let i = 0; i < lineasValidas.length; i += LOTE) {
       if (cancelarRef.current) { cancelado = true; break; }
-      const cant = modo === 'alta' ? Number(l.cantidad) : -Number(l.cantidad);
-      try {
-        // La línea ya trae id/nombre/código guardados al agregarla — no hace
-        // falta volver a buscarla en un array de resultados de búsqueda que
-        // pudo haber cambiado (o vaciarse) desde que se agregó.
-        await crearAjusteDirecto(l, cant, nota.trim() || 'Ajuste masivo');
-        ok++;
-        aplicadas.push(l);
-      } catch {
-        fallidos++;
-      }
-      setProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
+      const lote = lineasValidas.slice(i, i + LOTE);
+      await Promise.all(lote.map(async (l) => {
+        const cant = modo === 'alta' ? Number(l.cantidad) : -Number(l.cantidad);
+        try {
+          // La línea ya trae id/nombre/código guardados al agregarla — no hace
+          // falta volver a buscarla en un array de resultados de búsqueda que
+          // pudo haber cambiado (o vaciarse) desde que se agregó.
+          await crearAjusteDirecto(l, cant, nota.trim() || 'Ajuste masivo');
+          ok++;
+          aplicadas.push(l);
+        } catch {
+          fallidos++;
+        }
+        setProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
+      }));
     }
     setAplicando(false);
     setCancelando(false);
