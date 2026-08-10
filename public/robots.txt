@@ -18,5 +18,3 @@ Disallow: /bienvenida
 Disallow: /onboarding
 Disallow: /pago/
 Disallow: /reset-password
-
-Sitemap: https://kamexsolutions.com.ar/sitemap.xml
