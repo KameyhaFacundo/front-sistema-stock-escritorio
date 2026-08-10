@@ -66,8 +66,6 @@ import { useIsMobile } from '../../utils/responsive';
 import iaService from '../../services/iaService';
 import { useAuth } from '../../auth/AuthContextBase';
 import { abrevUnidad, UNIDAD_LABEL, parseUnidad } from '../../utils/unidadMedida';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { COMPANY_NAME, PRIMARY_COLOR } from '../../config/brand';
 
 // Código interno para un producto sin código de fábrica — arranca con "20"
@@ -96,7 +94,12 @@ const PDF_INV_PRIMARY = hexToRgbInventario(PRIMARY_COLOR);
 // PDF de control de inventario — solo lista stock actual + una columna vacía
 // "Stock físico" para completar a mano contando en el local; no guarda nada
 // ni genera ajustes automáticos (eso se sigue cargando en Movimientos si hace falta).
-function generarPdfInventario(rows, empresa) {
+// jsPDF/autoTable se cargan solo acá, al toque de exportar — evita bajarlos
+// siempre que alguien abre Productos, use o no la exportación a PDF.
+async function generarPdfInventario(rows, empresa) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'), import('jspdf-autotable'),
+  ]);
   const doc   = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
   const hoy   = new Date().toLocaleDateString('es-AR');

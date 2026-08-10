@@ -25,9 +25,6 @@ import FileUploadIcon     from '@mui/icons-material/FileUpload';
 import FileDownloadIcon   from '@mui/icons-material/FileDownload';
 import WarningAmberIcon   from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon    from '@mui/icons-material/CheckCircle';
-import jsPDF              from 'jspdf';
-import autoTable          from 'jspdf-autotable';
-
 import { COMPANY_NAME, PRIMARY_COLOR }   from '../../config/brand';
 import { AuthContext } from '../../auth/AuthContextBase';
 
@@ -87,7 +84,12 @@ const PDF_ESTADO   = {
 };
 
 /* ── PDF de deudas ── */
-function generarPdfDeudas(cliente, deudas, empresa) {
+// jsPDF/autoTable se cargan solo acá, al toque de exportar — son ~110kb
+// comprimidos que antes bajaba TODO el que abría Clientes, use o no el PDF.
+async function generarPdfDeudas(cliente, deudas, empresa) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'), import('jspdf-autotable'),
+  ]);
   const doc   = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
   const hoy   = new Date().toLocaleDateString('es-AR');

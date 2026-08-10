@@ -42,7 +42,6 @@ import { fmtMoney, fmtDate, toLocalDateStr } from '../../utils/format';
 import { exportarExcel } from '../../utils/excelExport';
 import { PRIMARY_COLOR, COMPANY_NAME } from '../../config/brand';
 import { pendientesViejas as calcularPendientesViejas } from '../../utils/comprasPendientes';
-import autoTable from 'jspdf-autotable';
 import DataTable      from '../../components/shared/DataTable';
 import TablePagination from '../../components/shared/TablePagination';
 import AyudaButton     from '../../components/shared/AyudaButton';
@@ -1724,7 +1723,11 @@ export default function Compras() {
 
   const exportarCompraPDF = async (c) => {
     const full = await comprasService.getById(c.id);
-    const { default: jsPDF } = await import('jspdf');
+    // autoTable también diferido — antes quedaba estático arriba mientras
+    // jsPDF ya se cargaba de una, así que la mitad del ahorro se perdía igual.
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'), import('jspdf-autotable'),
+    ]);
     const doc   = new jsPDF();
     const pageW = doc.internal.pageSize.getWidth();
     const hoy   = new Date().toLocaleDateString('es-AR');

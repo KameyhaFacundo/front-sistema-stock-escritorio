@@ -14,9 +14,6 @@ import DescriptionIcon    from '@mui/icons-material/Description';
 import FilterListIcon     from '@mui/icons-material/FilterList';
 import PictureAsPdfIcon   from '@mui/icons-material/PictureAsPdf';
 import ShoppingCartCheckoutIcon from '@mui/icons-material/ShoppingCartCheckout';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-
 import {
   BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, HOVER, DROPDOWN, TABLE_HEADER, modalPaperSx,
   SUCCESS, SUCCESS_BG, SUCCESS_BORDER, ERROR, ERROR_BG, WARNING, WARNING_BG, fieldSx,
@@ -46,7 +43,12 @@ const ESTADO_COLORS = {
   cancelado:  { bg: `${MUTED}18`, fg: MUTED, border: `${MUTED}40` },
 };
 
-function generarPdfPresupuesto(presupuesto, empresa) {
+// jsPDF/autoTable se cargan solo acá, al toque de exportar — evita bajarlos
+// siempre que alguien abre Presupuestos, use o no la exportación a PDF.
+async function generarPdfPresupuesto(presupuesto, empresa) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'), import('jspdf-autotable'),
+  ]);
   const doc   = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
 
