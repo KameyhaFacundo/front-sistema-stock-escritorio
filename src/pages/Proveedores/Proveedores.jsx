@@ -253,6 +253,8 @@ function ModalEditarProveedor({ open, onClose, onActualizar, proveedor }) {
 
 /* ── Modal Detalle de Proveedor ── */
 function ModalProveedorDetalle({ open, onClose, proveedor, onPagar }) {
+  const { checkPermisos } = useHasPermiso();
+  const puedePagarDeuda = checkPermisos('actualizarCompra');
   const [deudas,     setDeudas]     = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [deudaPagar, setDeudaPagar] = useState(null);
@@ -330,11 +332,13 @@ function ModalProveedorDetalle({ open, onClose, proveedor, onPagar }) {
                       ))}
                     </Box>
                   )}
-                  <Button size="small" startIcon={<PaymentIcon sx={{ fontSize: 14 }} />}
-                    onClick={() => setDeudaPagar(d)}
-                    sx={{ color: P, textTransform: 'none', fontWeight: 600, fontSize: 12, '&:hover': { bgcolor: HOVER } }}>
-                    Registrar pago
-                  </Button>
+                  {puedePagarDeuda && (
+                    <Button size="small" startIcon={<PaymentIcon sx={{ fontSize: 14 }} />}
+                      onClick={() => setDeudaPagar(d)}
+                      sx={{ color: P, textTransform: 'none', fontWeight: 600, fontSize: 12, '&:hover': { bgcolor: HOVER } }}>
+                      Registrar pago
+                    </Button>
+                  )}
                 </Box>
               );
             })}

@@ -47,6 +47,7 @@ const PERMISOS_MAP = {
   eliminarProveedor: 'delete-proveedores',
   crearCliente: 'create-clientes',
   actualizarCliente: 'update-clientes',
+  actualizarVenta: 'update-ventas',
   eliminarCliente: 'delete-clientes',
   crearUsuario: 'create-usuarios',
   eliminarUsuario: 'delete-usuarios',

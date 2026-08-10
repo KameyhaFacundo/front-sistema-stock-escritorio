@@ -511,6 +511,7 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
   const { checkPermisos } = useHasPermiso();
   const puedeEditar = checkPermisos('actualizarCliente');
   const puedeEliminar = checkPermisos('eliminarCliente');
+  const puedeCobrarDeuda = checkPermisos('actualizarVenta');
   const isMobile = useIsMobile();
   const [expanded,        setExpanded]        = useState(false);
   const [deudas,          setDeudas]          = useState([]);
@@ -838,10 +839,12 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
                     </Box>
                   ))}
                 </Box>
-                <Button size="small" variant="contained" onClick={() => setOpenSaldarTodo(true)}
-                  sx={{ bgcolor: SUCCESS, color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: 12, px: 2, py: 0.75, borderRadius: '8px', flexShrink: 0, '&:hover': { bgcolor: SUCCESS_HOVER } }}>
-                  Saldar todo
-                </Button>
+                {puedeCobrarDeuda && (
+                  <Button size="small" variant="contained" onClick={() => setOpenSaldarTodo(true)}
+                    sx={{ bgcolor: SUCCESS, color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: 12, px: 2, py: 0.75, borderRadius: '8px', flexShrink: 0, '&:hover': { bgcolor: SUCCESS_HOVER } }}>
+                    Saldar todo
+                  </Button>
+                )}
               </Box>
 
               {deudas.map(d => {
@@ -960,12 +963,14 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
                     )}
 
                     <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
-                      <Button size="small" startIcon={<PaymentIcon sx={{ fontSize: 14 }} />}
-                        onClick={() => setDeudaCobrar(d)}
-                        sx={{ color: SUCCESS, textTransform: 'none', fontWeight: 600, fontSize: 12, '&:hover': { bgcolor: HOVER } }}>
-                        Registrar cobro
-                      </Button>
-                      {d.lineas?.some(l => l.precioActual > 0 && Math.abs(l.precioActual - l.precio) > 0.01) && (
+                      {puedeCobrarDeuda && (
+                        <Button size="small" startIcon={<PaymentIcon sx={{ fontSize: 14 }} />}
+                          onClick={() => setDeudaCobrar(d)}
+                          sx={{ color: SUCCESS, textTransform: 'none', fontWeight: 600, fontSize: 12, '&:hover': { bgcolor: HOVER } }}>
+                          Registrar cobro
+                        </Button>
+                      )}
+                      {puedeCobrarDeuda && d.lineas?.some(l => l.precioActual > 0 && Math.abs(l.precioActual - l.precio) > 0.01) && (
                         <Button size="small"
                           onClick={() => handleActualizarPrecios(d.id)}
                           disabled={actualizandoId === d.id}
@@ -973,7 +978,7 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
                           {actualizandoId === d.id ? 'Actualizando...' : '↑ Actualizar a precios actuales'}
                         </Button>
                       )}
-                      {d.lineas?.some(l => l.precioOriginal > 0 && Math.abs(l.precioOriginal - l.precio) > 0.01) && (
+                      {puedeCobrarDeuda && d.lineas?.some(l => l.precioOriginal > 0 && Math.abs(l.precioOriginal - l.precio) > 0.01) && (
                         <Button size="small"
                           onClick={() => handleRevertirPrecios(d.id)}
                           disabled={reviertendoId === d.id}
