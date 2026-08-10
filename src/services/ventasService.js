@@ -89,10 +89,14 @@ export const ventasService = {
   // (a diferencia de anular(), que es toda la venta). El backend no devuelve
   // la venta actualizada acá (devuelve la devolución en sí) — quien llama
   // tiene que refrescar la venta aparte con getById() para ver el estado nuevo.
-  async crearDevolucion(id, { lineas, motivo }) {
+  async crearDevolucion(id, { lineas, motivo, formaReintegro }) {
     const res = await api.post(`ventas/${id}/devolucion`, {
       lineas: lineas.map(l => ({ id_linea_venta: l.idLineaVenta, cantidad: l.cantidad })),
       ...(motivo ? { motivo } : {}),
+      // Cómo se resuelve con el cliente la diferencia a favor, si la hay
+      // (ver ModalDevolucionVenta en Dashboard.jsx) — el backend asume
+      // 'efectivo' si no se manda nada, así que esto es opcional acá.
+      ...(formaReintegro ? { forma_reintegro: formaReintegro } : {}),
     });
     return {
       idDevolucion: res.data.data?.id,

@@ -335,14 +335,27 @@ function TabResumen({ ventas, dashStats, lineData, totalVentasN, ventasPorDia, v
 }
 
 /* ── Modal: devolución parcial de una venta ── */
+// Cómo se resuelve con el cliente la diferencia a favor de una devolución —
+// antes se asumía siempre "efectivo del cajón" sin importar cómo se había
+// pagado la venta, lo que descuadraba el arqueo en devoluciones de ventas
+// con tarjeta/transferencia/QR (esa plata nunca estuvo físicamente ahí). Solo
+// "efectivo" ajusta la caja (ver DevolucionVentaService en el backend).
+const FORMAS_REINTEGRO = [
+  { value: 'efectivo', label: 'Efectivo del cajón' },
+  { value: 'transferencia', label: 'Transferencia' },
+  { value: 'mercaderia', label: 'Cambio por mercadería' },
+  { value: 'saldo_favor', label: 'Queda a favor del cliente' },
+];
+
 function ModalDevolucionVenta({ open, onClose, venta, onDevuelto }) {
   const toast = useToast();
   const [cantidades, setCantidades] = useState({});
   const [motivo, setMotivo] = useState('');
+  const [formaReintegro, setFormaReintegro] = useState('efectivo');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) { setCantidades({}); setMotivo(''); }
+    if (open) { setCantidades({}); setMotivo(''); setFormaReintegro('efectivo'); }
   }, [open, venta?.rawId]);
 
   if (!venta) return null;
@@ -362,7 +375,9 @@ function ModalDevolucionVenta({ open, onClose, venta, onDevuelto }) {
 
     setSaving(true);
     try {
-      const { message, montoDevuelto, idDevolucion } = await ventasService.crearDevolucion(venta.rawId, { lineas, motivo: motivo.trim() });
+      const { message, montoDevuelto, idDevolucion } = await ventasService.crearDevolucion(venta.rawId, {
+        lineas, motivo: motivo.trim(), formaReintegro,
+      });
       // El endpoint devuelve la devolución en sí, no la venta actualizada —
       // se refresca aparte para reflejar el nuevo estado/cantidades.
       const ventaActualizada = await ventasService.getById(venta.rawId);
@@ -420,6 +435,27 @@ function ModalDevolucionVenta({ open, onClose, venta, onDevuelto }) {
             </Box>
 
             <TextField fullWidth placeholder="Motivo (opcional)" value={motivo} onChange={e => setMotivo(e.target.value)} sx={{ mb: 2.5 }} />
+
+            {totalADevolver > 0 && (
+              <Box sx={{ mb: 2.5 }}>
+                <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600, mb: 1 }}>
+                  ¿Cómo se le resuelve la diferencia al cliente?
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                  {FORMAS_REINTEGRO.map(f => (
+                    <Chip key={f.value} label={f.label} size="small" clickable
+                      onClick={() => setFormaReintegro(f.value)}
+                      sx={{
+                        fontWeight: 600, fontSize: 11.5, borderRadius: '8px',
+                        bgcolor: formaReintegro === f.value ? `${P}18` : CARD,
+                        color: formaReintegro === f.value ? P : INK2,
+                        border: `1px solid ${formaReintegro === f.value ? `${P}50` : BORDER}`,
+                        '&:hover': { bgcolor: `${P}18`, color: P },
+                      }} />
+                  ))}
+                </Box>
+              </Box>
+            )}
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2.5, py: 1.75, borderRadius: '10px', bgcolor: `${P}0c`, border: `1px solid ${P}18`, mb: 2.5 }}>
               <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700 }}>Total a devolver</Typography>
