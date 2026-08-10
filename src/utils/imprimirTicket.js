@@ -65,11 +65,18 @@ async function generarTicketHtml(data, empresa, factura) {
 
   const itemsBlocks = items.map((item) => {
     const cantidadLabel = esFraccionable(item.unidadMedida) ? `${item.cantidad} ${abrevUnidad(item.unidadMedida)}` : item.cantidad;
+    // Descuento por línea (distinto del ajuste global de arriba) — precioOriginal
+    // es el precio de lista antes de tocarlo a mano en el POS (ver updatePrecio/
+    // updateDescuento en Home.jsx y precio_original en LineaVenta del backend).
+    // Si nunca se aplicó ninguno, precioOriginal === precio y no se muestra nada.
+    const tieneDescuentoLinea = item.precioOriginal > item.precio;
+    const pctDescuentoLinea = tieneDescuentoLinea ? Math.round((1 - item.precio / item.precioOriginal) * 100) : 0;
     return `
     <div class="tk-item">
       <div class="tk-row"><span>${cantidadLabel} x ${fmtMoney(item.precio)}</span><span>${fmtMoney(item.precio * item.cantidad)}</span></div>
       <div class="tk-desc">${esc(item.nombre)}</div>
       ${item.codigo ? `<div class="tk-codigo">Cod: ${esc(item.codigo)}</div>` : ''}
+      ${tieneDescuentoLinea ? `<div class="tk-codigo">Precio de lista: ${fmtMoney(item.precioOriginal)} (-${pctDescuentoLinea}%)</div>` : ''}
     </div>`;
   }).join('');
 

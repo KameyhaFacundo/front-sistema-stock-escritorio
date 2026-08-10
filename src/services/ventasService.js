@@ -29,6 +29,11 @@ export function mapVenta(v) {
         cantidad:  parseFloat(l.cantidad ?? 0),
         unidadMedida: l.producto?.unidad_medida || 'unidad',
         precio:    parseFloat(l.precio_venta ?? 0),
+        // precio_original = precio de lista antes de cualquier descuento por
+        // línea (ver LineaVenta::$fillable en el backend) — si nunca se tocó,
+        // el backend lo guarda igual al precio_venta, así que cae en 0
+        // diferencia y el ticket no muestra ningún descuento de más.
+        precioOriginal: l.precio_original != null ? parseFloat(l.precio_original) : parseFloat(l.precio_venta ?? 0),
         costo:     parseFloat(l.producto?.costo ?? 0),
         subtotal:  parseFloat(l.precio_venta ?? 0) * parseFloat(l.cantidad ?? 0),
         cantidadDevuelta,

@@ -921,7 +921,14 @@ function Home() {
         idVentaReal: ventaGuardada?.id ?? null,
         fecha: ahora.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
         hora:  ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        items: cart.map(i => ({ nombre: i.nombre, precio: i.precio, cantidad: i.cantidad, unidadMedida: i.unidadMedida })),
+        items: cart.map(i => ({
+          nombre: i.nombre, codigo: i.codigo, precio: i.precio, cantidad: i.cantidad, unidadMedida: i.unidadMedida,
+          // precioOriginal es el precio de lista antes de tocarlo a mano en el
+          // carrito (ver updatePrecio/updateDescuento) — imprimirTicket.js lo usa
+          // para mostrar el descuento por línea. Si nunca se tocó, queda igual a
+          // precio y no se muestra nada.
+          precioOriginal: i.precioOriginal ?? i.precio,
+        })),
         subtotal,
         ajuste: ajuste.activo ? { tipo: ajuste.tipo, calculo: ajuste.calculo, valor: ajuste.valor, monto: montoAjuste } : null,
         total: ventaTotal,
@@ -1171,7 +1178,7 @@ function Home() {
             idVentaReal: saved.id ?? null,
             fecha: fechaObj.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
             hora: saved.hora,
-            items: saved.items.map(i => ({ nombre: i.nombre, precio: i.precio, cantidad: i.cantidad })),
+            items: saved.items.map(i => ({ nombre: i.nombre, precio: i.precio, cantidad: i.cantidad, precioOriginal: i.precioOriginal ?? i.precio })),
             subtotal: saved.total,
             ajuste: null,
             total: saved.total,

@@ -542,7 +542,7 @@ function TabVentas({ ventas, onVentaActualizada }) {
         ticketId: v.id,
         fecha: fmtDate(v.fecha),
         hora: v.hora,
-        items: (v.items || []).map(i => ({ nombre: i.nombre, precio: i.precio, cantidad: i.cantidad, unidadMedida: i.unidadMedida })),
+        items: (v.items || []).map(i => ({ nombre: i.nombre, precio: i.precio, cantidad: i.cantidad, unidadMedida: i.unidadMedida, precioOriginal: i.precioOriginal ?? i.precio })),
         subtotal: (v.items || []).reduce((s, i) => s + i.precio * i.cantidad, 0),
         ajuste: null,
         total: v.total,
