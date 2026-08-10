@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { logoutApi } from "./authServiceApi";
 import { AuthContext } from "./AuthContextBase";
@@ -34,6 +34,20 @@ export const AuthProvider = ({ children }) => {
     } catch (e) {
       console.error('No se pudo recargar los permisos', e);
     }
+  }, []);
+
+  // "permisos" en localStorage se escribe una sola vez, en el login, y nunca
+  // se vuelve a tocar solo (recargarPermisos es manual — hoy solo lo dispara
+  // el propio usuario editando sus permisos desde Usuarios). Si por lo que
+  // sea esa copia queda vieja respecto de lo que el backend tiene guardado
+  // (ej. se restauró un backup de otro momento, o algo se asignó por fuera de
+  // la app), la única forma de que se corrija sola era antes cerrar sesión y
+  // volver a entrar — un botón/campo se veía "sin permiso" para siempre sin
+  // ninguna pista de por qué. Un refresco silencioso al abrir la app (una vez,
+  // best-effort, no bloquea nada si falla) evita que esto quede pegado.
+  useEffect(() => {
+    if (token) recargarPermisos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const switchSucursal = useCallback(async (idSucursal) => {
