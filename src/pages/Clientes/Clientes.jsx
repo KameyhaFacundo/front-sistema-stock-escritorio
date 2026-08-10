@@ -63,6 +63,7 @@ function exportarCSVClientes(rows) {
 }
 
 const labelSx = { color: MUTED, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.75 };
+const METODO_LABELS = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', qr: 'QR', fiado: 'Fiado' };
 
 /* ── Helpers de color para PDF (jsPDF quiere RGB 0-255, no hex) ── */
 function hexToRgb(hex) {
@@ -702,16 +703,32 @@ function ClienteRow({ cliente, deudaResumen, onEditar, onEliminar, onCobrar }) {
 
         {/* Columna deuda */}
         <Box>
-          {tieneDeuda ? (
-            <Box>
-              <Typography sx={{ color: ERROR, fontWeight: 700, fontSize: 14 }}>
-                {fmtMoney(deudaResumen.saldo_pendiente)}
-              </Typography>
-              <Typography sx={{ color: MUTED, fontSize: 11 }}>
-                {deudaResumen.cantidad_ventas} venta{deudaResumen.cantidad_ventas !== 1 ? 's' : ''}
-              </Typography>
-            </Box>
-          ) : (
+          {tieneDeuda ? (() => {
+            const celda = (
+              <Box>
+                <Typography sx={{ color: ERROR, fontWeight: 700, fontSize: 14 }}>
+                  {fmtMoney(deudaResumen.saldo_pendiente)}
+                </Typography>
+                <Typography sx={{ color: MUTED, fontSize: 11 }}>
+                  {deudaResumen.cantidad_ventas} venta{deudaResumen.cantidad_ventas !== 1 ? 's' : ''}
+                </Typography>
+              </Box>
+            );
+            const porMetodo = Object.entries(deudaResumen.cobrado_por_metodo || {});
+            if (!porMetodo.length) return celda;
+            return (
+              <Tooltip title={
+                <Box sx={{ py: 0.25 }}>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, mb: 0.5 }}>Cobrado hasta ahora:</Typography>
+                  {porMetodo.map(([metodo, monto]) => (
+                    <Typography key={metodo} sx={{ fontSize: 12 }}>{METODO_LABELS[metodo] || metodo}: {fmtMoney(monto)}</Typography>
+                  ))}
+                </Box>
+              }>
+                {celda}
+              </Tooltip>
+            );
+          })() : (
             <Typography sx={{ color: MUTED, fontSize: 13 }}>Al día</Typography>
           )}
         </Box>

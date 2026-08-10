@@ -33,6 +33,8 @@ import { proveedoresService } from '../../services/proveedoresService';
 import { deudasService }      from '../../services/deudasService';
 import DEUDA_COLORS from '../../constants/deudaStatus';
 
+const METODO_LABELS = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', qr: 'QR', cuenta_corriente: 'Cuenta corriente' };
+
 /* ── Exportar / Importar Excel ── */
 function exportarCSVProveedores(rows) {
   exportarExcel({
@@ -373,14 +375,29 @@ const PROV_COLUMNS = [
   },
   {
     key: '_deuda', header: 'Deuda', flex: true,
-    render: (p) => p.tieneDeuda ? (
-      <Box>
-        <Typography sx={{ color: ERROR, fontWeight: 700, fontSize: 14 }}>{fmtMoney(p._deuda.saldo_pendiente)}</Typography>
-        <Typography sx={{ color: MUTED, fontSize: 11 }}>{p._deuda.cantidad_compras} compra{p._deuda.cantidad_compras !== 1 ? 's' : ''}</Typography>
-      </Box>
-    ) : (
-      <Typography sx={{ color: MUTED, fontSize: 13 }}>Sin deuda</Typography>
-    ),
+    render: (p) => {
+      if (!p.tieneDeuda) return <Typography sx={{ color: MUTED, fontSize: 13 }}>Sin deuda</Typography>;
+      const porMetodo = Object.entries(p._deuda.pagado_por_metodo || {});
+      const celda = (
+        <Box>
+          <Typography sx={{ color: ERROR, fontWeight: 700, fontSize: 14 }}>{fmtMoney(p._deuda.saldo_pendiente)}</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 11 }}>{p._deuda.cantidad_compras} compra{p._deuda.cantidad_compras !== 1 ? 's' : ''}</Typography>
+        </Box>
+      );
+      if (!porMetodo.length) return celda;
+      return (
+        <Tooltip title={
+          <Box sx={{ py: 0.25 }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 700, mb: 0.5 }}>Pagado hasta ahora:</Typography>
+            {porMetodo.map(([metodo, monto]) => (
+              <Typography key={metodo} sx={{ fontSize: 12 }}>{METODO_LABELS[metodo] || metodo}: {fmtMoney(monto)}</Typography>
+            ))}
+          </Box>
+        }>
+          {celda}
+        </Tooltip>
+      );
+    },
   },
   {
     key: 'activo', header: 'Estado', flex: true,
