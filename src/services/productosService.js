@@ -107,14 +107,19 @@ export const productosService = {
     return mapProducto(res.data.data);
   },
 
-  async create(data) {
-    const res = await api.post('productos', data);
-    return mapProducto(res.data.data);
+  // ligero: para altas/ediciones EN LOTE (importación masiva, actualizar
+  // precios de "todos") que llaman esto cientos de veces seguidas y no leen
+  // la respuesta más que para saber si salió bien — le pide al backend que
+  // se salte el reload de 8 relaciones que la UI normal de alta/edición sí
+  // necesita para refrescar la fila (ver ?ligero=1 en ProductosController).
+  async create(data, { ligero = false } = {}) {
+    const res = await api.post('productos', data, ligero ? { params: { ligero: 1 } } : undefined);
+    return ligero ? null : mapProducto(res.data.data);
   },
 
-  async update(id, data) {
-    const res = await api.put(`productos/${id}`, data);
-    return mapProducto(res.data.data);
+  async update(id, data, { ligero = false } = {}) {
+    const res = await api.put(`productos/${id}`, data, ligero ? { params: { ligero: 1 } } : undefined);
+    return ligero ? null : mapProducto(res.data.data);
   },
 
   async delete(id) {

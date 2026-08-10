@@ -2568,7 +2568,9 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
           // llamada — con "todos" como alcance eso es un refetch de cientos de
           // productos por cada producto actualizado. Un solo recargarProductos()
           // al final alcanza (ver mismo criterio en confirmarImportacion()).
-          await productosService.update(p.id, { precio: nuevo });
+          // { ligero: true } evita que el backend arme la respuesta completa
+          // con 8 relaciones que acá ni se usan.
+          await productosService.update(p.id, { precio: nuevo }, { ligero: true });
           ok++;
         } catch { /* skip */ }
         setProgreso(pr => ({ ...pr, hecho: pr.hecho + 1 }));
@@ -3086,7 +3088,7 @@ export default function Productos() {
               unidad_medida: esFerreteria ? f.unidadMedida : 'unidad',
               ...(f.grupo ? { tiene_variantes: true, id_grupo_talle: f.grupo.id } : {}),
               ...(f.talle ? { id_talle: f.talle.id } : {}),
-            });
+            }, { ligero: true });
             ok++;
           } catch { fallas++; }
           setImportProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
