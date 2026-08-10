@@ -820,6 +820,70 @@ function ComboComponentesEditor({ value, onChange, excludeId }) {
   );
 }
 
+// Proveedores ADICIONALES a los que también se le puede comprar este producto
+// (además del principal, elegido aparte más arriba en el form) — cada uno
+// puede tener su propio costo/código, útil cuando distintos proveedores
+// cobran distinto por el mismo producto. Ver Producto::proveedoresAlternativos().
+function ProveedoresAlternativosEditor({ value, onChange, proveedores, idProveedorPrincipal }) {
+  const [seleccionId, setSeleccionId] = useState('');
+
+  const disponibles = useMemo(() => proveedores.filter(p =>
+    p.id !== Number(idProveedorPrincipal) && !value.some(v => v.id === p.id)
+  ), [proveedores, value, idProveedorPrincipal]);
+
+  const agregar = () => {
+    if (!seleccionId) return;
+    const prov = proveedores.find(p => p.id === Number(seleccionId));
+    if (!prov) return;
+    onChange([...value, { id: prov.id, nombre: prov.nombre, costo: '', codigoProveedor: '' }]);
+    setSeleccionId('');
+  };
+
+  const quitar = (id) => onChange(value.filter(v => v.id !== id));
+  const actualizar = (id, campo, val) => onChange(value.map(v => v.id === id ? { ...v, [campo]: val } : v));
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+        <FormControl fullWidth>
+          <Select value={seleccionId} onChange={e => setSeleccionId(e.target.value)} displayEmpty sx={selectSx}
+            MenuProps={{ PaperProps: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, color: INK } } }}
+            renderValue={(v) => v ? (proveedores.find(p => p.id === Number(v))?.nombre || v) : <Box sx={{ color: MUTED }}>Elegir proveedor para agregar...</Box>}>
+            {disponibles.length === 0 ? (
+              <MenuItem disabled value="">No hay más proveedores para agregar</MenuItem>
+            ) : disponibles.map(pv => (
+              <MenuItem key={pv.id} value={String(pv.id)} sx={{ '&:hover': { bgcolor: HOVER } }}>{pv.nombre}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <IconButton onClick={agregar} disabled={!seleccionId}
+          sx={{ bgcolor: P, color: '#fff', borderRadius: '8px', flexShrink: 0, '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { opacity: 0.4, color: '#fff' } }}>
+          <AddIcon fontSize="small" />
+        </IconButton>
+      </Box>
+
+      {value.length > 0 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {value.map(v => (
+            <Box key={v.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: INPUT, border: `1px solid ${BORDER}`, borderRadius: '8px', px: 1.5, py: 1 }}>
+              <Typography sx={{ color: INK, fontSize: 13.5, flex: 1, minWidth: 0 }} noWrap>{v.nombre}</Typography>
+              <TextField placeholder="Costo" type="number" size="small" value={v.costo}
+                onChange={e => actualizar(v.id, 'costo', e.target.value)}
+                sx={{ ...fieldSx, width: 90, flexShrink: 0 }} />
+              <TextField placeholder="Código" size="small" value={v.codigoProveedor}
+                onChange={e => actualizar(v.id, 'codigoProveedor', e.target.value)}
+                sx={{ ...fieldSx, width: 110, flexShrink: 0 }} />
+              <IconButton size="small" onClick={() => quitar(v.id)} sx={{ color: MUTED, flexShrink: 0, '&:hover': { color: ERROR } }}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 // Bloque de foto reutilizado tanto en el formulario de edición como en el
 // paso posterior a crear un producto (subir/generar imagen necesita que el
 // producto ya exista en el backend, así que no puede estar en el form de alta).
@@ -944,6 +1008,11 @@ function formDesdeProducto(producto) {
     precioSinIva: String(precioSinIva), precioFinal: String(precioFinal),
     tieneVariantes: producto.tieneVariantes ?? false, idGrupoTalle: producto.idGrupoTalle ? String(producto.idGrupoTalle) : '',
     idTalle: producto.idTalle ? String(producto.idTalle) : '',
+    proveedoresAlternativos: (producto.proveedoresAlternativos || []).map(pa => ({
+      id: pa.id, nombre: pa.nombre,
+      costo: pa.costo != null ? String(pa.costo) : '',
+      codigoProveedor: pa.codigoProveedor || '',
+    })),
   };
 }
 
@@ -975,6 +1044,7 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
     fechaVencimiento: '', iva: '21', costo: '0.00', margen: '0',
     precioSinIva: '0.00', precioFinal: '0.00',
     tieneVariantes: false, idGrupoTalle: '', idTalle: '',
+    proveedoresAlternativos: [],
   });
   const [openScanner, setOpenScanner] = useState(false);
   // Talles de todos los grupos, aplanados para el selector de "talle único" —
@@ -1135,6 +1205,15 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
         // hay que mandar explícitamente null para poder DESASIGNAR un proveedor
         // que ya tenía — omitir la clave ahí dejaría el valor anterior intacto.
         ...(form.proveedor ? { id_proveedor: Number(form.proveedor) } : (isEdit ? { id_proveedor: null } : {})),
+        // Al crear, sin alternativos no hace falta mandar la clave. Al editar sí
+        // (aunque quede vacía) para poder desasignar los que ya tenía.
+        ...(form.proveedoresAlternativos.length > 0 || isEdit ? {
+          proveedores_alternativos: form.proveedoresAlternativos.map(pa => ({
+            id_proveedor: pa.id,
+            costo: pa.costo !== '' ? Number(pa.costo) : null,
+            codigo_proveedor: pa.codigoProveedor.trim() || null,
+          })),
+        } : {}),
       };
 
       if (isEdit) {
@@ -1364,7 +1443,18 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
               <Label>Proveedor</Label>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <FormControl fullWidth>
-                  <Select value={form.proveedor} onChange={set('proveedor')} displayEmpty sx={selectSx}
+                  <Select value={form.proveedor}
+                    onChange={e => {
+                      // Si el proveedor elegido como principal ya estaba en la lista de
+                      // alternativos, sacarlo de ahí — no puede estar en las dos listas
+                      // a la vez (el backend lo rechaza).
+                      const nuevoId = e.target.value;
+                      setForm(f => ({
+                        ...f, proveedor: nuevoId,
+                        proveedoresAlternativos: f.proveedoresAlternativos.filter(pa => pa.id !== Number(nuevoId)),
+                      }));
+                    }}
+                    displayEmpty sx={selectSx}
                     MenuProps={{ PaperProps: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, color: INK } } }}
                     renderValue={(v) => v ? (proveedores.find(p => p.id === Number(v))?.nombre || v) : <Box sx={{ color: MUTED }}>Sin proveedor</Box>}>
                     <MenuItem value="" sx={{ '&:hover': { bgcolor: HOVER } }}>Sin proveedor</MenuItem>
@@ -1381,6 +1471,16 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
                 </Tooltip>
               </Box>
             </Box>
+          </Box>
+
+          <Box>
+            <Label>Otros proveedores (opcional)</Label>
+            <ProveedoresAlternativosEditor
+              value={form.proveedoresAlternativos}
+              onChange={(v) => setForm(f => ({ ...f, proveedoresAlternativos: v }))}
+              proveedores={proveedores}
+              idProveedorPrincipal={form.proveedor}
+            />
           </Box>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>

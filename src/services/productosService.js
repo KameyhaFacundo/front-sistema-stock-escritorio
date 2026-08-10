@@ -29,6 +29,14 @@ export function mapProducto(p) {
     alerta:           parseFloat(p.stock_minimo ?? 5),
     id_proveedor:     p.id_proveedor || null,
     proveedor:        p.proveedor?.persona || null,
+    // Proveedores adicionales a los que también se le puede comprar este
+    // producto, además del principal de arriba — ver Producto::proveedoresAlternativos().
+    proveedoresAlternativos: (p.proveedores_alternativos ?? []).map(pa => ({
+      id:              pa.id,
+      nombre:          pa.persona,
+      costo:           pa.pivot?.costo != null ? parseFloat(pa.pivot.costo) : null,
+      codigoProveedor: pa.pivot?.codigo_proveedor || null,
+    })),
     precioFinal:      parseFloat(p.precio ?? 0),
     costo:            parseFloat(p.costo ?? 0),
     // Fecha del último cambio de precio/costo (ver HistorialPrecio) — null si
