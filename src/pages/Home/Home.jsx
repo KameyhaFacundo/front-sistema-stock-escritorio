@@ -432,6 +432,7 @@ function Home() {
   const metodoPagoRefs = useRef({});
   const recibidoRef = useRef(null);
   const descuentoRef = useRef(null);
+  const confirmarVentaBtnRef = useRef(null);
   const [openConfirmarModal, setOpenConfirmarModal] = useState(false);
 
   // ── Ajuste (descuento / recargo) ───────────────────────────────────
@@ -2388,6 +2389,12 @@ function Home() {
               </Typography>
               <TextField fullWidth size="small" autoFocus placeholder="Ej: cliente frecuente, producto con detalle, servicio a domicilio..."
                 value={motivoDescuento} onChange={e => setMotivoDescuento(e.target.value)}
+                onKeyDown={e => {
+                  // Enter acá pasa el foco a "Confirmar venta" en vez de hacer
+                  // nada — un segundo Enter ahí ya confirma solo (comportamiento
+                  // nativo del botón), sin tener que tocar el mouse.
+                  if (e.key === 'Enter') { e.preventDefault(); confirmarVentaBtnRef.current?.focus(); }
+                }}
                 sx={{ '& .MuiOutlinedInput-root': { bgcolor: MODAL, color: INK, '& fieldset': { borderColor: BORDER }, '&.Mui-focused fieldset': { borderColor: PRIMARY } } }} />
             </Box>
           )}
@@ -2398,6 +2405,7 @@ function Home() {
               Cancelar
             </Button>
             <Button fullWidth autoFocus={!requiereMotivoDescuento} variant="contained"
+              ref={confirmarVentaBtnRef}
               disabled={requiereMotivoDescuento && !motivoDescuento.trim()}
               onClick={() => { setOpenConfirmarModal(false); ejecutarConfirmarVenta(); }}
               sx={{ bgcolor: PRIMARY, textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { opacity: 0.5 } }}>
