@@ -38,6 +38,7 @@ import CalculateIcon        from '@mui/icons-material/Calculate';
 import lazyWithRetry from '../../utils/lazyWithRetry';
 const BarcodeScanner = lazyWithRetry(() => import('../../components/shared/BarcodeScanner'));
 import { clientesService } from '../../services/clientesService';
+import { useClientes, useCrearCliente } from '../../hooks/queries/useClientesQueries';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import AyudaButton from '../../components/shared/AyudaButton';
 import CampoPrecio from '../../components/shared/CampoPrecio';
@@ -294,12 +295,12 @@ function Home() {
   const [mobileTab, setMobileTab] = useState(0);
 
   // ── Clientes desde API ─────────────────────────────────────────────
-  const [clientesOpts, setClientesOpts] = useState([]);
-  useEffect(() => {
-    clientesService.getAll()
-      .then(cs => setClientesOpts(cs))
-      .catch(() => toast('No se pudieron cargar los clientes', 'error'));
-  }, []);
+  // useClientes() (TanStack Query, 5min de staleTime) en vez de un fetch
+  // directo sin caché — antes esto se repetía sin caché cada vez que el
+  // cajero volvía a la pantalla de venta, mientras el resto del sistema
+  // (Clientes.jsx, etc.) ya usa este mismo hook cacheado.
+  const { data: clientesOpts = [] } = useClientes();
+  const crearClienteMutation = useCrearCliente();
 
   // ── Tour guiado de "Ayuda" (ver src/utils/tour.js) ──────────────────
   useEffect(() => {
@@ -353,12 +354,11 @@ function Home() {
     if (!nuevoCliente.nombre.trim()) return;
     setCreandoCliente(true);
     try {
-      const creado = await clientesService.create({
+      const creado = await crearClienteMutation.mutateAsync({
         persona: nuevoCliente.nombre.trim(),
         cuit: nuevoCliente.cuit.trim() || null,
         telefono: nuevoCliente.telefono.trim() || null,
       });
-      setClientesOpts(prev => [...prev, creado]);
       setClienteId(creado.id);
       resetNuevoCliente();
       toast('Cliente creado correctamente', 'success');
