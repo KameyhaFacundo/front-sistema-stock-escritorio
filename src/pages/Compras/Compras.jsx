@@ -76,18 +76,20 @@ function FieldLabel({ children, required }) {
   );
 }
 
-// Aviso de que este mismo producto ya se compró a OTROS proveedores — se
-// muestra antes de confirmar la compra, para decidir si conviene más
-// comprarlo en otro lado (ver sugerirCostoDeHistorial en ModalNuevaCompra).
+// Aviso de que este producto tiene OTROS proveedores — configurados en la
+// ficha del producto (principal/alternativos, con costo propio si se
+// cargó) y/o de compras anteriores — se muestra antes de confirmar la
+// compra, para decidir si conviene más comprarlo en otro lado (ver
+// sugerirCostoDeHistorial en ModalNuevaCompra).
 function ComparativaProveedoresChip({ comparativa }) {
   if (!comparativa?.length) return null;
   return (
     <Tooltip title={
       <Box sx={{ py: 0.25 }}>
-        <Typography sx={{ fontSize: 12, fontWeight: 700, mb: 0.5 }}>También se compró a:</Typography>
+        <Typography sx={{ fontSize: 12, fontWeight: 700, mb: 0.5 }}>Otros proveedores de este producto:</Typography>
         {comparativa.map(c => (
           <Typography key={c.idProveedor} sx={{ fontSize: 12 }}>
-            {c.proveedorNombre}: {fmtMoney(c.precioCompra)}
+            {c.proveedorNombre}: {c.precioCompra != null ? fmtMoney(c.precioCompra) : 'sin costo cargado'}
           </Typography>
         ))}
       </Box>
@@ -254,14 +256,38 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
   // en memoria, así que el id solo no alcanza para saber su unidad/nombre.
   const unidadDeLinea = (l) => l.productoData?.unidadMedida || 'unidad';
 
+  // Proveedores YA CONFIGURADOS en el producto (principal + alternativos, ver
+  // ProveedoresAlternativosEditor en Productos.jsx) — a diferencia del
+  // historial de abajo, estos sirven aunque nunca se le haya comprado antes
+  // a ese proveedor puntual (es justo el caso de un alternativo recién cargado).
+  const proveedoresConfigurados = (producto, idProveedorActual) => {
+    const lista = [];
+    if (producto.id_proveedor && producto.id_proveedor !== idProveedorActual && producto.proveedor) {
+      lista.push({ idProveedor: producto.id_proveedor, proveedorNombre: `${producto.proveedor} (principal)`, precioCompra: producto.costo > 0 ? producto.costo : null });
+    }
+    for (const pa of producto.proveedoresAlternativos || []) {
+      if (pa.id === idProveedorActual) continue;
+      lista.push({ idProveedor: pa.id, proveedorNombre: pa.nombre, precioCompra: pa.costo });
+    }
+    return lista;
+  };
+
   // Si ya se le compró este producto antes a ESTE proveedor, sugiere el
   // último precio pagado en vez de que el usuario tenga que retipearlo cada
   // vez — común en ferreterías, que restockean seguido a los mismos
   // proveedores de siempre. No bloquea la selección: el costo del producto
   // ya se aplicó al toque (ver onSeleccionar), esto solo lo refina un
   // instante después si hay una compra previa a ese proveedor puntual.
-  const sugerirCostoDeHistorial = async (idx, idProducto, idProveedorActual) => {
-    setComparativas(prev => { const n = { ...prev }; delete n[idx]; return n; });
+  const sugerirCostoDeHistorial = async (idx, producto, idProveedorActual) => {
+    const idProducto = producto.id;
+    // Los configurados se muestran de una, sin esperar la consulta de
+    // historial (que puede no traer nada si son proveedores recién cargados).
+    const configurados = proveedoresConfigurados(producto, idProveedorActual);
+    setComparativas(prev => {
+      const n = { ...prev };
+      if (configurados.length) n[idx] = configurados; else delete n[idx];
+      return n;
+    });
     try {
       const historial = await productosService.getHistorialCompras(idProducto);
       if (!historial.length) return;
@@ -285,19 +311,19 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
       // Este mismo producto, comprado antes a OTROS proveedores — el precio
       // más reciente de cada uno (el historial ya viene ordenado del más
       // nuevo al más viejo, ver ProductosController::historialCompras). Se
-      // muestra igual aunque no haya un proveedor elegido todavía.
-      const vistos = new Set();
-      const otros = [];
+      // suma a los ya configurados (sin repetir proveedor).
+      const vistos = new Set(configurados.map(c => c.idProveedor));
+      const otros = [...configurados];
       for (const h of historial) {
         if (!h.idProveedor || h.idProveedor === idProveedorActual || vistos.has(h.idProveedor)) continue;
         vistos.add(h.idProveedor);
         otros.push({ idProveedor: h.idProveedor, proveedorNombre: h.proveedorNombre, precioCompra: h.precioCompra });
       }
       if (otros.length) {
-        otros.sort((a, b) => a.precioCompra - b.precioCompra);
+        otros.sort((a, b) => (a.precioCompra ?? Infinity) - (b.precioCompra ?? Infinity));
         setComparativas(prev => ({ ...prev, [idx]: otros }));
       }
-    } catch { /* sin historial o sin conexión — se queda con el costo del producto */ }
+    } catch { /* sin historial o sin conexión — se queda con los proveedores configurados */ }
   };
 
   const setPrecioCompraLinea = (idx, valor) => {
@@ -718,7 +744,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                       if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); setComparativas(prev => { const n = { ...prev }; delete n[idx]; return n; }); return; }
                       setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
                       setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
-                      sugerirCostoDeHistorial(idx, val.id, form.id_proveedor);
+                      sugerirCostoDeHistorial(idx, val, form.id_proveedor);
                     }}
                     onCrear={(nombre) => setNuevoProd({ active: true, idx, nombre })}
                   />
@@ -848,7 +874,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                           if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); setComparativas(prev => { const n = { ...prev }; delete n[idx]; return n; }); return; }
                           setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
                           setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
-                          sugerirCostoDeHistorial(idx, val.id, form.id_proveedor);
+                          sugerirCostoDeHistorial(idx, val, form.id_proveedor);
                         }}
                         onCrear={(nombre) => setNuevoProd({ active: true, idx, nombre })}
                         onEnterKeyDown={async (e, query) => {
@@ -869,7 +895,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                               e.preventDefault();
                               setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: exacto.id, productoData: exacto, precio_compra: exacto.costo > 0 ? String(exacto.costo) : ls[idx].precio_compra, precio_venta: String(exacto.precioFinal ?? exacto.precio ?? '') }; return { ...f, lineas: ls }; });
                               setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
-                              sugerirCostoDeHistorial(idx, exacto.id, form.id_proveedor);
+                              sugerirCostoDeHistorial(idx, exacto, form.id_proveedor);
                               irACantidad();
                             }
                           } catch { /* sin match — deja que el usuario elija del desplegable */ }
