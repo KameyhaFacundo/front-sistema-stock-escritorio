@@ -719,8 +719,9 @@ function TabVentas({ ventas, onVentaActualizada }) {
         <Typography sx={{ color: MUTED, fontSize: 13 }}>de <strong style={{ color: INK }}>{filtradas.length}</strong> ventas</Typography>
       </Box>
 
-      {/* Modal: Detalle de venta */}
-      <Dialog open={Boolean(detalleVenta)} onClose={() => setDetalleVenta(null)} maxWidth="sm" fullWidth
+      {/* Modal: Detalle de venta — md (no sm) para que la tabla de productos
+          (Producto/Cant./Precio/Subtotal) no quede amontonada. */}
+      <Dialog open={Boolean(detalleVenta)} onClose={() => setDetalleVenta(null)} maxWidth="md" fullWidth
         PaperProps={{ sx: modalPaperSx }}>
         {detalleVenta && (
           <Box>

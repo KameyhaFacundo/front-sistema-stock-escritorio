@@ -122,6 +122,31 @@ export const productosService = {
     return ligero ? null : mapProducto(res.data.data);
   },
 
+  // Alta masiva (importación) en UNA sola request — reemplaza el patrón
+  // anterior de un create() por fila en lotes paralelos de a 8: con el
+  // servidor PHP embebido de un solo hilo, esas N requests se procesaban
+  // una por una igual del lado del servidor, cada una con su propio
+  // ida-y-vuelta HTTP. Ver ProductosController::bulkStore().
+  // Qué códigos de una lista ya existen — UNA sola consulta en vez de un
+  // GET por código único (ver ProductosController::codigosExistentes()).
+  async codigosExistentes(codigos) {
+    const res = await api.post('productos/codigos-existentes', { codigos });
+    return new Set((res.data.data || []).map(c => String(c).toLowerCase()));
+  },
+
+  async bulkCreate(productos) {
+    const res = await api.post('productos/bulk', { productos });
+    return res.data.data; // { creados, errores }
+  },
+
+  // Cambio de precio masivo en UNA sola request — usado por
+  // ModalActualizarPrecios (%/monto fijo y "Desde planilla"). Mismo motivo
+  // que bulkCreate(). Ver ProductosController::bulkUpdatePrecio().
+  async bulkUpdatePrecio(items) {
+    const res = await api.post('productos/bulk-precio', { items });
+    return res.data.data; // { actualizados }
+  },
+
   async delete(id) {
     await api.delete(`productos/${id}`);
   },

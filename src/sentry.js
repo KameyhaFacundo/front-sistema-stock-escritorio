@@ -1,4 +1,5 @@
-import { init } from '@sentry/react';
+import { init, setTag } from '@sentry/react';
+import { APP_NAME } from './config/brand';
 
 // Vacío por default: sin DSN no manda nada, no rompe nada en local ni en un
 // deploy que todavía no lo configuró. Completar con VITE_SENTRY_DSN en las
@@ -15,4 +16,9 @@ if (dsn) {
     environment: import.meta.env.MODE,
     tracesSampleRate: 0.1,
   });
+  // Todos los clientes comparten el mismo proyecto de Sentry (ver
+  // clients/_template/.env) — sin esto, un error de Palomar y uno de
+  // Stock Prueba se verían idénticos, sin forma de saber de cuál instalación
+  // vino. APP_NAME ya es el nombre por-cliente que arma src/config/brand.js.
+  setTag('cliente', APP_NAME);
 }

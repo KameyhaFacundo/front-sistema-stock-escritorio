@@ -1023,9 +1023,11 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
   const toast = useToast();
   const { tieneIA } = usePlan();
   const { user } = useAuth();
-  // Vender por peso/longitud (kg, metro, litro) es solo para ferretería — para
-  // cualquier otro rubro el selector ni se muestra y todo sigue en 'unidad'.
-  const esFerreteria = user?.empresa?.tipo === 'ferret';
+  // Vender por peso/longitud (kg, metro, litro) está disponible para
+  // cualquier rubro salvo indumentaria (una prenda no se vende "por kg") — el
+  // nombre quedó de cuando era exclusivo de ferretería, pero hoy también
+  // aplica a kiosco/almacén/etc.
+  const esFerreteria = user?.empresa?.tipo !== 'indument';
   // Variantes por talle son solo para indumentaria, y nunca para un producto
   // que ya es en sí mismo una variante (no hay variantes de variantes).
   const esIndumentaria = user?.empresa?.tipo === 'indument' && !producto?.idProductoPadre;
@@ -2478,16 +2480,19 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
   const [categoria,          setCategoria]          = useState('');
   const [proveedor,          setProveedor]          = useState('');
   const [loading,            setLoading]            = useState(false);
-  const [progreso,           setProgreso]           = useState({ hecho: 0, total: 0 });
-  const [cancelando,         setCancelando]         = useState(false);
   // Productos que el usuario sacó de la vista previa a mano — el cambio
   // masivo no les toca el precio, aunque entren en el alcance elegido.
   const [excluidos,          setExcluidos]          = useState(() => new Set());
-  // Mismo criterio que confirmarImportacion() en Productos() — el loop de
-  // handleAplicar() solo para si chequea este ref, si no "Cancelar" no
-  // frenaba nada de verdad y seguía actualizando precios en segundo plano.
-  const cancelarRef = useRef(false);
-  useEffect(() => () => { cancelarRef.current = true; }, []);
+
+  // Alcance "planilla": precio distinto por producto (no un % o monto fijo
+  // igual para todos) — se exporta el catálogo actual, se edita la columna
+  // Precio en Excel, y se reimporta acá. planillaItems ya viene resuelto
+  // (antes/después/id) directo del archivo + matching por código, sin pasar
+  // por el modelo de tipo/valor de abajo.
+  const [planillaItems,   setPlanillaItems]   = useState([]);
+  const [planillaLoading, setPlanillaLoading] = useState(false);
+  const [planillaResumen, setPlanillaResumen] = useState(null);
+  const planillaFileRef = useRef(null);
 
   // El alcance de este cambio (una categoría entera, un proveedor entero, o
   // "todos") necesita autoridad sobre el catálogo completo que matchea, no
@@ -2497,7 +2502,8 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
   const [targetsLoading, setTargetsLoading] = useState(false);
 
   useEffect(() => {
-    if (!open) { setTargets([]); return; }
+    if (!open) { setTargets([]); setPlanillaItems([]); setPlanillaResumen(null); return; }
+    if (alcance === 'planilla') { setTargets([]); return; }
     const params = { estado: true };
     if (alcance === 'categoria') {
       if (!categoria) { setTargets([]); return; }
@@ -2531,9 +2537,17 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
 
   // Cambiar de alcance (categoría/proveedor/todos) invalida las exclusiones
   // hechas a mano — son sobre la lista anterior, no tienen sentido acá.
-  useEffect(() => { setExcluidos(new Set()); }, [targets]);
+  useEffect(() => { setExcluidos(new Set()); }, [targets, planillaItems]);
+
+  const planillaAplicados = useMemo(() => planillaItems.filter(i => !excluidos.has(i.id)), [planillaItems, excluidos]);
+
+  const previewPlanilla = useMemo(() => {
+    if (!planillaItems.length) return null;
+    return { items: planillaItems, count: planillaAplicados.length };
+  }, [planillaItems, planillaAplicados]);
 
   const preview = useMemo(() => {
+    if (alcance === 'planilla') return previewPlanilla;
     const v = parseFloat(valor);
     if (!targets.length || !v || isNaN(v)) return null;
     const items = targets.map(p => {
@@ -2542,56 +2556,131 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
       return { id: p.id, nombre: p.nombre, antes: p.precioFinal, despues: Math.round(nuevo) };
     });
     return { items, count: targetsAplicados.length };
-  }, [valor, tipo, targets, targetsAplicados]);
+  }, [valor, tipo, targets, targetsAplicados, alcance, previewPlanilla]);
+
+  // Trae el catálogo completo (activo) para poder descargarlo como planilla
+  // o para hacer matching por código contra un archivo recién subido — mismo
+  // patrón de dos pasadas que el useEffect de targets de arriba.
+  const traerCatalogoCompleto = async () => {
+    const primera = await productosService.getAllPaginado({ estado: true, per_page: 1 });
+    const total = primera.total || 0;
+    if (!total) return [];
+    const completo = await productosService.getAllPaginado({ estado: true, per_page: total });
+    return completo.items;
+  };
+
+  const handleDescargarPlanilla = async () => {
+    setPlanillaLoading(true);
+    try {
+      const productos = await traerCatalogoCompleto();
+      exportarExcel({
+        filename: 'planilla_precios.xlsx',
+        sheetName: 'Precios',
+        subtitle: `Planilla de precios · ${new Date().toLocaleDateString('es-AR')}`,
+        columns: [
+          { header: 'Código', width: 16 },
+          { header: 'Nombre', width: 32 },
+          { header: 'Precio actual', width: 16, numFmt: '"$" #,##0.00', align: 'right' },
+        ],
+        rows: productos.map(p => [p.codigo, p.nombre, p.precioFinal]),
+      });
+      toast('Planilla descargada — editá la columna "Precio actual" y volvé a subirla', 'success');
+    } catch {
+      toast('No se pudo generar la planilla', 'error');
+    } finally {
+      setPlanillaLoading(false);
+    }
+  };
+
+  const handleSubirPlanilla = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPlanillaLoading(true);
+    setPlanillaResumen(null);
+    try {
+      const lines = await leerFilasArchivo(file);
+      if (lines.length < 2) { toast('El archivo está vacío o no tiene datos', 'warning'); return; }
+      const inicio = indiceEncabezado(lines);
+      const header = lines[inicio].map(c => String(c || '').replace(/^"|"$/g, '').toLowerCase().trim());
+      const findCol = (...terms) => header.findIndex(c => terms.some(t => c.includes(t)));
+      const colCodigo = findCol('codigo', 'código', 'sku');
+      const colPrecio = findCol('precio');
+      if (colCodigo === -1 || colPrecio === -1) {
+        toast('No se encontraron las columnas "Código" y "Precio actual" en el archivo', 'error');
+        return;
+      }
+
+      const filas = [];
+      for (let i = inicio + 1; i < lines.length; i++) {
+        const codigo = String(lines[i][colCodigo] || '').trim();
+        const precio = Number(lines[i][colPrecio]);
+        if (!codigo || isNaN(precio)) continue;
+        filas.push({ codigo, precio });
+      }
+      if (!filas.length) { toast('No se encontraron filas válidas (código + precio) en el archivo', 'warning'); return; }
+
+      const catalogo = await traerCatalogoCompleto();
+      const porCodigo = new Map(catalogo.map(p => [String(p.codigo).toLowerCase(), p]));
+
+      let sinMatch = 0, sinCambio = 0;
+      const items = [];
+      filas.forEach(({ codigo, precio }) => {
+        const p = porCodigo.get(codigo.toLowerCase());
+        if (!p) { sinMatch++; return; }
+        const nuevo = Math.round(Math.max(0, precio));
+        if (nuevo === Math.round(p.precioFinal)) { sinCambio++; return; }
+        items.push({ id: p.id, nombre: p.nombre, antes: p.precioFinal, despues: nuevo });
+      });
+
+      setPlanillaItems(items);
+      setPlanillaResumen({ total: filas.length, sinMatch, sinCambio, cambios: items.length });
+      if (!items.length) toast('Ningún producto tiene un precio distinto al actual en la planilla', 'warning');
+    } catch {
+      toast('No se pudo leer el archivo. Asegurate de que sea un .csv o .xlsx válido.', 'error');
+    } finally {
+      setPlanillaLoading(false);
+    }
+  };
 
   const handleAplicar = async () => {
+    const esPlanilla = alcance === 'planilla';
     const v = parseFloat(valor);
-    if (!v || isNaN(v)) return;
-    cancelarRef.current = false;
-    setCancelando(false);
+    if (!esPlanilla && (!v || isNaN(v))) return;
+    const items = esPlanilla ? planillaAplicados : targetsAplicados;
+    if (!items.length) return;
     setLoading(true);
-    setProgreso({ hecho: 0, total: targetsAplicados.length });
-    let ok = 0, cancelado = false;
-    // De a lotes chicos en paralelo, no un producto a la vez esperado — mismo
-    // motivo que confirmarImportacion() (con "todos" como alcance esto puede
-    // ser cientos de productos, minutos de espera si va uno por uno).
-    const LOTE = 8;
-    for (let i = 0; i < targetsAplicados.length; i += LOTE) {
-      if (cancelarRef.current) { cancelado = true; break; }
-      const lote = targetsAplicados.slice(i, i + LOTE);
-      await Promise.all(lote.map(async (p) => {
-        const delta = tipo === '%' ? p.precioFinal * v / 100 : v;
-        const nuevo = Math.round(Math.max(0, p.precioFinal + delta));
-        try {
-          // productosService.update() directo, no actualizarProducto() del
-          // contexto: ese invalida (y refetchea) la lista completa en cada
-          // llamada — con "todos" como alcance eso es un refetch de cientos de
-          // productos por cada producto actualizado. Un solo recargarProductos()
-          // al final alcanza (ver mismo criterio en confirmarImportacion()).
-          // { ligero: true } evita que el backend arme la respuesta completa
-          // con 8 relaciones que acá ni se usan.
-          await productosService.update(p.id, { precio: nuevo }, { ligero: true });
-          ok++;
-        } catch { /* skip */ }
-        setProgreso(pr => ({ ...pr, hecho: pr.hecho + 1 }));
-      }));
+    // En lotes de a LOTE_BULK filas por request, no todo en una — el PHP
+    // embebido corta cualquier request a los 30s (max_execution_time): con
+    // "todos" como alcance en un catálogo grande, una única request con
+    // miles de productos puede tardar más que eso y perderse entera. Ver
+    // el mismo criterio (y el porqué con más detalle) en
+    // Productos::confirmarImportacion() y ProductosController::bulkUpdatePrecio().
+    const payload = items.map(p => ({
+      id: p.id,
+      precio: esPlanilla ? p.despues : Math.round(Math.max(0, p.precioFinal + (tipo === '%' ? p.precioFinal * v / 100 : v))),
+    }));
+    let ok = 0;
+    const LOTE_BULK = 300;
+    for (let i = 0; i < payload.length; i += LOTE_BULK) {
+      const lote = payload.slice(i, i + LOTE_BULK);
+      try {
+        const { actualizados } = await productosService.bulkUpdatePrecio(lote);
+        ok += actualizados;
+      } catch { /* sigue con el resto de los lotes */ }
     }
     if (ok > 0) recargarProductos();
     setLoading(false);
-    setCancelando(false);
-    toast(`${ok} precio${ok !== 1 ? 's' : ''} actualizado${ok !== 1 ? 's' : ''}${cancelado ? ' · cancelado' : ''}`, 'success');
+    toast(`${ok} precio${ok !== 1 ? 's' : ''} actualizado${ok !== 1 ? 's' : ''}`, ok > 0 ? 'success' : 'error');
     onClose();
-  };
-
-  const handleCancelar = () => {
-    cancelarRef.current = true;
-    setCancelando(true);
   };
 
   const handleAlcance = (val) => {
     setAlcance(val);
     setCategoria('');
     setProveedor('');
+    setPlanillaItems([]);
+    setPlanillaResumen(null);
   };
 
   const toggleExcluido = (id) => {
@@ -2606,7 +2695,7 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
 
   const fmtP = n => n.toLocaleString('es-AR');
 
-  const isDisabled = !preview || loading || targetsLoading || preview.count === 0
+  const isDisabled = !preview || loading || targetsLoading || planillaLoading || preview.count === 0
     || (alcance === 'categoria' && !categoria)
     || (alcance === 'proveedor' && !proveedor);
 
@@ -2627,8 +2716,8 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
         {/* Alcance — primero para orientar el resto */}
         <Box sx={{ mb: 2.5 }}>
           <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 1 }}>Aplicar a</Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: (alcance === 'categoria' || alcance === 'proveedor') ? 1.5 : 0 }}>
-            {[['todos', 'Todos'], ['categoria', 'Una categoría'], ['proveedor', 'Un proveedor']].map(([val, label]) => (
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: (alcance === 'categoria' || alcance === 'proveedor' || alcance === 'planilla') ? 1.5 : 0 }}>
+            {[['todos', 'Todos'], ['categoria', 'Una categoría'], ['proveedor', 'Un proveedor'], ['planilla', 'Desde planilla']].map(([val, label]) => (
               <Button key={val} onClick={() => handleAlcance(val)}
                 variant={alcance === val ? 'contained' : 'outlined'}
                 sx={alcance === val
@@ -2663,9 +2752,34 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
               </Select>
             </FormControl>
           )}
+          {alcance === 'planilla' && (
+            <Box>
+              <Typography sx={{ color: MUTED, fontSize: 12.5, mb: 1.25, lineHeight: 1.5 }}>
+                Para poner un precio distinto por producto (no un % o monto igual para todos): descargá la planilla,
+                editá la columna &ldquo;Precio actual&rdquo; con el precio nuevo de cada uno, y subila de vuelta.
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button startIcon={<FileDownloadIcon sx={{ fontSize: 16 }} />} onClick={handleDescargarPlanilla} disabled={planillaLoading}
+                  sx={{ color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '8px', py: 0.875, px: 2, '&:hover': { bgcolor: HOVER } }}>
+                  Descargar planilla actual
+                </Button>
+                <Button startIcon={<FileUploadIcon sx={{ fontSize: 16 }} />} onClick={() => planillaFileRef.current?.click()} disabled={planillaLoading}
+                  sx={{ color: '#fff', bgcolor: P, textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '8px', py: 0.875, px: 2, '&:hover': { bgcolor: P_HOVER } }}>
+                  Subir planilla editada
+                </Button>
+                <Box component="input" ref={planillaFileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleSubirPlanilla} sx={{ display: 'none' }} />
+              </Box>
+              {planillaResumen && (
+                <Typography sx={{ color: MUTED, fontSize: 12, mt: 1 }}>
+                  {planillaResumen.cambios} con precio nuevo · {planillaResumen.sinCambio} sin cambios · {planillaResumen.sinMatch} código{planillaResumen.sinMatch !== 1 ? 's' : ''} no encontrado{planillaResumen.sinMatch !== 1 ? 's' : ''}
+                </Typography>
+              )}
+            </Box>
+          )}
         </Box>
 
-        {/* Tipo + Valor */}
+        {/* Tipo + Valor — no aplica al alcance "planilla", que ya trae el precio nuevo por fila */}
+        {alcance !== 'planilla' && (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr' }, gap: 2, mb: 2.5 }}>
           <Box>
             <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 1 }}>Tipo</Typography>
@@ -2691,9 +2805,13 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
               sx={{ ...fieldSx, '& .MuiInputBase-input': { py: '11px', px: '14px', color: INK } }} />
           </Box>
         </Box>
+        )}
 
         {targetsLoading && (
           <Typography sx={{ color: MUTED, fontSize: 13, mb: 2.5 }}>Buscando productos...</Typography>
+        )}
+        {planillaLoading && (
+          <Typography sx={{ color: MUTED, fontSize: 13, mb: 2.5 }}>Procesando planilla...</Typography>
         )}
 
         {/* Preview — con checkbox por fila para sacar algún producto puntual
@@ -2727,22 +2845,15 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
         )}
 
         {loading ? (
+          // Una sola request atómica — no hay progreso fila a fila ni forma
+          // de cancelarla a mitad de camino (ver ProductosController::
+          // bulkUpdatePrecio()).
           <Box sx={{ mt: 1 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-              <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600 }}>
-                {cancelando ? 'Cancelando…' : 'Actualizando precios…'}
-              </Typography>
-              <Typography sx={{ color: P, fontSize: 12.5, fontWeight: 700 }}>{progreso.hecho} / {progreso.total}</Typography>
-            </Box>
-            <LinearProgress variant="determinate"
-              value={progreso.total ? (progreso.hecho / progreso.total) * 100 : 0}
-              sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: cancelando ? MUTED : P, borderRadius: 4 } }} />
-            <Button fullWidth onClick={handleCancelar} disabled={cancelando} sx={{
-              mt: 1, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600,
-              borderRadius: '8px', py: 0.75, fontSize: 12.5, '&:hover': { bgcolor: HOVER },
-            }}>
-              {cancelando ? 'Terminando de cancelar…' : 'Cancelar'}
-            </Button>
+            <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600, mb: 0.75 }}>
+              Actualizando precios…
+            </Typography>
+            <LinearProgress variant="indeterminate"
+              sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: P, borderRadius: 4 } }} />
           </Box>
         ) : (
           <Button fullWidth variant="contained" disabled={isDisabled} onClick={handleAplicar}
@@ -2765,7 +2876,8 @@ export default function Productos() {
   const toast = useToast();
   const { user } = useAuth();
   const esIndumentaria = user?.empresa?.tipo === 'indument';
-  const esFerreteria = user?.empresa?.tipo === 'ferret';
+  // Ver el mismo criterio (y el porqué del nombre) en NuevoProducto() más arriba.
+  const esFerreteria = user?.empresa?.tipo !== 'indument';
   const { checkPermisos } = useHasPermiso();
   const { data: sucursales = [] } = useSucursales({ enabled: checkPermisos('list-sucursales') });
   const mostrarStockTotal = sucursales.length > 1;
@@ -2805,9 +2917,18 @@ export default function Productos() {
   const [openScanner,     setOpenScanner]     = useState(false);
   const [openActualizar,  setOpenActualizar]  = useState(false);
   const [importPreview,   setImportPreview]   = useState(null);
+  // Entre elegir el archivo y que aparezca el modal de "revisá antes de
+  // importar" hay trabajo real (parsear + chequear códigos duplicados) —
+  // sin este indicador, esa espera se sentía como que la app no respondía.
+  const [analizandoImport, setAnalizandoImport] = useState(false);
   const [importando,      setImportando]      = useState(false);
   const [importProgreso,  setImportProgreso]  = useState({ hecho: 0, total: 0 });
   const [cancelandoImport, setCancelandoImport] = useState(false);
+  // Fase 2 (alta real) ahora es UNA sola request a /productos/bulk — ya no
+  // hay progreso fila a fila para mostrar ahí, ni forma de cancelarla a
+  // mitad de camino (es atómica). Fase 1 (resolver categoría/proveedor
+  // nuevos) sigue siendo secuencial y sí se puede cancelar.
+  const [importEnviando,  setImportEnviando]  = useState(false);
   const [importPagina,    setImportPagina]    = useState(1);
   const [importPageSize,  setImportPageSize]  = useState(20);
   const [exportando,      setExportando]      = useState(false);
@@ -2923,6 +3044,15 @@ export default function Productos() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    setAnalizandoImport(true);
+    try {
+      await procesarArchivoImport(file);
+    } finally {
+      setAnalizandoImport(false);
+    }
+  };
+
+  const procesarArchivoImport = async (file) => {
     let lines;
     try {
       lines = await leerFilasArchivo(file);
@@ -2987,20 +3117,17 @@ export default function Productos() {
     }
     if (!filas.length) { toast('No se encontraron productos válidos en el archivo', 'warning'); return; }
     // El chequeo de duplicados es contra el catálogo completo del backend, no
-    // un array local — se pide de a lotes chicos en paralelo (uno por código
-    // único) en vez de una consulta por fila en serie, para no demorar
-    // minutos con un archivo de miles de filas.
+    // un array local — UNA sola consulta con todos los códigos únicos del
+    // archivo (antes era un GET por código único, aunque fuera en paralelo
+    // de a 8: con un catálogo grande esa espera, sin ningún indicador de
+    // carga, se sentía como que la app se había colgado antes de mostrar el
+    // modal de previsualización). Ver ProductosController::codigosExistentes().
     const codigosUnicos = [...new Set(filas.map(f => f.codigo).filter(Boolean))];
-    const existentes = new Set();
-    const LOTE = 8;
-    for (let i = 0; i < codigosUnicos.length; i += LOTE) {
-      const lote = codigosUnicos.slice(i, i + LOTE);
-      await Promise.all(lote.map(async (codigo) => {
-        try {
-          const coincidencias = await productosService.getAll({ codigo_exacto: codigo });
-          if (coincidencias.length > 0) existentes.add(codigo.toLowerCase());
-        } catch { /* un error puntual de red no debería bloquear el import */ }
-      }));
+    let existentes = new Set();
+    if (codigosUnicos.length) {
+      try {
+        existentes = await productosService.codigosExistentes(codigosUnicos);
+      } catch { /* un error puntual de red no debería bloquear el import */ }
     }
     filas.forEach(f => { f.codigoDuplicado = f.codigo ? existentes.has(f.codigo.toLowerCase()) : false; });
     setImportPagina(1);
@@ -3058,41 +3185,54 @@ export default function Productos() {
       resueltos[idx] = info;
     }
 
-    // Fase 2: crear los productos de a lotes chicos EN PARALELO (mismo patrón
-    // que el chequeo de duplicados más arriba) — antes era un create() por
-    // fila esperado uno a la vez, minutos para un archivo de miles de filas.
+    // Fase 2: alta real en lotes de a LOTE_BULK filas por request — antes era
+    // un create() por fila (aunque fuera en lotes paralelos de a 8); con el
+    // servidor PHP embebido de un solo hilo esas N requests igual se
+    // procesaban una por una del lado del servidor. UNA sola request con
+    // TODO el archivo (lo que se probó primero) tiene un límite real: el PHP
+    // embebido corta cualquier request a los 30s (max_execution_time) — con
+    // miles de filas la creación entera (producto + stock + lote por fila)
+    // tarda más que eso, PHP mata la request a mitad de camino, y se pierde
+    // el lote COMPLETO en vez de solo lo que faltaba. Mandarlo en lotes
+    // moderados mantiene lo bueno (mucho menos ida-y-vuelta que 1 por fila)
+    // sin arriesgar un timeout, y lo ya importado en lotes previos queda
+    // guardado aunque uno de los siguientes falle. Ver ProductosController::bulkStore().
     if (!cancelado) {
-      const LOTE = 8;
-      for (let i = 0; i < importPreview.length; i += LOTE) {
-        if (cancelarImportRef.current) { cancelado = true; break; }
-        const indices = Array.from({ length: Math.min(LOTE, importPreview.length - i) }, (_, k) => i + k);
-        await Promise.all(indices.map(async (idx) => {
-          const f = importPreview[idx];
-          const info = resueltos[idx];
-          if (info.error) { fallas++; setImportProgreso(p => ({ ...p, hecho: p.hecho + 1 })); return; }
+      const filas = [];
+      for (let idx = 0; idx < importPreview.length; idx++) {
+        const f = importPreview[idx];
+        const info = resueltos[idx];
+        if (info.error) { fallas++; continue; }
+        filas.push({
+          producto: f.nombre,
+          codigo: f.codigo || undefined,
+          precio: f.precio,
+          costo: f.costo,
+          stock: f.stock,
+          id_categoria: info.catId,
+          id_proveedor: info.provId,
+          unidad_medida: esFerreteria ? f.unidadMedida : 'unidad',
+          ...(f.grupo ? { tiene_variantes: true, id_grupo_talle: f.grupo.id } : {}),
+          ...(f.talle ? { id_talle: f.talle.id } : {}),
+        });
+      }
+      if (filas.length) {
+        setImportEnviando(true);
+        setImportProgreso({ hecho: 0, total: filas.length });
+        const LOTE_BULK = 300;
+        for (let i = 0; i < filas.length; i += LOTE_BULK) {
+          if (cancelarImportRef.current) { cancelado = true; break; }
+          const lote = filas.slice(i, i + LOTE_BULK);
           try {
-            // productosService.create() directo, no crearProducto() del contexto:
-            // ese pasa por React Query y en cada llamada invalida (y refetchea)
-            // la lista completa de productos apenas termina — con miles de filas
-            // eso duplica los pedidos al backend durante el import (una carga +
-            // un refetch por cada fila). Acá alcanza con refrescar una sola vez
-            // al final, ver recargarProductos() más abajo.
-            await productosService.create({
-              producto: f.nombre,
-              codigo: f.codigo || undefined,
-              precio: f.precio,
-              costo: f.costo,
-              stock: f.stock,
-              id_categoria: info.catId,
-              id_proveedor: info.provId,
-              unidad_medida: esFerreteria ? f.unidadMedida : 'unidad',
-              ...(f.grupo ? { tiene_variantes: true, id_grupo_talle: f.grupo.id } : {}),
-              ...(f.talle ? { id_talle: f.talle.id } : {}),
-            }, { ligero: true });
-            ok++;
-          } catch { fallas++; }
-          setImportProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
-        }));
+            const { creados, errores } = await productosService.bulkCreate(lote);
+            ok += creados;
+            fallas += errores;
+          } catch {
+            fallas += lote.length;
+          }
+          setImportProgreso(p => ({ ...p, hecho: Math.min(p.total, i + lote.length) }));
+        }
+        setImportEnviando(false);
       }
     }
 
@@ -3438,11 +3578,11 @@ export default function Productos() {
                 </IconButton>
               ))}
             </Box>
-            <Tooltip title="Importar Excel o CSV">
-              <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />}
+            <Tooltip title={analizandoImport ? 'Analizando archivo…' : 'Importar Excel o CSV'}>
+              <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />} disabled={analizandoImport}
                 onClick={() => csvRef.current?.click()}
-                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
-                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Importar</Box>
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER }, '&.Mui-disabled': { opacity: 0.6 } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{analizandoImport ? 'Analizando…' : 'Importar'}</Box>
               </Button>
             </Tooltip>
             <Tooltip title="Exportar Excel">
@@ -4055,19 +4195,21 @@ export default function Productos() {
               <Box sx={{ mt: 2, flexShrink: 0 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
                   <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600 }}>
-                    {cancelandoImport ? 'Cancelando…' : 'Importando productos…'}
+                    {cancelandoImport ? 'Cancelando…' : importEnviando ? 'Creando productos…' : 'Preparando categorías y proveedores…'}
                   </Typography>
                   <Typography sx={{ color: P, fontSize: 12.5, fontWeight: 700 }}>{importProgreso.hecho} / {importProgreso.total}</Typography>
                 </Box>
                 <LinearProgress variant="determinate"
                   value={importProgreso.total ? (importProgreso.hecho / importProgreso.total) * 100 : 0}
                   sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: cancelandoImport ? MUTED : P, borderRadius: 4 } }} />
+                {/* La creación real ahora va en lotes de a 300 filas por request
+                    (no todo en una) — sí se puede cancelar entre lotes. */}
                 <Button onClick={handleCancelarImport} disabled={cancelandoImport} sx={{
-                  mt: 1.25, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600,
-                  borderRadius: '8px', py: 0.75, fontSize: 12.5, '&:hover': { bgcolor: HOVER },
-                }}>
-                  {cancelandoImport ? 'Terminando de cancelar…' : 'Cancelar importación'}
-                </Button>
+                    mt: 1.25, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600,
+                    borderRadius: '8px', py: 0.75, fontSize: 12.5, '&:hover': { bgcolor: HOVER },
+                  }}>
+                    {cancelandoImport ? 'Terminando de cancelar…' : 'Cancelar importación'}
+                  </Button>
               </Box>
             ) : (
               <Box sx={{ display: 'flex', gap: 1.5, mt: 2, flexShrink: 0 }}>

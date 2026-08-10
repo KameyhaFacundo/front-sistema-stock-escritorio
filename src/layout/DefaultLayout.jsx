@@ -12,6 +12,7 @@ import HandshakeIcon             from '@mui/icons-material/Handshake';
 import BusinessIcon              from '@mui/icons-material/Business';
 import MenuIcon                  from '@mui/icons-material/Menu';
 import LockOpenIcon              from '@mui/icons-material/LockOpen';
+import CloudOffIcon              from '@mui/icons-material/CloudOff';
 import { AuthContext } from '../auth/AuthContextBase';
 import { ConfigModal } from './ConfigModal';
 import { useToast } from '../context/ToastContext';
@@ -283,6 +284,25 @@ export default function DefaultLayout() {
                   <Typography sx={{ color: WARNING, fontWeight: 700, fontSize: 13, flexShrink: 0, ml: 1 }}>
                     {fmtMoney(alertas.totalFiadosClientes)}
                   </Typography>
+                </Box>
+              )}
+
+              {/* Backup sin Google Drive — si la PC se rompe o se la roban sin
+                  esto conectado, los datos que estaban solo ahí se pierden. */}
+              {alertas.backupSinDrive && (
+                <Box onClick={() => { handleCloseAlertas(); setOpenConfig(true); }}
+                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, textDecoration: 'none', '&:hover': { bgcolor: HOVER }, cursor: 'pointer' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ width: 30, height: 30, borderRadius: '8px', bgcolor: `${WARNING}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <CloudOffIcon sx={{ color: WARNING, fontSize: 15 }} />
+                    </Box>
+                    <Box>
+                      <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600 }}>Backup solo en esta PC</Typography>
+                      <Typography sx={{ color: MUTED, fontSize: 12 }}>
+                        Conectá Google Drive para no perder tus datos si el equipo falla
+                      </Typography>
+                    </Box>
+                  </Box>
                 </Box>
               )}
             </>

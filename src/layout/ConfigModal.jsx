@@ -48,6 +48,8 @@ import { twoFactorService } from '../services/twoFactorService';
 // import ConfirmDialog from '../components/shared/ConfirmDialog';
 import { WA_NUMBER } from '../components/shared/SoporteWidget';
 import { useToast } from '../context/ToastContext';
+import { AlertaWithConfirmation } from '../functions/alerts';
+import RestoreIcon from '@mui/icons-material/Restore';
 import { AuthContext } from '../auth/AuthContextBase';
 import useHasPermiso from '../hooks/useHasPermiso';
 import usePlan from '../hooks/usePlan';
@@ -307,8 +309,10 @@ function TabNegocio() {
   // navegador de una segunda PC.
   const [driveDisponible, setDriveDisponible] = useState(false);
   const [driveConectado, setDriveConectado] = useState(false);
+  const [driveEmail, setDriveEmail] = useState(null);
   const [driveCargando, setDriveCargando] = useState(true);
   const [driveConectando, setDriveConectando] = useState(false);
+  const [restaurando, setRestaurando] = useState(false);
   // Estado de "Conectar otra caja" — comentado junto con el botón/modal más
   // abajo, descomentar los tres si se reactiva.
   // const [lanModal, setLanModal] = useState(false);
@@ -324,7 +328,10 @@ function TabNegocio() {
   useEffect(() => {
     if (!window.electronAPI?.driveConectado) { setDriveCargando(false); return; }
     setDriveDisponible(true);
-    window.electronAPI.driveConectado().then(setDriveConectado).finally(() => setDriveCargando(false));
+    window.electronAPI.driveConectado().then(ok => {
+      setDriveConectado(ok);
+      if (ok) window.electronAPI.driveEmail?.().then(setDriveEmail);
+    }).finally(() => setDriveCargando(false));
   }, []);
 
   const conectarDrive = async () => {
@@ -333,6 +340,7 @@ function TabNegocio() {
       const res = await window.electronAPI.driveConectar();
       if (res.ok) {
         setDriveConectado(true);
+        window.electronAPI.driveEmail?.().then(setDriveEmail);
         toast('Google Drive conectado — los próximos backups se van a subir solos', 'success');
       } else {
         toast(res.error || 'No se pudo conectar con Google Drive', 'error');
@@ -345,6 +353,7 @@ function TabNegocio() {
   const desconectarDrive = async () => {
     await window.electronAPI.driveDesconectar();
     setDriveConectado(false);
+    setDriveEmail(null);
     toast('Google Drive desconectado — los backups siguen guardándose local, nomás', 'info');
   };
 
@@ -372,6 +381,27 @@ function TabNegocio() {
   //     setLanLoading(false);
   //   }
   // };
+
+  // Reemplaza la base ENTERA por la del backup elegido — automatiza el
+  // procedimiento manual de RESTAURAR-BACKUP.md (cerrar la app, descomprimir,
+  // reemplazar el archivo, reabrir). El propio proceso principal ya para y
+  // reinicia el servidor solo; acá solo hace falta recargar la ventana al
+  // final para que el front deje de mostrar datos viejos en memoria.
+  const restaurarBackup = async () => {
+    setRestaurando(true);
+    try {
+      const res = await window.electronAPI.restaurarBackup();
+      if (res.cancelado) return;
+      if (!res.ok) {
+        toast(res.error || 'No se pudo restaurar el backup', 'error');
+        return;
+      }
+      toast('Backup restaurado — recargando...', 'success');
+      setTimeout(() => window.location.reload(), 1200);
+    } finally {
+      setRestaurando(false);
+    }
+  };
 
   const ultimoBackup = localStorage.getItem('ultimo_backup');
   const backupTooltip = ultimoBackup
@@ -723,7 +753,7 @@ function TabNegocio() {
               <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>Backup en Google Drive</Typography>
               <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 0.25 }}>
                 {driveConectado
-                  ? 'Conectado — el backup diario se sube solo a tu Drive, además de guardarse local.'
+                  ? `Conectado${driveEmail ? ` (${driveEmail})` : ''} — el backup diario se sube solo a tu Drive, además de guardarse local.`
                   : 'Conectá tu propia cuenta de Google para que el backup diario, además de local, quede a salvo en tu Drive.'}
               </Typography>
             </Box>
@@ -747,6 +777,43 @@ function TabNegocio() {
               {driveConectando ? 'Abrí el navegador y aprobá el acceso...' : 'Conectar Google Drive'}
             </Button>
           )}
+        </Box>
+      )}
+
+      {/* Restaurar backup — reemplaza la base ENTERA por la de un .gz elegido
+          a mano (cambio de PC, o recuperar datos perdidos). Mismo criterio
+          que la sección de Drive: solo existe en la app empaquetada. */}
+      {driveDisponible && (
+        <Box sx={{ ...card, p: 2.5, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{
+              width: 36, height: 36, borderRadius: '10px', flexShrink: 0,
+              bgcolor: HOVER, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <RestoreIcon sx={{ color: MUTED, fontSize: 18 }} />
+            </Box>
+            <Box>
+              <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>Restaurar un backup</Typography>
+              <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 0.25 }}>
+                Reemplaza TODOS los datos actuales por los de un backup (.gz) — para cambiar de PC o recuperar datos perdidos.
+              </Typography>
+            </Box>
+          </Box>
+          <Button
+            variant="outlined"
+            disabled={restaurando}
+            onClick={() => AlertaWithConfirmation({
+              title: '¿Restaurar este backup?',
+              textMain: 'Esto reemplaza TODOS los productos, ventas, clientes y demás datos actuales por los del backup que elijas. No se puede deshacer (aunque se guarda una copia de la base actual por las dudas). ¿Continuar?',
+              textSuccesfull: 'Backup restaurado',
+              textError: 'No se pudo restaurar el backup',
+              functionConfirmed: restaurarBackup,
+            })}
+            startIcon={restaurando ? <CircularProgress size={14} /> : <RestoreIcon sx={{ fontSize: 16 }} />}
+            sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '8px', whiteSpace: 'nowrap', '&:hover': { bgcolor: HOVER, borderColor: ERROR, color: ERROR }, '&.Mui-disabled': { opacity: 0.6 } }}
+          >
+            {restaurando ? 'Restaurando...' : 'Restaurar backup'}
+          </Button>
         </Box>
       )}
 

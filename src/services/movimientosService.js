@@ -48,6 +48,27 @@ export const movimientosService = {
     return mapMovimiento(res.data.data);
   },
 
+  // Ajuste masivo (importación Excel o "Ajuste masivo" por filtro) en UNA
+  // sola request — reemplaza el patrón anterior de un create() por fila en
+  // lotes paralelos de a 8: con el servidor PHP embebido de un solo hilo,
+  // esas N requests se procesaban una por una igual del lado del servidor.
+  // Cada item se procesa de forma independiente en el backend (uno con
+  // stock insuficiente no tumba el resto). Ver MovimientosController::bulkStore().
+  async bulkCreate(items) {
+    const res = await api.post('movimientos/bulk', {
+      items: items.map(i => ({
+        id_producto: i.id_producto ?? null,
+        producto:    i.producto,
+        codigo:      i.codigo ?? '',
+        sub_tipo:    i.subTipo ?? '',
+        cantidad:    i.cantidad,
+        nota:        i.nota ?? '',
+      })),
+    });
+    const data = res.data.data;
+    return { aplicados: data.aplicados, fallidos: data.fallidos, indicesFallidos: data.indices_fallidos ?? [] };
+  },
+
   async transferir({ idProducto, cantidad, idSucursalOrigen, idSucursalDestino }) {
     const res = await api.post('movimientos/transferencia', {
       id_producto: idProducto,

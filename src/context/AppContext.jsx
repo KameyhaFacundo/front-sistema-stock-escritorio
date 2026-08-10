@@ -14,6 +14,11 @@ export function AppProvider({ children }) {
   const [resumenDeudas, setResumenDeudas] = useState([]);
   const [resumenFiados, setResumenFiados] = useState([]);
   const [dashboardStats, setDashboardStats] = useState(null);
+  // Si nunca conectó Google Drive, el único backup que tiene vive SOLO en
+  // esta PC — si el equipo se rompe o se lo roban, se pierde todo. Se
+  // chequea una vez al arrancar (window.electronAPI no existe en pnpm dev/
+  // demo/acceso por navegador de otra caja, ahí queda en false y no molesta).
+  const [driveConectado, setDriveConectado] = useState(true);
 
   const handleError = useCallback((msg, err) => {
     console.error(msg, err);
@@ -49,6 +54,13 @@ export function AppProvider({ children }) {
     ]).finally(() => startTransition(() => setLoadingData(false)));
   }, []);
 
+  useEffect(() => {
+    if (!window.electronAPI?.driveConectado) return;
+    window.electronAPI.driveConectado()
+      .then(ok => startTransition(() => setDriveConectado(ok)))
+      .catch(() => {});
+  }, []);
+
   const statsHoy = useMemo(() => {
     if (dashboardStats) {
       return {
@@ -64,16 +76,18 @@ export function AppProvider({ children }) {
     const stockBajo = dashboardStats?.stockBajo ?? [];
     const deudasProv = resumenDeudas.filter(d => (d.saldo_pendiente ?? 0) > 0);
     const fiadosCli = resumenFiados.filter(f => (f.saldo_pendiente ?? 0) > 0);
-    const total = (stockBajo.length > 0 ? 1 : 0) + (deudasProv.length > 0 ? 1 : 0) + (fiadosCli.length > 0 ? 1 : 0);
+    const backupSinDrive = !driveConectado;
+    const total = (stockBajo.length > 0 ? 1 : 0) + (deudasProv.length > 0 ? 1 : 0) + (fiadosCli.length > 0 ? 1 : 0) + (backupSinDrive ? 1 : 0);
     return {
       stockBajo,
       deudasProveedores: deudasProv,
       totalDeudasProveedores: deudasProv.reduce((s, d) => s + (d.saldo_pendiente ?? 0), 0),
       fiadosClientes: fiadosCli,
       totalFiadosClientes: fiadosCli.reduce((s, f) => s + (f.saldo_pendiente ?? 0), 0),
+      backupSinDrive,
       total,
     };
-  }, [dashboardStats, resumenDeudas, resumenFiados]);
+  }, [dashboardStats, resumenDeudas, resumenFiados, driveConectado]);
 
   const value = useMemo(() => ({
     loadingData, dashboardStats, statsHoy, alertas,

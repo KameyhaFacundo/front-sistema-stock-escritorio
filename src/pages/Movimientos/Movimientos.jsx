@@ -36,30 +36,7 @@ import { AuthContext } from '../../auth/AuthContextBase';
 import { productosService } from '../../services/productosService';
 import { movimientosService } from '../../services/movimientosService';
 import { esFraccionable, abrevUnidad } from '../../utils/unidadMedida';
-import { toLocalDateStr, nowHora } from '../../utils/format';
-
-// Igual que ajustarStock() de ProductosContext pero SIN invalidar los caches
-// de React Query en cada llamada — para los imports/ajustes masivos de acá
-// abajo, que llaman esto una vez por fila: con miles de filas, invalidar (y
-// refetchear) productos y movimientos en cada una duplica los pedidos al
-// backend. Los modales llaman a onCompletado() una sola vez al terminar el
-// lote entero en vez de confiar en la invalidación automática por fila.
-async function crearAjusteDirecto(producto, cantidad, nota) {
-  await movimientosService.create({
-    id_producto: producto.id,
-    producto: producto.nombre,
-    codigo: producto.codigo || '',
-    tipo: 'ajuste',
-    subTipo: nota.trim() || 'Ajuste manual',
-    // El backend exige esto (no subTipo) para las bajas — ver
-    // MovimientosController::store(). subTipo se queda con el fallback
-    // genérico solo para categorizar en listados/reportes.
-    nota: nota.trim(),
-    cantidad,
-    fecha: toLocalDateStr(),
-    hora: nowHora(),
-  });
-}
+import { toLocalDateStr } from '../../utils/format';
 
 const TIPO_LABELS = {
   ajuste: 'Ajuste', venta: 'Venta', compra: 'Compra',
@@ -655,17 +632,9 @@ function ModalImportarMovimientos({ open, onClose, onCompletado }) {
   const [parseando, setParseando]   = useState(false);
   const [filas, setFilas]           = useState(null);
   const [aplicando, setAplicando]   = useState(false);
-  const [progreso, setProgreso]     = useState({ hecho: 0, total: 0 });
-  const [cancelando, setCancelando] = useState(false);
   const [nombreArchivo, setNombreArchivo] = useState('');
   const [pagina,   setPagina]   = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  // El loop de handleConfirmar() solo para si chequea este ref en cada
-  // vuelta — cerrar el modal o navegar a otra pantalla sin esto no lo
-  // frenaba, seguía aplicando ajustes de stock en segundo plano (mismo bug
-  // que confirmarImportacion() en Productos.jsx).
-  const cancelarRef = useRef(false);
-  useEffect(() => () => { cancelarRef.current = true; }, []);
 
   const handleClose = () => {
     setFilas(null); setNombreArchivo(''); setPagina(1);
@@ -730,42 +699,36 @@ function ModalImportarMovimientos({ open, onClose, onCompletado }) {
   const noEncontrados = (filas || []).filter(f => !f.producto);
 
   const handleConfirmar = async () => {
-    cancelarRef.current = false;
-    setCancelando(false);
     setAplicando(true);
-    setProgreso({ hecho: 0, total: encontrados.length });
-    let ok = 0, fallidos = 0, cancelado = false;
-    // De a lotes chicos en paralelo, no una fila a la vez esperada — mismo
-    // motivo que resolverProductoAsync() más arriba.
-    const LOTE = 8;
-    for (let i = 0; i < encontrados.length; i += LOTE) {
-      if (cancelarRef.current) { cancelado = true; break; }
-      const lote = encontrados.slice(i, i + LOTE);
-      await Promise.all(lote.map(async (f) => {
-        try {
-          // El signo viene directo del Excel: una cantidad negativa resta del
-          // stock, una positiva suma — no hace falta elegir un modo aparte.
-          await crearAjusteDirecto(f.producto, f.cantidad, 'Importado desde Excel');
-          ok++;
-        } catch {
-          fallidos++;
-        }
-        setProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
-      }));
+    // En lotes de a LOTE_BULK filas por request, no todo en una — el PHP
+    // embebido corta cualquier request a los 30s (max_execution_time): con
+    // miles de filas una única request puede tardar más que eso y perderse
+    // entera. Ver el mismo criterio en Productos::confirmarImportacion().
+    const items = encontrados.map(f => ({
+      id_producto: f.producto.id, producto: f.producto.nombre, codigo: f.producto.codigo || '',
+      // El signo viene directo del Excel: una cantidad negativa resta del
+      // stock, una positiva suma — no hace falta elegir un modo aparte.
+      cantidad: f.cantidad, nota: 'Importado desde Excel',
+    }));
+    let ok = 0, fallidos = 0;
+    const LOTE_BULK = 300;
+    for (let i = 0; i < items.length; i += LOTE_BULK) {
+      const lote = items.slice(i, i + LOTE_BULK);
+      try {
+        const { aplicados, fallidos: fallidosBack } = await movimientosService.bulkCreate(lote);
+        ok += aplicados;
+        fallidos += fallidosBack;
+      } catch {
+        fallidos += lote.length;
+      }
     }
     setAplicando(false);
-    setCancelando(false);
     if (ok > 0) onCompletado?.();
     toast(
-      fallidos > 0 ? `${ok} productos actualizados, ${fallidos} fallaron` : `${ok} productos actualizados${cancelado ? ' · cancelado' : ''}`,
+      fallidos > 0 ? `${ok} productos actualizados, ${fallidos} fallaron` : `${ok} productos actualizados`,
       fallidos > 0 ? 'error' : 'success'
     );
     handleClose();
-  };
-
-  const handleCancelarConfirmacion = () => {
-    cancelarRef.current = true;
-    setCancelando(true);
   };
 
   const totalPages  = filas ? Math.max(1, Math.ceil(filas.length / pageSize)) : 1;
@@ -870,22 +833,14 @@ function ModalImportarMovimientos({ open, onClose, onCompletado }) {
             )}
 
             {aplicando ? (
+              // Una sola request atómica — no hay progreso fila a fila ni
+              // forma de cancelarla a mitad de camino.
               <Box sx={{ mt: 2, flexShrink: 0 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-                  <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600 }}>
-                    {cancelando ? 'Cancelando…' : 'Aplicando movimientos…'}
-                  </Typography>
-                  <Typography sx={{ color: P, fontSize: 12.5, fontWeight: 700 }}>{progreso.hecho} / {progreso.total}</Typography>
-                </Box>
-                <LinearProgress variant="determinate"
-                  value={progreso.total ? (progreso.hecho / progreso.total) * 100 : 0}
-                  sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: cancelando ? MUTED : P, borderRadius: 4 } }} />
-                <Button fullWidth onClick={handleCancelarConfirmacion} disabled={cancelando} sx={{
-                  mt: 1.25, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600,
-                  borderRadius: '10px', py: 0.85, fontSize: 12.5, '&:hover': { bgcolor: HOVER },
-                }}>
-                  {cancelando ? 'Terminando de cancelar…' : 'Cancelar'}
-                </Button>
+                <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600, mb: 0.75 }}>
+                  Aplicando movimientos…
+                </Typography>
+                <LinearProgress variant="indeterminate"
+                  sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: P, borderRadius: 4 } }} />
               </Box>
             ) : (
               <Box sx={{ display: 'flex', gap: 1.5, mt: 2, flexShrink: 0 }}>
@@ -919,14 +874,7 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
   const [lineas,        setLineas]        = useState([]);
   const [nota,          setNota]          = useState('');
   const [aplicando,     setAplicando]     = useState(false);
-  const [progreso,      setProgreso]      = useState({ hecho: 0, total: 0 });
-  const [cancelando,    setCancelando]    = useState(false);
-  // Mismo criterio que ModalImportarMovimientos — sin este ref, cerrar el
-  // modal (o navegar a otra pantalla) mientras el loop de handleConfirmar()
-  // corre no lo frenaba, seguía aplicando ajustes en segundo plano.
-  const cancelarRef = useRef(false);
   const searchRef   = useRef(null);
-  useEffect(() => () => { cancelarRef.current = true; }, []);
 
   const { resultados: resultadosBusqueda } = useBusquedaProductos(searchProd, { perPage: 20 });
 
@@ -960,36 +908,34 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
 
   const handleConfirmar = async () => {
     if (!lineasValidas.length) return;
-    cancelarRef.current = false;
-    setCancelando(false);
     setAplicando(true);
-    setProgreso({ hecho: 0, total: lineasValidas.length });
-    let ok = 0, fallidos = 0, cancelado = false;
-    const aplicadas = [];
-    // De a lotes chicos EN PARALELO, no una línea a la vez esperada — antes
-    // un ajuste de cientos de productos tardaba minutos por ser N pedidos
-    // secuenciales (mismo patrón que la importación masiva de Productos.jsx).
-    const LOTE = 8;
-    for (let i = 0; i < lineasValidas.length; i += LOTE) {
-      if (cancelarRef.current) { cancelado = true; break; }
-      const lote = lineasValidas.slice(i, i + LOTE);
-      await Promise.all(lote.map(async (l) => {
-        const cant = modo === 'alta' ? Number(l.cantidad) : -Number(l.cantidad);
-        try {
-          // La línea ya trae id/nombre/código guardados al agregarla — no hace
-          // falta volver a buscarla en un array de resultados de búsqueda que
-          // pudo haber cambiado (o vaciarse) desde que se agregó.
-          await crearAjusteDirecto(l, cant, nota.trim() || 'Ajuste masivo');
-          ok++;
-          aplicadas.push(l);
-        } catch {
-          fallidos++;
-        }
-        setProgreso(p => ({ ...p, hecho: p.hecho + 1 }));
-      }));
+    // En lotes de a LOTE_BULK filas por request, no todo en una — el PHP
+    // embebido corta cualquier request a los 30s (max_execution_time): con
+    // muchas líneas una única request puede tardar más que eso y perderse
+    // entera. Ver el mismo criterio en Productos::confirmarImportacion().
+    const notaFinal = nota.trim() || 'Ajuste masivo';
+    const items = lineasValidas.map(l => ({
+      id_producto: l.id, producto: l.nombre, codigo: l.codigo,
+      cantidad: modo === 'alta' ? Number(l.cantidad) : -Number(l.cantidad),
+      nota: notaFinal,
+    }));
+    let ok = 0, fallidos = 0;
+    const fallidosSet = new Set();
+    const LOTE_BULK = 300;
+    for (let i = 0; i < items.length; i += LOTE_BULK) {
+      const lote = items.slice(i, i + LOTE_BULK);
+      try {
+        const { aplicados, fallidos: fallidosBack, indicesFallidos } = await movimientosService.bulkCreate(lote);
+        ok += aplicados;
+        fallidos += fallidosBack;
+        indicesFallidos.forEach(idx => fallidosSet.add(i + idx));
+      } catch {
+        fallidos += lote.length;
+        for (let k = 0; k < lote.length; k++) fallidosSet.add(i + k);
+      }
     }
+    const aplicadas = lineasValidas.filter((_, i) => !fallidosSet.has(i));
     setAplicando(false);
-    setCancelando(false);
     if (ok > 0) onCompletado?.();
     if (aplicadas.length) {
       exportarExcel({
@@ -1006,15 +952,10 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
       });
     }
     toast(
-      fallidos > 0 ? `${ok} productos actualizados, ${fallidos} fallaron` : `${ok} productos actualizados — Excel descargado${cancelado ? ' · cancelado' : ''}`,
+      fallidos > 0 ? `${ok} productos actualizados, ${fallidos} fallaron` : `${ok} productos actualizados — Excel descargado`,
       fallidos > 0 ? 'error' : 'success'
     );
     handleClose();
-  };
-
-  const handleCancelarConfirmacion = () => {
-    cancelarRef.current = true;
-    setCancelando(true);
   };
 
   return (
@@ -1121,22 +1062,14 @@ function ModalAjusteMasivo({ open, onClose, onCompletado }) {
           sx={{ ...fieldSx, mb: 3 }} />
 
         {aplicando ? (
+          // Una sola request atómica — no hay progreso fila a fila ni forma
+          // de cancelarla a mitad de camino.
           <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-              <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600 }}>
-                {cancelando ? 'Cancelando…' : 'Aplicando ajustes…'}
-              </Typography>
-              <Typography sx={{ color: P, fontSize: 12.5, fontWeight: 700 }}>{progreso.hecho} / {progreso.total}</Typography>
-            </Box>
-            <LinearProgress variant="determinate"
-              value={progreso.total ? (progreso.hecho / progreso.total) * 100 : 0}
-              sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: cancelando ? MUTED : P, borderRadius: 4 } }} />
-            <Button fullWidth onClick={handleCancelarConfirmacion} disabled={cancelando} sx={{
-              mt: 1.25, color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600,
-              borderRadius: '10px', py: 0.85, fontSize: 12.5, '&:hover': { bgcolor: HOVER },
-            }}>
-              {cancelando ? 'Terminando de cancelar…' : 'Cancelar'}
-            </Button>
+            <Typography sx={{ color: INK2, fontSize: 12.5, fontWeight: 600, mb: 0.75 }}>
+              Aplicando ajustes…
+            </Typography>
+            <LinearProgress variant="indeterminate"
+              sx={{ height: 8, borderRadius: 4, bgcolor: `${P}20`, '& .MuiLinearProgress-bar': { bgcolor: P, borderRadius: 4 } }} />
           </Box>
         ) : (
           <Box sx={{ display: 'flex', gap: 1.5 }}>

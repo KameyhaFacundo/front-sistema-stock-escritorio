@@ -5,13 +5,13 @@ import {
   Navigate,
   Outlet,
 } from "react-router-dom";
-import DefaultLayout from "./layout/DefaultLayout";
 import lazyWithRetry from "./utils/lazyWithRetry";
 import { AppProvider } from "./context/AppContext";
 import CoreDataProviders from "./context/CoreDataProviders";
 import RouteErrorElement from "./components/shared/RouteErrorElement";
 import PrivateRoute from "./security/PrivateRoute";
 
+const DefaultLayout = lazyWithRetry(() => import("./layout/DefaultLayout"));
 const Login        = lazyWithRetry(() => import("./pages/Login/Login"));
 const ConfirmarEmail = lazyWithRetry(() => import("./pages/ConfirmarEmail/ConfirmarEmail"));
 const Dashboard    = lazyWithRetry(() => import("./pages/Dashboard/Dashboard"));
