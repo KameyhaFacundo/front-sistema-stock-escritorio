@@ -2552,20 +2552,27 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
     setLoading(true);
     setProgreso({ hecho: 0, total: targetsAplicados.length });
     let ok = 0, cancelado = false;
-    for (const p of targetsAplicados) {
+    // De a lotes chicos en paralelo, no un producto a la vez esperado — mismo
+    // motivo que confirmarImportacion() (con "todos" como alcance esto puede
+    // ser cientos de productos, minutos de espera si va uno por uno).
+    const LOTE = 8;
+    for (let i = 0; i < targetsAplicados.length; i += LOTE) {
       if (cancelarRef.current) { cancelado = true; break; }
-      const delta = tipo === '%' ? p.precioFinal * v / 100 : v;
-      const nuevo = Math.round(Math.max(0, p.precioFinal + delta));
-      try {
-        // productosService.update() directo, no actualizarProducto() del
-        // contexto: ese invalida (y refetchea) la lista completa en cada
-        // llamada — con "todos" como alcance eso es un refetch de cientos de
-        // productos por cada producto actualizado. Un solo recargarProductos()
-        // al final alcanza (ver mismo criterio en confirmarImportacion()).
-        await productosService.update(p.id, { precio: nuevo });
-        ok++;
-      } catch { /* skip */ }
-      setProgreso(pr => ({ ...pr, hecho: pr.hecho + 1 }));
+      const lote = targetsAplicados.slice(i, i + LOTE);
+      await Promise.all(lote.map(async (p) => {
+        const delta = tipo === '%' ? p.precioFinal * v / 100 : v;
+        const nuevo = Math.round(Math.max(0, p.precioFinal + delta));
+        try {
+          // productosService.update() directo, no actualizarProducto() del
+          // contexto: ese invalida (y refetchea) la lista completa en cada
+          // llamada — con "todos" como alcance eso es un refetch de cientos de
+          // productos por cada producto actualizado. Un solo recargarProductos()
+          // al final alcanza (ver mismo criterio en confirmarImportacion()).
+          await productosService.update(p.id, { precio: nuevo });
+          ok++;
+        } catch { /* skip */ }
+        setProgreso(pr => ({ ...pr, hecho: pr.hecho + 1 }));
+      }));
     }
     if (ok > 0) recargarProductos();
     setLoading(false);
