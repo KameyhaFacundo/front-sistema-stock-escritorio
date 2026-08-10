@@ -4,7 +4,7 @@ import { AuthContext } from '../../auth/AuthContextBase';
 import {
   Box, Typography, TextField, Button, InputAdornment,
   IconButton, Divider, Chip, Tooltip, Autocomplete,
-  Dialog, DialogContent, DialogTitle, DialogActions, Switch, Tabs, Tab, Popover,
+  Dialog, DialogContent, DialogTitle, DialogActions, Switch, Tabs, Tab,
 } from '@mui/material';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,7 +33,6 @@ import PointOfSaleIcon       from '@mui/icons-material/PointOfSale';
 import CameraAltIcon        from '@mui/icons-material/CameraAlt';
 import ShoppingBagIcon      from '@mui/icons-material/ShoppingBag';
 import ReplayIcon           from '@mui/icons-material/Replay';
-import KeyboardIcon         from '@mui/icons-material/Keyboard';
 import CalculateIcon        from '@mui/icons-material/Calculate';
 
 import lazyWithRetry from '../../utils/lazyWithRetry';
@@ -293,7 +292,6 @@ function Home() {
   const puedeAplicarDescuento = checkPermisos('aplicarDescuento');
   const isMobile = useIsMobile();
   const [mobileTab, setMobileTab] = useState(0);
-  const [atajosAnchor, setAtajosAnchor] = useState(null);
 
   // ── Clientes desde API ─────────────────────────────────────────────
   const [clientesOpts, setClientesOpts] = useState([]);
@@ -622,19 +620,26 @@ function Home() {
   useEffect(() => {
     const handler = (e) => {
       if (e.key === 'F1') { e.preventDefault(); searchRef.current?.focus(); }
-      if (e.key === 'F2' && cart.length > 0 && caja.abierta) {
+      if (e.key === 'F2') {
         e.preventDefault();
-        abrirConfirmacionRef.current?.();
+        if (cart.length > 0 && caja.abierta) abrirConfirmacionRef.current?.();
+        else if (!caja.abierta) toast('Abrí la caja antes de vender', 'error');
+        else toast('Agregá algún producto antes de cobrar', 'error');
       }
       if (e.key === 'F3') { e.preventDefault(); setOpenScanner(true); }
-      if (e.key === 'F4' && cart.length > 0 && caja.abierta) { e.preventDefault(); clienteInputRef.current?.focus(); }
+      if (e.key === 'F4') {
+        e.preventDefault();
+        if (cart.length > 0 && caja.abierta) clienteInputRef.current?.focus();
+        else if (!caja.abierta) toast('Abrí la caja antes de vender', 'error');
+        else toast('Agregá algún producto antes de elegir cliente', 'error');
+      }
       if (e.key === 'Escape') {
         setOpenMonto(false); setOpenPrecio(false); setOpenScanner(false); setOpenConfirmarModal(false);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [cart.length, caja.abierta]);
+  }, [cart.length, caja.abierta, toast]);
 
   // ── Cart operations ────────────────────────────────────────────────
   // Solo ferretería puede tener productos en kg/metro/litro — para todo el
@@ -680,6 +685,14 @@ function Home() {
       const minimo = fraccionable ? 0.01 : 1;
       return { ...i, cantidad: Math.max(minimo, Math.min(n, max)) };
     }));
+  };
+  // Enter en precio/descuento de una línea vuelve al buscador — mismo gesto
+  // que ya tenía el campo de cantidad (CampoCantidadCarrito onEnter), para
+  // que el cajero pueda seguir escaneando sin tocar el mouse.
+  const volverABuscarEnEnter = (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    searchRef.current?.focus();
   };
 
   // Cargar la cantidad a partir de lo que el cliente quiere gastar (típico en
@@ -1211,7 +1224,7 @@ function Home() {
       <Box sx={{ px: 3, py: 1.25, borderBottom: `1px solid ${BORDER}`, flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
         {/* Gradiente de acento */}
         <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${PRIMARY}, ${MONEY}, ${ORANGE})` }} />
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
             <Box sx={{ width: 34, height: 34, borderRadius: '10px', bgcolor: `${PRIMARY}18`, border: `1px solid ${PRIMARY}30`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <PointOfSaleIcon sx={{ color: PRIMARY, fontSize: 19 }} />
@@ -1221,77 +1234,24 @@ function Home() {
             </Typography>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Tooltip title="Atajos de teclado">
-              <Button
-                data-tour="pos-atajos"
-                startIcon={<KeyboardIcon sx={{ fontSize: 18 }} />}
-                onClick={(e) => setAtajosAnchor(e.currentTarget)}
-                sx={{
-                  display: { xs: 'none', md: 'inline-flex' },
-                  color: INK2, textTransform: 'none', fontWeight: 600, fontSize: 13,
-                  border: `1px solid ${BORDER}`, borderRadius: '8px', px: 1.5, py: 0.75,
-                  '&:hover': { bgcolor: HOVER, color: INK, borderColor: 'var(--border-hover)' },
-                }}>
-                Atajos
-              </Button>
-            </Tooltip>
-            <AyudaButton />
-          </Box>
-
-          <Popover
-            open={Boolean(atajosAnchor)}
-            anchorEl={atajosAnchor}
-            onClose={() => setAtajosAnchor(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            PaperProps={{ sx: { bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', mt: 1 } }}>
-            <Box sx={{ p: 2.5, minWidth: 260 }}>
-              <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14, mb: 1.5 }}>
-                Atajos de teclado
-              </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box data-tour="pos-atajos" sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1.25 }}>
               {[
-                ['F1', 'Ir al buscador de productos'],
-                ['Enter', 'Agregar el producto encontrado'],
-                ['F4', 'Ir a Cliente'],
-                ['Enter', 'En Cliente/Pago/Recibido/Descuento: pasar al siguiente paso'],
-                ['↑↓←→', 'En Métodos de Pago: elegir cómo paga'],
-                ['F2', 'Abrir el resumen para confirmar la venta'],
-                ['F3', 'Escanear codigo de barras'],
-                ['Esc', 'Cerrar cualquier ventana'],
-              ].map(([key, desc], i) => (
-                <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75 }}>
-                  <Box sx={{
-                    minWidth: 40, px: 1, py: 0.4, textAlign: 'center', flexShrink: 0,
-                    bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '6px',
-                  }}>
-                    <Typography sx={{ color: PRIMARY, fontSize: 11.5, fontFamily: 'monospace', fontWeight: 700 }}>{key}</Typography>
+                ['F1', 'Buscar'],
+                ['F4', 'Cliente'],
+                ['F2', 'Cobrar'],
+                ['F3', 'Escanear'],
+              ].map(([key, label]) => (
+                <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.625, bgcolor: `${PRIMARY}12`, border: `1px solid ${PRIMARY}35`, borderRadius: '7px', pl: 0.5, pr: 1, py: 0.4 }}>
+                  <Box sx={{ bgcolor: PRIMARY, color: '#fff', borderRadius: '5px', px: 0.75, py: 0.15 }}>
+                    <Typography sx={{ fontSize: 10.5, fontFamily: 'monospace', fontWeight: 800 }}>{key}</Typography>
                   </Box>
-                  <Typography sx={{ color: INK2, fontSize: 13 }}>{desc}</Typography>
+                  <Typography sx={{ color: INK2, fontSize: 12, fontWeight: 600 }}>{label}</Typography>
                 </Box>
               ))}
             </Box>
-          </Popover>
-        </Box>
-
-        {/* Atajos siempre visibles, no solo en el popover a demanda — para
-            que el flujo 100% por teclado (F4 Cliente → Enter → Métodos de
-            pago → Enter → Recibido/Descuento → Enter → confirmar) se pueda
-            aprender de un vistazo sin tener que abrir "Atajos" cada vez. */}
-        <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1.25, mt: 1 }}>
-          {[
-            ['F1', 'Buscar'],
-            ['F4', 'Cliente'],
-            ['F2', 'Cobrar'],
-            ['F3', 'Escanear'],
-          ].map(([key, label]) => (
-            <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.625, bgcolor: `${PRIMARY}12`, border: `1px solid ${PRIMARY}35`, borderRadius: '7px', pl: 0.5, pr: 1, py: 0.4 }}>
-              <Box sx={{ bgcolor: PRIMARY, color: '#fff', borderRadius: '5px', px: 0.75, py: 0.15 }}>
-                <Typography sx={{ fontSize: 10.5, fontFamily: 'monospace', fontWeight: 800 }}>{key}</Typography>
-              </Box>
-              <Typography sx={{ color: INK2, fontSize: 12, fontWeight: 600 }}>{label}</Typography>
-            </Box>
-          ))}
+            <AyudaButton />
+          </Box>
         </Box>
       </Box>
 
@@ -1560,6 +1520,7 @@ function Home() {
                                 disabled={!puedeAplicarDescuento}
                                 title={!puedeAplicarDescuento ? 'No tenés permiso para cambiar el precio' : undefined}
                                 onChange={e => updatePrecio(item.id, e.target.value)}
+                                onKeyDown={volverABuscarEnEnter}
                                 onWheel={e => e.target.blur()}
                                 style={{
                                   width: 46, background: 'none', border: 'none', outline: 'none',
@@ -1571,6 +1532,7 @@ function Home() {
                                 disabled={!puedeAplicarDescuento}
                                 title={!puedeAplicarDescuento ? 'No tenés permiso para aplicar descuentos' : undefined}
                                 onChange={e => updateDescuento(item.id, e.target.value)}
+                                onKeyDown={volverABuscarEnEnter}
                                 onWheel={e => e.target.blur()}
                                 style={{
                                   width: 26, background: 'none', border: 'none', outline: 'none',
@@ -1700,6 +1662,7 @@ function Home() {
                             disabled={!puedeAplicarDescuento}
                             title={!puedeAplicarDescuento ? 'No tenés permiso para cambiar el precio' : undefined}
                             onChange={e => updatePrecio(item.id, e.target.value)}
+                            onKeyDown={volverABuscarEnEnter}
                             onWheel={e => e.target.blur()}
                             style={{
                               width: 50, background: 'none', border: 'none', outline: 'none',
@@ -1723,6 +1686,7 @@ function Home() {
                             disabled={!puedeAplicarDescuento}
                             title={!puedeAplicarDescuento ? 'No tenés permiso para aplicar descuentos' : undefined}
                             onChange={e => updateDescuento(item.id, e.target.value)}
+                            onKeyDown={volverABuscarEnEnter}
                             onWheel={e => e.target.blur()}
                             style={{
                               width: 34, background: 'none', border: 'none', outline: 'none',
@@ -1848,10 +1812,14 @@ function Home() {
                   <TextField {...params} placeholder="Consumidor Final (buscar o crear cliente...)"
                     inputRef={el => { params.inputRef?.(el); clienteInputRef.current = el; }}
                     onKeyDown={(e) => {
-                      // El primer Enter (con el desplegable abierto) lo maneja el propio
-                      // Autocomplete (selecciona la opción resaltada) — recién cuando ya
-                      // está cerrado, este segundo Enter avanza a Métodos de Pago.
-                      if (e.key === 'Enter' && !clienteDropdownOpen) {
+                      // El primer Enter (con el desplegable abierto Y algo tipeado) lo
+                      // maneja el propio Autocomplete (selecciona la opción resaltada).
+                      // Con el campo vacío (queda "Consumidor Final") el desplegable
+                      // puede estar abierto igual (se abre solo al hacer click/foco) pero
+                      // no hay nada para resaltar/seleccionar — antes ese Enter se perdía
+                      // sin avanzar. Cerrado, o vacío aunque esté abierto: avanza directo
+                      // a Métodos de Pago.
+                      if (e.key === 'Enter' && (!clienteDropdownOpen || !e.target.value.trim())) {
                         e.preventDefault();
                         e.stopPropagation();
                         focusPrimerMetodoPago();
