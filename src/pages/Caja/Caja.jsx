@@ -894,7 +894,17 @@ export default function Caja() {
   // (no solo en Resumen) hasta que termine el cierre — si no, alcanza con volver
   // a la pestaña "Caja" para ver el mismo número y listo, arqueo ciego roto.
   const [arqueoIniciado, setArqueoIniciado] = useState(false);
-  const { caja, abrirCaja, cerrarCaja, agregarMovimientoCaja } = useCaja();
+  const { caja, abrirCaja, cerrarCaja, agregarMovimientoCaja, recargarCaja } = useCaja();
+
+  // registrarVenta (VentasContext) marca la caja como desactualizada pero
+  // A PROPÓSITO no la vuelve a pedir en el momento del cobro (para no hacer
+  // competir esa consulta con la del propio ticket en el servidor PHP de un
+  // solo hilo, ver el comentario ahí) — la idea era que se actualizara sola
+  // "apenas se vuelva a mirar", pero CajaProvider vive en toda la app y
+  // nunca se desmonta al navegar a esta página, así que ese momento nunca
+  // llegaba solo: los números quedaban viejos hasta recargar toda la app.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { recargarCaja(); }, []);
   const { user } = useAuth();
   // null/nunca configurado = las 5 (mismo default que ya usa ConfigModal).
   const arqueoMetodosVisibles = user?.empresa?.arqueo_metodos_visibles ?? ['efectivo', 'tarjeta', 'transferencia', 'qr', 'fiado'];
