@@ -2494,7 +2494,7 @@ function Home() {
                 : 'Facturar ARCA'}
             </Button>
           )}
-          <Button fullWidth variant="outlined" startIcon={<CancelIcon />} onClick={handleCerrarVentaOk}
+          <Button fullWidth variant="outlined" startIcon={<CancelIcon />} onClick={handleCerrarVentaOk} autoFocus
             sx={{ mt: 1.25, color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, fontSize: 13.5, borderRadius: '8px', py: 1.1, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
             Finalizar
           </Button>
