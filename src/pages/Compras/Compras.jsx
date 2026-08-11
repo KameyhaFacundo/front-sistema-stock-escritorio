@@ -597,7 +597,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
           Datos generales
         </Typography>
         <Box sx={{
-          display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1.4fr 1fr 1fr 1fr' }, gap: { xs: 1.25, sm: 2 }, mb: { xs: 2, sm: 3 },
+          display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1.2fr 0.85fr 0.95fr 0.85fr 1.3fr' }, gap: { xs: 1.25, sm: 2 }, mb: { xs: 2, sm: 3 },
           p: { xs: 1.25, sm: 2 }, border: `1px solid ${BORDER}`, borderRadius: '12px', bgcolor: `${TABLE_HEADER}80`,
         }}>
           <Box data-tour="compras-modal-proveedor">
@@ -651,37 +651,37 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
               </Select>
             </FormControl>
           </Box>
-        </Box>
 
-        {/* Ticket del proveedor — opcional, se puede subir ahora o más tarde
-            desde el detalle de la compra si todavía no lo tenés a mano. */}
-        <Box sx={{ mb: 2.5 }}>
-          <FieldLabel>Ticket del proveedor (opcional)</FieldLabel>
-          {comprobanteUrl || comprobanteFile ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${BORDER}`, borderRadius: '10px', px: 1.5, py: 1, bgcolor: CARD }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-                <ReceiptLongIcon sx={{ fontSize: 18, color: P, flexShrink: 0 }} />
-                {comprobanteUrl ? (
-                  <Typography onClick={() => setVerTicketOpen(true)}
-                    sx={{ color: P, fontSize: 13, fontWeight: 600, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
-                    Ver ticket adjunto
-                  </Typography>
-                ) : (
-                  <Typography sx={{ color: INK2, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{comprobanteFile.name}</Typography>
-                )}
+          {/* Ticket del proveedor — opcional, se puede subir ahora o más tarde
+              desde el detalle de la compra si todavía no lo tenés a mano. */}
+          <Box>
+            <FieldLabel>Ticket (opcional)</FieldLabel>
+            {comprobanteUrl || comprobanteFile ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${BORDER}`, borderRadius: '10px', px: 1.25, py: '7.5px', bgcolor: CARD }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                  <ReceiptLongIcon sx={{ fontSize: 17, color: P, flexShrink: 0 }} />
+                  {comprobanteUrl ? (
+                    <Typography onClick={() => setVerTicketOpen(true)}
+                      sx={{ color: P, fontSize: 13, fontWeight: 600, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
+                      Ver ticket
+                    </Typography>
+                  ) : (
+                    <Typography sx={{ color: INK2, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{comprobanteFile.name}</Typography>
+                  )}
+                </Box>
+                <IconButton size="small" onClick={handleEliminarComprobante} disabled={subiendoComprobante}
+                  sx={{ color: MUTED, flexShrink: 0, '&:hover': { color: ERROR, bgcolor: ERROR_BG } }}>
+                  <CloseIcon sx={{ fontSize: 16 }} />
+                </IconButton>
               </Box>
-              <IconButton size="small" onClick={handleEliminarComprobante} disabled={subiendoComprobante}
-                sx={{ color: MUTED, flexShrink: 0, '&:hover': { color: ERROR, bgcolor: ERROR_BG } }}>
-                <CloseIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Box>
-          ) : (
-            <Button component="label" fullWidth disabled={subiendoComprobante}
-              sx={{ py: 1.25, border: `1.5px dashed ${BORDER}`, borderRadius: '10px', color: INK2, textTransform: 'none', fontWeight: 600, fontSize: 13, '&:hover': { bgcolor: HOVER, borderColor: P } }}>
-              {subiendoComprobante ? 'Subiendo...' : 'Adjuntar foto o PDF del ticket'}
-              <input type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf" onChange={e => handleArchivoComprobante(e.target.files?.[0])} />
-            </Button>
-          )}
+            ) : (
+              <Button component="label" fullWidth disabled={subiendoComprobante} startIcon={<ReceiptLongIcon sx={{ fontSize: 17 }} />}
+                sx={{ py: '7.5px', border: `1.5px dashed ${BORDER}`, borderRadius: '10px', color: INK2, textTransform: 'none', fontWeight: 600, fontSize: 13, bgcolor: CARD, '&:hover': { bgcolor: HOVER, borderColor: P } }}>
+                {subiendoComprobante ? 'Subiendo...' : 'Adjuntar'}
+                <input type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf" onChange={e => handleArchivoComprobante(e.target.files?.[0])} />
+              </Button>
+            )}
+          </Box>
         </Box>
 
         {/* Líneas de compra */}
