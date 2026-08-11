@@ -185,6 +185,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
   }), [tieneFacturacion, tieneIA, tieneCobros, tieneCatalogo, tieneEtiquetas]);
 
   const { data: sucursales = [] } = useSucursales({ enabled: checkPermisos('list-sucursales') });
+  const puedeConfigurar = checkPermisos('verConfiguracion');
 
   const menuSections = useMemo(() =>
     buildMenuSections()
@@ -462,13 +463,15 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
           },
         }}
       >
-        <MenuItem
-          onClick={() => { setUserMenuAnchor(null); onOpenConfig(); }}
-          sx={{ fontSize: 13.5, color: INK, gap: 1.5, py: 1.25, '&:hover': { bgcolor: HOVER } }}
-        >
-          <SettingsIcon sx={{ fontSize: 16, color: MUTED }} />
-          Configuraciones
-        </MenuItem>
+        {puedeConfigurar && (
+          <MenuItem
+            onClick={() => { setUserMenuAnchor(null); onOpenConfig(); }}
+            sx={{ fontSize: 13.5, color: INK, gap: 1.5, py: 1.25, '&:hover': { bgcolor: HOVER } }}
+          >
+            <SettingsIcon sx={{ fontSize: 16, color: MUTED }} />
+            Configuraciones
+          </MenuItem>
+        )}
         <MenuItem
           onClick={() => { setUserMenuAnchor(null); onConfirmLogout(); }}
           sx={{ fontSize: 13.5, color: ERROR, gap: 1.5, py: 1.25, '&:hover': { bgcolor: ERROR_BG } }}

@@ -1788,11 +1788,16 @@ export function ConfigModal({ open, onClose }) {
   // son de la cuenta propia, no del negocio.
   const puedeConfigurar = checkPermisos('verConfiguracion');
 
-  const tabs = useMemo(() => [
+  // Antes "Mi perfil" y "Seguridad" quedaban siempre visibles sin importar el
+  // permiso (el criterio era "son de la cuenta propia, no del negocio") — a
+  // pedido, el rol básico (vendedor) no debe ver Configuración en absoluto,
+  // ni siquiera esas dos. Sigue existiendo "olvidé mi contraseña" en el login
+  // (público, sin login) para quien de verdad necesite cambiarla.
+  const tabs = useMemo(() => !puedeConfigurar ? [] : [
     { label: 'Mi perfil', render: () => <TabPerfil /> },
-    ...(puedeConfigurar ? [{ label: 'Negocio', render: () => <TabNegocio /> }] : []),
+    { label: 'Negocio', render: () => <TabNegocio /> },
     // Módulo opcional por cliente — ver CATALOGO_HABILITADO en config/brand.js.
-    ...(puedeConfigurar && CATALOGO_HABILITADO ? [{ label: 'Catálogo', render: () => <TabCatalogo /> }] : []),
+    ...(CATALOGO_HABILITADO ? [{ label: 'Catálogo', render: () => <TabCatalogo /> }] : []),
     // Gestión de sucursales desactivada por ahora a pedido — comentado, no
     // borrado. El negocio sigue operando con la única sucursal ("Casa
     // Central") creada al instalar; el resto del sistema (stock, turnos,
@@ -1801,8 +1806,8 @@ export function ConfigModal({ open, onClose }) {
     // ...(checkPermisos('list-sucursales') ? [{ label: 'Sucursales', render: () => <TabSucursales /> }] : []),
     // Cobros es enteramente sobre conectar Mercado Pago para Point — con Point
     // deshabilitado (VITE_POINT_HABILITADO=false) no tiene sentido mostrarla.
-    ...(puedeConfigurar && POINT_HABILITADO ? [{ label: 'Cobros', render: () => <TabCobros /> }] : []),
-    ...(puedeConfigurar ? [{ label: 'Facturación', render: () => <TabFacturacion /> }] : []),
+    ...(POINT_HABILITADO ? [{ label: 'Cobros', render: () => <TabCobros /> }] : []),
+    { label: 'Facturación', render: () => <TabFacturacion /> },
     { label: 'Seguridad', render: () => <TabSeguridad /> },
   ], [puedeConfigurar]);
 
@@ -1854,7 +1859,9 @@ export function ConfigModal({ open, onClose }) {
           pestaña es largo, encerrarlo en una caja de 560px fijos lo dejaba
           apretado); en desktop mantiene el scroll interno acotado. */}
       <DialogContent sx={{ p: { xs: 2, sm: 3 }, maxHeight: { xs: 'none', sm: 560 }, overflowY: { xs: 'visible', sm: 'auto' } }}>
-        {tabActual.render()}
+        {tabActual
+          ? tabActual.render()
+          : <Typography sx={{ color: MUTED, fontSize: 13.5, textAlign: 'center', py: 4 }}>No tenés permiso para ver Configuración.</Typography>}
       </DialogContent>
     </Dialog>
   );

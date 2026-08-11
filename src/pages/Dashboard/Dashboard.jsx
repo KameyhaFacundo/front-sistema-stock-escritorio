@@ -1850,13 +1850,15 @@ export default function Dashboard() {
             </Box>
           </Box>
           <Box data-tour="dash-filtros" sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'nowrap' }}>
-            <Tooltip title="Exportar ventas a Excel">
-              <Box onClick={() => exportarCSV(ventasFiltradas, desde, hasta)}
-                sx={{ ...card, px: { xs: 1.25, sm: 2 }, py: { xs: 1, sm: 1.25 }, display: 'flex', alignItems: 'center', gap: 0.75, cursor: 'pointer', '&:hover': { borderColor: P, bgcolor: HOVER }, transition: 'all 0.15s', flexShrink: 0 }}>
-                <FileDownloadIcon sx={{ color: P, fontSize: 15 }} />
-                <Typography sx={{ color: INK2, fontSize: 12, fontWeight: 700, display: { xs: 'none', sm: 'block' } }}>Excel</Typography>
-              </Box>
-            </Tooltip>
+            {puedeFiltrarFechas && (
+              <Tooltip title="Exportar ventas a Excel">
+                <Box onClick={() => exportarCSV(ventasFiltradas, desde, hasta)}
+                  sx={{ ...card, px: { xs: 1.25, sm: 2 }, py: { xs: 1, sm: 1.25 }, display: 'flex', alignItems: 'center', gap: 0.75, cursor: 'pointer', '&:hover': { borderColor: P, bgcolor: HOVER }, transition: 'all 0.15s', flexShrink: 0 }}>
+                  <FileDownloadIcon sx={{ color: P, fontSize: 15 }} />
+                  <Typography sx={{ color: INK2, fontSize: 12, fontWeight: 700, display: { xs: 'none', sm: 'block' } }}>Excel</Typography>
+                </Box>
+              </Tooltip>
+            )}
             {[{ label: 'DESDE', val: desde, set: setDesde }, { label: 'HASTA', val: hasta, set: setHasta }].map(({ label, val, set }) => (
               <Box key={label} sx={{
                 ...card, px: { xs: 1.25, sm: 2 }, py: { xs: 1, sm: 1.25 },
