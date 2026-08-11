@@ -1542,13 +1542,6 @@ export function NuevoProducto({ onVolver, categorias, setCategorias, onCrear, on
                   </FormControl>
                 </>
               )}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: esFerreteria ? 1.5 : 0 }}>
-                <Switch checked={form.activo} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))}
-                  sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: P }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: P } }} />
-                <Typography sx={{ color: INK, fontSize: 13, fontWeight: 500 }}>
-                  {form.activo ? 'Activo' : 'Inactivo'} <Box component="span" sx={{ color: MUTED, fontWeight: 400 }}>— visible en el POS</Box>
-                </Typography>
-              </Box>
             </Box>
           </Box>
         </Box>

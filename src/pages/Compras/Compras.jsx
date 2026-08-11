@@ -983,8 +983,9 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
 
       {/* Modal Nuevo Producto — el mismo que usa la página Productos, para no
           duplicar la lógica de precios/IVA/stock inicial en un mini-form aparte.
-          Mismo diseño y tamaño que el modal de Combo. */}
-      <Dialog open={nuevoProd.active} onClose={resetNuevoProd} maxWidth="sm" fullWidth
+          Mismo ancho ("md") que en la página Productos — con "sm" quedaba
+          angosto y se veía distinto según desde dónde se abriera. */}
+      <Dialog open={nuevoProd.active} onClose={resetNuevoProd} maxWidth="md" fullWidth
         PaperProps={{ sx: modalPaperSx }}>
         {nuevoProd.active && (
           <NuevoProducto
