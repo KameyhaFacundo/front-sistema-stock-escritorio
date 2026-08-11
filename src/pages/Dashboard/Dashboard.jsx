@@ -1645,8 +1645,14 @@ export default function Dashboard() {
   // del resto de las pestañas, esta se oculta del todo sin el permiso, no
   // solo sus acciones internas.
   const puedeVerAuditoria = checkPermisos('verCarritosVaciados');
-  const tabs = puedeVerAuditoria ? [...TABS, 'Auditoría'] : TABS;
-  const tabAuditoriaIndex = TABS.length;
+  // Sin view-dashboard-completo, el dashboard queda acotado a "Resumen" nomás
+  // — Ventas/Compras/Productos/Métodos de pago/Historial de Caja exponen el
+  // mismo detalle que esas secciones enteras, que un cajero básico puede no
+  // tener acceso a ver por su cuenta (ver RolSeeder.php, rol "usuario").
+  const puedeVerCompleto = checkPermisos('verDashboardCompleto');
+  const tabsBase = puedeVerCompleto ? TABS : [TABS[0]];
+  const tabs = puedeVerAuditoria ? [...tabsBase, 'Auditoría'] : tabsBase;
+  const tabAuditoriaIndex = tabsBase.length;
 
   const chartBorder = mode === 'dark' ? '#1e2230' : '#e2e8f0';
   const chartMuted  = mode === 'dark' ? '#656e85' : '#94a3b8';

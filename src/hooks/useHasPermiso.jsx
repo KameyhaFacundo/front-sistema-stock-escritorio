@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContextBase';
 // y coincidir con lo que exige cada ruta del backend, ver routes/api.php).
 const PERMISOS_MAP = {
   verDashboard: 'view-dashboard',
+  verDashboardCompleto: 'view-dashboard-completo',
   verPOS: 'create-ventas',
   verProductos: 'list-productos',
   verMovimientos: 'list-movimientos',
