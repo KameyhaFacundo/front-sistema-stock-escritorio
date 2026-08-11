@@ -4,8 +4,8 @@
   "description": "Sistema de gestión de inventario",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#5c6ef8",
+  "background_color": "#1A1714",
+  "theme_color": "#B5622C",
   "orientation": "any",
   "icons": [
     {
