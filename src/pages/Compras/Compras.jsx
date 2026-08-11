@@ -212,6 +212,15 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
   const [saving,       setSaving]       = useState(false);
   const [categorias,   setCategorias]   = useState([]);
   const [nuevoProd,       setNuevoProd]       = useState({ active: false, idx: null, nombre: '' });
+  // Pago dividido — solo al crear (editar sigue con un único metodo_pago, ver
+  // handleRegistrar). Mismo patrón que "Varios" en el POS (Home.jsx): una
+  // lista de {metodo, monto} en vez de un solo método para el total; lo que
+  // no cubran esas líneas queda como saldo en cuenta corriente con el
+  // proveedor (lo calcula el backend solo, ver ComprasController::store).
+  const [variosPagos,     setVariosPagos]     = useState(false);
+  const [pagosAplicados,  setPagosAplicados]  = useState([]);
+  const [metodoSplit,     setMetodoSplit]     = useState('efectivo');
+  const [montoSplitActual, setMontoSplitActual] = useState('');
   // Ticket del proveedor — si ya existe la compra (edición) se sube al toque;
   // si es alta nueva, se guarda el archivo acá y se sube recién después de
   // crear la compra (todavía no hay id contra el cual subirlo).
@@ -463,6 +472,13 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
 
   const subtotal = form.lineas.reduce((s, l) => s + (Number(l.cantidad) * (Number(l.precio_compra) || 0)), 0);
 
+  const saldoSinAsignar = Math.max(0, Math.round((subtotal - pagosAplicados.reduce((s, p) => s + p.monto, 0)) * 100) / 100);
+  const handleAgregarPagoSplit = () => {
+    const m = Number(montoSplitActual) || saldoSinAsignar;
+    if (m > 0) { setPagosAplicados(prev => [...prev, { metodo: metodoSplit, monto: Math.min(m, saldoSinAsignar) }]); setMontoSplitActual(''); }
+  };
+  const handleQuitarPagoSplit = (i) => setPagosAplicados(prev => prev.filter((_, idx) => idx !== i));
+
   const validate = () => {
     const errs = {};
     if (!form.id_proveedor) errs.id_proveedor = 'El proveedor es requerido';
@@ -486,6 +502,10 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
         fecha:        form.fecha,
         estado:       form.estado,
         metodo_pago:  form.metodo_pago,
+        // Pago dividido — solo al crear (editar no lo soporta, ver arriba).
+        // Lo que no cubran estos pagos queda como saldo en cuenta corriente
+        // con el proveedor, calculado por el backend (ComprasController::store).
+        ...(!editId && variosPagos ? { pagos: pagosAplicados.map(p => ({ metodo: p.metodo, monto: p.monto })) } : {}),
         lineas:       form.lineas.filter(l => l.id_producto).map(l => ({
           id_producto:       l.id_producto,
           cantidad:          Number(l.cantidad),
@@ -517,6 +537,9 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
       setComprobanteUrl(null);
       setComprobanteFile(null);
       setComparativas({});
+      setVariosPagos(false);
+      setPagosAplicados([]);
+      setMontoSplitActual('');
       onClose();
     } catch (e) {
       toast(e.response?.data?.message || 'Error al procesar la compra', 'error');
@@ -526,7 +549,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
   };
 
   const resetNuevoProd = () => { setNuevoProd({ active: false, idx: null, nombre: '' }); };
-  const handleClose = () => { setForm(emptyConProveedorRecordado()); setErrors({}); resetNuevoProd(); setComprobanteUrl(null); setComprobanteFile(null); setVencAbiertos(new Set()); setComparativas({}); onClose(); };
+  const handleClose = () => { setForm(emptyConProveedorRecordado()); setErrors({}); resetNuevoProd(); setComprobanteUrl(null); setComprobanteFile(null); setVencAbiertos(new Set()); setComparativas({}); setVariosPagos(false); setPagosAplicados([]); setMontoSplitActual(''); onClose(); };
 
   // Agrega una línea por cada talle elegido en "Comprar por curva" — aprovecha
   // la última línea si está vacía en vez de dejarla suelta, mismo criterio
@@ -634,15 +657,33 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
               sx={{ ...fieldSx, '& .MuiOutlinedInput-root': { ...fieldSx['& .MuiOutlinedInput-root'], bgcolor: CARD } }} />
           </Box>
           <Box>
-            <FieldLabel>Método de pago</FieldLabel>
-            <FormControl fullWidth>
-              <Select value={form.metodo_pago} onChange={setField('metodo_pago')} sx={{ ...selectFieldSx, bgcolor: CARD, borderRadius: '10px' }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, color: INK } } }}>
-                {[['efectivo','Efectivo'],['tarjeta','Tarjeta'],['transferencia','Transferencia'],['cuenta_corriente','Cuenta Corriente']].map(([v, l]) => (
-                  <MenuItem key={v} value={v} sx={{ fontSize: 14, '&:hover': { bgcolor: HOVER } }}>{l}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+              <FieldLabel>Método de pago</FieldLabel>
+              {!editId && (
+                <Typography onClick={() => { setVariosPagos(v => !v); setPagosAplicados([]); setMontoSplitActual(''); }}
+                  sx={{ color: P, fontSize: 11, fontWeight: 600, cursor: 'pointer', mb: '5px', '&:hover': { textDecoration: 'underline' } }}>
+                  {variosPagos ? 'Un solo método' : 'Dividir pago'}
+                </Typography>
+              )}
+            </Box>
+            {variosPagos ? (
+              <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '10px', bgcolor: CARD, px: 1.25, py: '7.5px' }}>
+                <Typography sx={{ color: pagosAplicados.length ? INK : MUTED, fontSize: 13, fontWeight: pagosAplicados.length ? 600 : 400 }}>
+                  {pagosAplicados.length
+                    ? `${pagosAplicados.length} pago${pagosAplicados.length !== 1 ? 's' : ''} cargado${pagosAplicados.length !== 1 ? 's' : ''}`
+                    : 'Sin pagos cargados'}
+                </Typography>
+              </Box>
+            ) : (
+              <FormControl fullWidth>
+                <Select value={form.metodo_pago} onChange={setField('metodo_pago')} sx={{ ...selectFieldSx, bgcolor: CARD, borderRadius: '10px' }}
+                  MenuProps={{ PaperProps: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, color: INK } } }}>
+                  {[['efectivo','Efectivo'],['tarjeta','Tarjeta'],['transferencia','Transferencia'],['cuenta_corriente','Cuenta Corriente']].map(([v, l]) => (
+                    <MenuItem key={v} value={v} sx={{ fontSize: 14, '&:hover': { bgcolor: HOVER } }}>{l}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Box>
           <Box data-tour="compras-modal-estado">
             <FieldLabel>Estado</FieldLabel>
@@ -689,6 +730,58 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
             )}
           </Box>
         </Box>
+
+        {/* Pago dividido — solo aparece si se activó "Dividir pago" arriba.
+            Lo que no cubran estas líneas queda como saldo en cuenta corriente
+            con el proveedor (lo calcula el backend, ver ComprasController). */}
+        {variosPagos && (
+          <Box sx={{ mb: { xs: 2, sm: 3 }, p: { xs: 1.25, sm: 2 }, border: `1px solid ${BORDER}`, borderRadius: '12px', bgcolor: `${TABLE_HEADER}80` }}>
+            <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', mb: 1.25 }}>
+              Pagos
+            </Typography>
+            {pagosAplicados.length > 0 && (
+              <Box sx={{ mb: 1.5 }}>
+                {pagosAplicados.map((p, i) => (
+                  <Box key={i} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.5 }}>
+                    <Typography sx={{ color: INK2, fontSize: 13 }}>{METODO_LABELS[p.metodo] || p.metodo}</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Typography sx={{ color: INK, fontWeight: 600, fontSize: 13 }}>{fmtMoney(p.monto)}</Typography>
+                      <IconButton size="small" onClick={() => handleQuitarPagoSplit(i)} sx={{ color: MUTED, p: 0.25, '&:hover': { color: ERROR, bgcolor: ERROR_BG } }}>
+                        <CloseIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            )}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <Select value={metodoSplit} onChange={e => setMetodoSplit(e.target.value)} sx={{ ...selectFieldSx, bgcolor: CARD, borderRadius: '10px' }}
+                  MenuProps={{ PaperProps: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, color: INK } } }}>
+                  {[['efectivo','Efectivo'],['tarjeta','Tarjeta'],['transferencia','Transferencia']].map(([v, l]) => (
+                    <MenuItem key={v} value={v} sx={{ fontSize: 14, '&:hover': { bgcolor: HOVER } }}>{l}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <CampoPrecio size="small" placeholder={saldoSinAsignar ? String(saldoSinAsignar) : '0'} value={montoSplitActual}
+                onChange={e => setMontoSplitActual(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAgregarPagoSplit(); } }}
+                sx={{ ...numberFieldSx, flex: 1, minWidth: 100, bgcolor: CARD, borderRadius: '10px' }} />
+              <Button variant="contained" onClick={handleAgregarPagoSplit} disabled={saldoSinAsignar <= 0}
+                sx={{ bgcolor: P, textTransform: 'none', fontWeight: 700, borderRadius: '8px', px: 2, whiteSpace: 'nowrap', '&:hover': { bgcolor: P_HOVER } }}>
+                Agregar
+              </Button>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1.5, pt: 1.25, borderTop: `1px solid ${BORDER}` }}>
+              <Typography sx={{ color: MUTED, fontSize: 13 }}>
+                {saldoSinAsignar > 0 ? 'Queda como saldo (cuenta corriente)' : 'Total cubierto'}
+              </Typography>
+              <Typography sx={{ color: saldoSinAsignar > 0 ? WARNING : SUCCESS_LIGHT, fontWeight: 700, fontSize: 14 }}>
+                {fmtMoney(saldoSinAsignar)}
+              </Typography>
+            </Box>
+          </Box>
+        )}
 
         {/* Líneas de compra */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25 }}>
