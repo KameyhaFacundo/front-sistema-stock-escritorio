@@ -1129,7 +1129,7 @@ function TabCompras({ compras, onCompraActualizada }) {
       </Box>
 
       {/* Modal: Detalle de compra */}
-      <Dialog open={Boolean(detalleCompra) || detalleLoading} onClose={() => setDetalleCompra(null)} maxWidth="sm" fullWidth
+      <Dialog open={Boolean(detalleCompra) || detalleLoading} onClose={() => setDetalleCompra(null)} maxWidth="md" fullWidth
         PaperProps={{ sx: modalPaperSx }}>
         {detalleCompra && (
           <Box>
