@@ -70,13 +70,13 @@ const PaymentModal = memo(function PaymentModal({
   // — mismas condiciones que lo deshabilitan (ver el Button de más abajo).
   const handleEnter = (e) => {
     if (e.key !== 'Enter') return;
-    if (saving || !form.monto || Number(form.monto) > saldo || Number(form.monto) <= 0) return;
+    if (saving || !form.monto || Number(form.monto) > saldo || Number(form.monto) <= 0 || !form.nota.trim()) return;
     e.preventDefault();
     handleSubmit();
   };
 
   const handleSubmit = async () => {
-    if (!form.monto || Number(form.monto) <= 0) return;
+    if (!form.monto || Number(form.monto) <= 0 || !form.nota.trim()) return;
     if (!serviceFn) { toast('Error: servicio no configurado', 'error'); return; }
     setSaving(true);
     try {
@@ -240,8 +240,10 @@ const PaymentModal = memo(function PaymentModal({
 
         {/* ── Nota ── */}
         <Box sx={{ mb: 4 }}>
-          <Typography sx={labelSx}>Nota (opcional)</Typography>
-          <TextField fullWidth placeholder={type === 'cobro' ? 'Ej: Abono semana 1' : 'Ej: Pago cuota 1/3'}
+          <Typography sx={labelSx}>
+            Nota <Box component="span" sx={{ color: ERROR }}>*</Box>
+          </Typography>
+          <TextField fullWidth placeholder={type === 'cobro' ? 'Ej: Cobrado en el local, en efectivo' : 'Ej: Pago cuota 1/3'}
             value={form.nota} onChange={set('nota')} onKeyDown={handleEnter}
             InputProps={{
               startAdornment: (
@@ -251,6 +253,11 @@ const PaymentModal = memo(function PaymentModal({
               ),
             }}
             sx={fieldSx} />
+          {/* Antes era opcional — un cobro sin ninguna referencia es mucho más
+              fácil de inventar. Ver el mismo cambio en DeudasClientesController::cobrar. */}
+          <Typography sx={{ color: MUTED, fontSize: 11, mt: 0.75 }}>
+            Contá dónde/cómo se {type === 'cobro' ? 'cobró' : 'pagó'} — ayuda a confirmar el {type === 'cobro' ? 'cobro' : 'pago'} después si hace falta.
+          </Typography>
         </Box>
 
         {/* ── Actions ── */}
@@ -264,7 +271,7 @@ const PaymentModal = memo(function PaymentModal({
             Cancelar
           </Button>
           <Button fullWidth variant="contained" onClick={handleSubmit}
-            disabled={saving || !form.monto || Number(form.monto) > saldo || Number(form.monto) <= 0}
+            disabled={saving || !form.monto || Number(form.monto) > saldo || Number(form.monto) <= 0 || !form.nota.trim()}
             sx={{
               bgcolor: confirmColor, textTransform: 'none', fontWeight: 700, fontSize: 14, py: 1.5,
               borderRadius: '12px', boxShadow: 'none',
