@@ -10,6 +10,7 @@ export { P, P_HOVER, SUCCESS, SUCCESS_HOVER, SUCCESS_BG, SUCCESS_BORDER,
 
 // ── Theme-aware CSS variable tokens ────────────────────────────────────────
 export const BG           = 'var(--bg)';
+export const BG_SIDEBAR   = 'var(--bg-sidebar)';
 export const CARD         = 'var(--card)';
 export const BORDER       = 'var(--border)';
 export const INK          = 'var(--ink)';
@@ -21,6 +22,10 @@ export const ACTIVE_BG    = 'var(--active-bg)';
 export const TABLE_HEADER = 'var(--table-header)';
 export const DROPDOWN     = 'var(--dropdown)';
 export const MODAL        = 'var(--modal)';
+// Color de texto a usar SOBRE un fondo tintado con el acento (ej. el ítem
+// activo del sidebar) — a diferencia de P (fijo, VITE_PRIMARY_COLOR), este
+// sí cambia por tema/modo junto con --active-bg, ver ThemeContext.jsx.
+export const ACCENT_INK   = 'var(--accent-ink)';
 
 // ── Reusable sx presets ─────────────────────────────────────────────────────
 import { P } from './palette';

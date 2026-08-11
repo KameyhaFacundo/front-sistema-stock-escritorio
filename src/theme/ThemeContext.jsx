@@ -4,43 +4,100 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeCtx } from './useAppTheme';
 import { PRIMARY_COLOR } from '../config/brand';
 
-// ── CSS variable sets ──────────────────────────────────────────────────────
-
-// ── Dark theme — Marrón cálido (paleta pedida a medida, ver conversación:
-// bg-page/bg-surface/border/text-primary/text-secondary/accent) ───────────
-const DARK_ACCENT = '#F5883A';
-const DARK = {
-  '--bg':           '#1A1714',
-  '--card':         '#211D19',
-  '--border':       '#2E2823',
-  '--border-hover': '#40372E',
-  '--ink':          '#F2EDE7',
-  '--ink2':         '#A89E93',
-  '--muted':        '#6B6259',
-  '--input':        '#231F1A',
-  '--hover':        '#282320',
-  '--active-bg':    '#3A2416',
-  '--table-header': '#17130F',
-  '--dropdown':     '#231F1A',
-  '--modal':        '#1A1714',
+// ── Paletas guardadas ────────────────────────────────────────────────────
+// Cada preset trae dark/light completos. Ninguno se borra al probar uno
+// nuevo — así se puede volver atrás o comparar sin tener que reconstruir
+// los valores de memoria. ACTIVE_PRESET más abajo decide cuál está en uso.
+const THEME_PRESETS = {
+  // Paleta original del sistema (antes de esta sesión) — azul/slate.
+  slate: {
+    accent: { light: '#5c6ef8', dark: '#5c6ef8' },
+    dark: {
+      '--bg': '#0f172a', '--bg-sidebar': '#0f172a', '--card': '#1e293b',
+      '--border': '#334155', '--border-hover': '#475569',
+      '--ink': '#f1f5f9', '--ink2': '#b0bdd0', '--muted': '#64748b',
+      '--input': '#1e293b', '--hover': '#334155', '--active-bg': '#1e3a5f',
+      '--accent-ink': '#f1f5f9',
+      '--table-header': '#172033', '--dropdown': '#1e293b', '--modal': '#0f172a',
+    },
+    light: {
+      '--bg': '#f4f6fa', '--bg-sidebar': '#f4f6fa', '--card': '#ffffff',
+      '--border': '#e2e8f0', '--border-hover': '#b8c4d8',
+      '--ink': '#0f172a', '--ink2': '#475569', '--muted': '#94a3b8',
+      '--input': '#f8fafc', '--hover': '#f1f5f9', '--active-bg': '#eef2ff',
+      '--accent-ink': '#0f172a',
+      '--table-header': '#f8fafc', '--dropdown': '#ffffff', '--modal': '#ffffff',
+    },
+  },
+  // Primera paleta cálida pedida — terracota/crema.
+  terracota: {
+    accent: { light: '#B5622C', dark: '#F5883A' },
+    dark: {
+      '--bg': '#1A1714', '--bg-sidebar': '#1A1714', '--card': '#211D19',
+      '--border': '#2E2823', '--border-hover': '#40372E',
+      '--ink': '#F2EDE7', '--ink2': '#A89E93', '--muted': '#6B6259',
+      '--input': '#231F1A', '--hover': '#282320', '--active-bg': '#3A2416',
+      '--accent-ink': '#F5883A',
+      '--table-header': '#17130F', '--dropdown': '#231F1A', '--modal': '#1A1714',
+    },
+    light: {
+      '--bg': '#F7F4EF', '--bg-sidebar': '#F7F4EF', '--card': '#FFFFFF',
+      '--border': '#E8E1D8', '--border-hover': '#D6C9B8',
+      '--ink': '#2A2521', '--ink2': '#6B5F54', '--muted': '#948879',
+      '--input': '#FAF7F2', '--hover': '#F1ECE4', '--active-bg': '#F5E6D8',
+      '--accent-ink': '#B5622C',
+      '--table-header': '#F2EDE6', '--dropdown': '#FFFFFF', '--modal': '#FFFFFF',
+    },
+  },
+  // Segunda paleta cálida pedida — "clay", con sidebar propio y semánticos
+  // success/danger (guardados en SEMANTIC_PRESETS más abajo — todavía no
+  // reemplazan SUCCESS/ERROR de palette.js, ver comentario ahí).
+  clay: {
+    accent: { light: '#B0653D', dark: '#E08A5B' },
+    dark: {
+      '--bg': '#2B2118', '--bg-sidebar': '#241B14', '--card': '#332720',
+      '--border': '#473627', '--border-hover': '#5C4936',
+      '--ink': '#F5EEE4', '--ink2': '#C7B7A3', '--muted': '#8F7D68',
+      '--input': '#362A22', '--hover': '#3D2F26', '--active-bg': '#4A3626',
+      '--accent-ink': '#FFC397',
+      '--table-header': '#251C15', '--dropdown': '#332720', '--modal': '#2B2118',
+    },
+    light: {
+      '--bg': '#F3EDE3', '--bg-sidebar': '#F8F4EC', '--card': '#FFFFFF',
+      '--border': '#E5DBC9', '--border-hover': '#D4C2A0',
+      '--ink': '#2B241D',
+      // Pedido como #8B7F6E — casi el mismo tono que ya hubo que oscurecer
+      // en "terracota" por bajo contraste (~3.8:1, por debajo del mínimo
+      // AA 4.5:1). Ajustado con el mismo criterio, no lo dejé tal cual.
+      '--ink2': '#6C6052', '--muted': '#A89C89',
+      '--input': '#FAF6EF', '--hover': '#ECE4D5', '--active-bg': '#F0DFCE',
+      '--accent-ink': '#8A4A22',
+      '--table-header': '#EFE7D9', '--dropdown': '#FFFFFF', '--modal': '#FFFFFF',
+    },
+  },
 };
 
-const LIGHT_ACCENT = '#B5622C';
-const LIGHT = {
-  '--bg':           '#F7F4EF',
-  '--card':         '#FFFFFF',
-  '--border':       '#E8E1D8',
-  '--border-hover': '#D6C9B8',
-  '--ink':          '#2A2521',
-  '--ink2':         '#6B5F54',
-  '--muted':        '#948879',
-  '--input':        '#FAF7F2',
-  '--hover':        '#F1ECE4',
-  '--active-bg':    '#F5E6D8',
-  '--table-header': '#F2EDE6',
-  '--dropdown':     '#FFFFFF',
-  '--modal':        '#FFFFFF',
+// success/success-bg/danger/danger-bg de "clay" quedan guardados acá para
+// cuando se decida migrar SUCCESS/ERROR (palette.js) a ser reactivos por
+// tema — hoy son constantes JS fijas, usadas con concatenación de alfa
+// (${SUCCESS}18) en todo el código, así que no pueden ser CSS vars sin
+// antes revisar cada uso una por una (mismo problema que ya existe con P).
+// eslint-disable-next-line no-unused-vars
+const SEMANTIC_PRESETS = {
+  clay: {
+    light: { success: '#6B7A4A', successBg: '#E7EADB', danger: '#B14A3A', dangerBg: '#F5DBD3' },
+    dark:  { success: '#A3B37B', successBg: '#3A3F2C', danger: '#E28470', dangerBg: '#4A2E27' },
+  },
 };
+
+// ── Preset activo ────────────────────────────────────────────────────────
+// Para volver a "terracota" o "slate": cambiar esta línea nomás, ningún
+// otro archivo depende del nombre del preset.
+const ACTIVE_PRESET = 'clay';
+const DARK  = THEME_PRESETS[ACTIVE_PRESET].dark;
+const LIGHT = THEME_PRESETS[ACTIVE_PRESET].light;
+const DARK_ACCENT  = THEME_PRESETS[ACTIVE_PRESET].accent.dark;
+const LIGHT_ACCENT = THEME_PRESETS[ACTIVE_PRESET].accent.light;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

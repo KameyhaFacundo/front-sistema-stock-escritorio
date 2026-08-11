@@ -31,8 +31,8 @@ function validHex(val, fallback) {
   return hexColorRx.test(clean) ? clean : fallback;
 }
 
-export const PRIMARY_COLOR = validHex(import.meta.env.VITE_PRIMARY_COLOR, '#B5622C');
-export const PRIMARY_HOVER = validHex(import.meta.env.VITE_PRIMARY_HOVER, '#9C5024');
+export const PRIMARY_COLOR = validHex(import.meta.env.VITE_PRIMARY_COLOR, '#B0653D');
+export const PRIMARY_HOVER = validHex(import.meta.env.VITE_PRIMARY_HOVER, '#985635');
 
 // Cobrar con Point (lector de tarjeta Mercado Pago) deshabilitado temporalmente
 // a pedido — no afecta a QR. Para reactivarlo, poner VITE_POINT_HABILITADO=true

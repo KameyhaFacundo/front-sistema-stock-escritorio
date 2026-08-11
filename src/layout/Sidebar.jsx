@@ -34,7 +34,7 @@ import { useCaja } from '../context/CajaContextBase';
 import useHasPermiso from '../hooks/useHasPermiso';
 import usePlan from '../hooks/usePlan';
 import {
-  CARD, BORDER, INK, INK2, MUTED, P, HOVER, ACTIVE_BG, DROPDOWN,
+  CARD, BG_SIDEBAR, BORDER, INK, INK2, MUTED, P, ACCENT_INK, HOVER, ACTIVE_BG, DROPDOWN,
   SUCCESS, ERROR, WARNING, ERROR_BG,
 } from '../theme/tokens';
 import { APP_NAME, APP_VERSION } from '../config/brand';
@@ -97,7 +97,7 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
           borderRadius: '6px',
           textDecoration: 'none',
           bgcolor: isActive ? ACTIVE_BG : 'transparent',
-          color:   isActive ? P : INK2,
+          color:   isActive ? ACCENT_INK : INK2,
           transition: 'all 0.15s',
           '&:hover': { bgcolor: HOVER, color: INK },
         }}
@@ -109,7 +109,7 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
               position: 'absolute', top: -2, right: -4,
               width: 7, height: 7, borderRadius: '50%',
               bgcolor: caja.abierta ? SUCCESS : MUTED,
-              border: `1.5px solid ${CARD}`,
+              border: `1.5px solid ${BG_SIDEBAR}`,
             }} />
           </Box>
           {!collapsed && (
@@ -145,7 +145,7 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
         borderRadius: '6px',
         textDecoration: 'none',
         bgcolor: isActive ? ACTIVE_BG : 'transparent',
-        color:   isActive ? P : INK2,
+        color:   isActive ? ACCENT_INK : INK2,
         transition: 'all 0.15s',
         '&:hover': { bgcolor: HOVER, color: INK },
       }}
@@ -242,7 +242,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
         minWidth: { xs: W, md: collapsed ? W_COLLAPSED : W },
         height: '100dvh',
         position: 'fixed', top: 0, left: 0,
-        bgcolor: CARD,
+        bgcolor: BG_SIDEBAR,
         borderRight: `1px solid ${BORDER}`,
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
@@ -377,7 +377,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
                 const content = (
                   <Box component={Link} to="/productos" onClick={handleSidebarClose}
                     onMouseEnter={() => preloadPage('/productos')}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9, justifyContent: collapsed ? 'center' : 'flex-start', borderRadius: '6px', textDecoration: 'none', bgcolor: isActive ? ACTIVE_BG : 'transparent', color: isActive ? P : INK2, transition: 'all 0.15s', '&:hover': { bgcolor: HOVER, color: INK }, }}>
+                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9, justifyContent: collapsed ? 'center' : 'flex-start', borderRadius: '6px', textDecoration: 'none', bgcolor: isActive ? ACTIVE_BG : 'transparent', color: isActive ? ACCENT_INK : INK2, transition: 'all 0.15s', '&:hover': { bgcolor: HOVER, color: INK }, }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: collapsed ? 'auto' : '100%' }}>
                       <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                         <Icon sx={{ fontSize: 16, flexShrink: 0 }} />
