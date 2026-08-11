@@ -10,7 +10,7 @@
   };
   var light = {
     '--bg':'#F7F4EF','--card':'#FFFFFF','--border':'#E8E1D8','--border-hover':'#D6C9B8',
-    '--ink':'#2A2521','--ink2':'#8A7F73','--muted':'#B8AEA2','--input':'#FAF7F2',
+    '--ink':'#2A2521','--ink2':'#6B5F54','--muted':'#948879','--input':'#FAF7F2',
     '--hover':'#F1ECE4','--active-bg':'#F5E6D8','--table-header':'#F2EDE6',
     '--dropdown':'#FFFFFF','--modal':'#FFFFFF','--p':'#B5622C'
   };
