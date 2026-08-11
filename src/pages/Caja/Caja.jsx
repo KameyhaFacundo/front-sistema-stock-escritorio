@@ -340,12 +340,19 @@ function TabMovimientos({ movimientos, onAgregar, cajaAbierta, ocultarMontos }) 
 function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoCierre, metodosVisibles = ['efectivo', 'tarjeta', 'transferencia', 'qr', 'fiado'], puedeVerMontos = true }) {
   const toast = useToast();
   const [contado, setContado] = useState('');
+  const [contadoTransferencia, setContadoTransferencia] = useState('');
 
   // Solo los movimientos en efectivo entran acá — una transferencia no es
   // plata física, así que no puede formar parte del "esperado" que este
   // cálculo tiene que igualar (ver comentario más abajo).
   const totalIngresos   = movimientos.filter(m => m.tipo === 'ingreso' && (m.metodo ?? 'efectivo') === 'efectivo').reduce((s, m) => s + m.monto, 0);
   const totalEgresos    = movimientos.filter(m => m.tipo === 'egreso' && (m.metodo ?? 'efectivo') === 'efectivo').reduce((s, m) => s + m.monto, 0);
+  // Mismo desglose que arriba, pero para transferencia — no entra al arqueo
+  // ciego de efectivo (no es plata física), así que se muestra siempre, sin
+  // ocultar. Sirve solo para ver de un vistazo cuánto se movió manual por
+  // transferencia en el turno (retiros, pagos a proveedores a mano, etc.).
+  const ingresosTransferencia = movimientos.filter(m => m.tipo === 'ingreso' && m.metodo === 'transferencia').reduce((s, m) => s + m.monto, 0);
+  const egresosTransferencia  = movimientos.filter(m => m.tipo === 'egreso' && m.metodo === 'transferencia').reduce((s, m) => s + m.monto, 0);
   const ventasEfectivo  = caja.ventasEfectivo || 0;
   // Tarjeta/transferencia/QR/fiado no mueven plata física — no forman parte
   // del efectivo "esperado" que el arqueo ciego protege, así que se muestran
@@ -374,8 +381,8 @@ function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoC
         {verMetodo('efectivo') && (
           <StatCard label="VENTAS EFECTIVO" value={fmtOculto(ventasEfectivo, ocultarMontos)} Icon={PointOfSaleIcon} color={SUCCESS} />
         )}
-        <StatCard label="INGRESOS MANUAL" value={fmtOculto(totalIngresos, ocultarMontos)} Icon={TrendingUpIcon} color={SUCCESS} />
-        <StatCard label="EGRESOS MANUAL" value={fmtOculto(totalEgresos, ocultarMontos)} Icon={TrendingDownIcon} color={ERROR} />
+        <StatCard label="INGRESOS MANUAL EFECTIVO" value={fmtOculto(totalIngresos, ocultarMontos)} Icon={TrendingUpIcon} color={SUCCESS} />
+        <StatCard label="EGRESOS MANUAL EFECTIVO" value={fmtOculto(totalEgresos, ocultarMontos)} Icon={TrendingDownIcon} color={ERROR} />
         {/* Tarjeta/transferencia/QR/fiado no mueven efectivo físico — no hace
             falta ocultarlas durante el arqueo ciego, no hay que contarlas a mano.
             Cuáles se muestran se elige en Configuración → Negocio → Arqueo de caja. */}
@@ -384,6 +391,12 @@ function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoC
         )}
         {verMetodo('transferencia') && (
           <StatCard label="VENTAS TRANSFERENCIA" value={fmt(ventasTransferencia)} Icon={SwapHorizIcon} color={P} />
+        )}
+        {verMetodo('transferencia') && (
+          <StatCard label="INGRESOS MANUAL TRANSFERENCIA" value={fmt(ingresosTransferencia)} Icon={TrendingUpIcon} color={P} />
+        )}
+        {verMetodo('transferencia') && (
+          <StatCard label="EGRESOS MANUAL TRANSFERENCIA" value={fmt(egresosTransferencia)} Icon={TrendingDownIcon} color={P} />
         )}
         {verMetodo('qr') && (
           <StatCard label="VENTAS QR" value={fmt(ventasQr)} Icon={QrCode2Icon} color={ORANGE} />
@@ -438,6 +451,45 @@ function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoC
           <Typography sx={{ color: MUTED, fontSize: 14 }}>No hay una caja abierta para arquear.</Typography>
         </Box>
       )}
+
+      {/* Arqueo de transferencia — solo para controlar, no bloquea nada ni se
+          guarda: la transferencia no es plata física, así que no hay "cajón"
+          que cerrar con esto. Comparás lo que el sistema espera (ventas +
+          ingresos - egresos manuales por transferencia) contra lo que ves en
+          tu cuenta/resumen bancario, a mano. */}
+      {verMetodo('transferencia') && caja.abierta && (() => {
+        const esperadoTransferencia = ventasTransferencia + ingresosTransferencia - egresosTransferencia;
+        const diferenciaTransferencia = contadoTransferencia === '' ? null : Number(contadoTransferencia) - esperadoTransferencia;
+        return (
+          <Box sx={{ ...card, p: 2.5, mt: 2 }}>
+            <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15, mb: 0.5 }}>Arqueo de transferencia</Typography>
+            <Typography sx={{ color: MUTED, fontSize: 12.5, mb: 1.5 }}>
+              Solo para controlar — no bloquea el cierre ni se guarda. Comparalo con lo que ves en tu cuenta.
+            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+              <Typography sx={{ color: INK2, fontSize: 13 }}>Transferencia esperada</Typography>
+              <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600 }}>{fmt(esperadoTransferencia)}</Typography>
+            </Box>
+            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Lo que ves en tu cuenta</Typography>
+            <CampoPrecio fullWidth placeholder="0" value={contadoTransferencia} onChange={e => setContadoTransferencia(e.target.value)}
+              InputProps={{ startAdornment: <InputAdornment position="start"><Typography sx={{ color: MUTED, fontSize: 14 }}>$</Typography></InputAdornment> }}
+              sx={fieldSx} />
+            {diferenciaTransferencia !== null && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.5, pt: 1.25, borderTop: `1px solid ${BORDER}` }}>
+                <Typography sx={{ color: INK2, fontSize: 13 }}>Diferencia</Typography>
+                <Chip
+                  label={`${diferenciaTransferencia >= 0 ? '+' : ''}${fmt(diferenciaTransferencia)}`}
+                  sx={{
+                    bgcolor: diferenciaTransferencia === 0 ? SUCCESS_BG : ERROR_BG,
+                    color: diferenciaTransferencia === 0 ? SUCCESS : ERROR,
+                    fontWeight: 700, fontSize: 13, borderRadius: '8px', height: 26, px: 1,
+                  }}
+                />
+              </Box>
+            )}
+          </Box>
+        );
+      })()}
 
       {/* Botón confirmar cierre */}
       {!resultadoCierre && caja.abierta && onConfirmarCierre && (
