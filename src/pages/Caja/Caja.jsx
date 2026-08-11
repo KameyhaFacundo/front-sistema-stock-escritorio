@@ -340,7 +340,6 @@ function TabMovimientos({ movimientos, onAgregar, cajaAbierta, ocultarMontos }) 
 function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoCierre, metodosVisibles = ['efectivo', 'tarjeta', 'transferencia', 'qr', 'fiado'], puedeVerMontos = true }) {
   const toast = useToast();
   const [contado, setContado] = useState('');
-  const [contadoTransferencia, setContadoTransferencia] = useState('');
 
   // Solo los movimientos en efectivo entran acá — una transferencia no es
   // plata física, así que no puede formar parte del "esperado" que este
@@ -386,9 +385,6 @@ function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoC
         {/* Tarjeta/transferencia/QR/fiado no mueven efectivo físico — no hace
             falta ocultarlas durante el arqueo ciego, no hay que contarlas a mano.
             Cuáles se muestran se elige en Configuración → Negocio → Arqueo de caja. */}
-        {verMetodo('tarjeta') && (
-          <StatCard label="VENTAS TARJETA" value={fmt(ventasTarjeta)} Icon={CreditCardIcon} color={P} />
-        )}
         {verMetodo('transferencia') && (
           <StatCard label="VENTAS TRANSFERENCIA" value={fmt(ventasTransferencia)} Icon={SwapHorizIcon} color={P} />
         )}
@@ -400,6 +396,9 @@ function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoC
         )}
         {verMetodo('qr') && (
           <StatCard label="VENTAS QR" value={fmt(ventasQr)} Icon={QrCode2Icon} color={ORANGE} />
+        )}
+        {verMetodo('tarjeta') && (
+          <StatCard label="VENTAS TARJETA" value={fmt(ventasTarjeta)} Icon={CreditCardIcon} color={P} />
         )}
         {verMetodo('fiado') && (
           <StatCard label="VENTAS FIADO" value={fmt(ventasFiado)} Icon={AccountBalanceWalletIcon} color={ORANGE} />
@@ -451,45 +450,6 @@ function TabResumen({ caja, movimientos, onConfirmarCierre, cerrando, resultadoC
           <Typography sx={{ color: MUTED, fontSize: 14 }}>No hay una caja abierta para arquear.</Typography>
         </Box>
       )}
-
-      {/* Arqueo de transferencia — solo para controlar, no bloquea nada ni se
-          guarda: la transferencia no es plata física, así que no hay "cajón"
-          que cerrar con esto. Comparás lo que el sistema espera (ventas +
-          ingresos - egresos manuales por transferencia) contra lo que ves en
-          tu cuenta/resumen bancario, a mano. */}
-      {verMetodo('transferencia') && caja.abierta && (() => {
-        const esperadoTransferencia = ventasTransferencia + ingresosTransferencia - egresosTransferencia;
-        const diferenciaTransferencia = contadoTransferencia === '' ? null : Number(contadoTransferencia) - esperadoTransferencia;
-        return (
-          <Box sx={{ ...card, p: 2.5, mt: 2 }}>
-            <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15, mb: 0.5 }}>Arqueo de transferencia</Typography>
-            <Typography sx={{ color: MUTED, fontSize: 12.5, mb: 1.5 }}>
-              Solo para controlar — no bloquea el cierre ni se guarda. Comparalo con lo que ves en tu cuenta.
-            </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-              <Typography sx={{ color: INK2, fontSize: 13 }}>Transferencia esperada</Typography>
-              <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600 }}>{fmt(esperadoTransferencia)}</Typography>
-            </Box>
-            <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Lo que ves en tu cuenta</Typography>
-            <CampoPrecio fullWidth placeholder="0" value={contadoTransferencia} onChange={e => setContadoTransferencia(e.target.value)}
-              InputProps={{ startAdornment: <InputAdornment position="start"><Typography sx={{ color: MUTED, fontSize: 14 }}>$</Typography></InputAdornment> }}
-              sx={fieldSx} />
-            {diferenciaTransferencia !== null && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.5, pt: 1.25, borderTop: `1px solid ${BORDER}` }}>
-                <Typography sx={{ color: INK2, fontSize: 13 }}>Diferencia</Typography>
-                <Chip
-                  label={`${diferenciaTransferencia >= 0 ? '+' : ''}${fmt(diferenciaTransferencia)}`}
-                  sx={{
-                    bgcolor: diferenciaTransferencia === 0 ? SUCCESS_BG : ERROR_BG,
-                    color: diferenciaTransferencia === 0 ? SUCCESS : ERROR,
-                    fontWeight: 700, fontSize: 13, borderRadius: '8px', height: 26, px: 1,
-                  }}
-                />
-              </Box>
-            )}
-          </Box>
-        );
-      })()}
 
       {/* Botón confirmar cierre */}
       {!resultadoCierre && caja.abierta && onConfirmarCierre && (
