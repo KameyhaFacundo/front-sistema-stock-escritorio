@@ -16,6 +16,7 @@ import WbSunnyOutlinedIcon    from "@mui/icons-material/WbSunnyOutlined";
 import DarkModeOutlinedIcon   from "@mui/icons-material/DarkModeOutlined";
 import { APP_NAME, PRIMARY_COLOR, PRIMARY_HOVER } from "../../config/brand";
 import { SIDEBAR_COLLAPSED_STORAGE_KEY } from "../../layout/sidebarConstants";
+import useHasPermiso, { PERMISOS_MAP, primeraRutaDisponible } from "../../hooks/useHasPermiso";
 import useLogo from "../../hooks/useLogo";
 import { BG, CARD, BORDER, INK, INK2, MUTED, INPUT, HOVER, ERROR } from "../../theme/tokens";
 import { useAppTheme } from "../../theme/useAppTheme";
@@ -97,6 +98,17 @@ function guardarSesion(res, { setToken, setUser, setMyPermisos }) {
   // si se había dejado colapsado en una sesión anterior.
   localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, 'false');
   setMyPermisos(todos); setToken(res.access_token); setUser(res.user);
+  return todos;
+}
+
+// Justo después de guardarSesion(), el contexto (myPermisos) todavía no se
+// re-renderizó con los permisos nuevos en este mismo tick — por eso acá se
+// arma tienePermiso a mano contra el array crudo que guardarSesion() ya
+// devolvió, en vez de usar el checkPermisos del hook (que leería el estado
+// viejo, de antes de este login).
+function rutaLandingTrasLogin(codigos) {
+  const tienePermiso = (permiso) => codigos.includes(PERMISOS_MAP[permiso] || permiso);
+  return primeraRutaDisponible(tienePermiso);
 }
 
 /* Segundo paso del login cuando la cuenta tiene 2FA activo */
@@ -111,9 +123,9 @@ function View2FA({ pendingToken, onVerificado, onCancelar }) {
     setLoading(true); setError('');
     try {
       const res = await verificar2faApi(pendingToken, data.codigo);
-      guardarSesion(res, authCtx);
+      const codigos = guardarSesion(res, authCtx);
       onVerificado();
-      navigate('/dashboard');
+      navigate(rutaLandingTrasLogin(codigos));
     } catch (e) {
       setError(e.response?.data?.message || 'Código incorrecto');
     } finally { setLoading(false); }
@@ -178,8 +190,8 @@ function ViewLogin({ onRequiere2fa }) {
         onRequiere2fa(res.pending_token);
         return;
       }
-      guardarSesion(res, authCtx);
-      navigate('/dashboard');
+      const codigos = guardarSesion(res, authCtx);
+      navigate(rutaLandingTrasLogin(codigos));
     } catch (e) {
       setToken(null); localStorage.removeItem('token');
       if (e.response?.status === 429) {
@@ -455,6 +467,7 @@ function ViewReset({ token, email, onDone }) {
 ══════════════════════════════ */
 export default function Login() {
   const { token }           = useContext(AuthContext);
+  const { checkPermisos }   = useHasPermiso();
   const navigate            = useNavigate();
   const location            = useLocation();
   const { mode, toggle }    = useAppTheme();
@@ -470,7 +483,7 @@ export default function Login() {
   const [view, setView] = useState(initialView);
   const [pendingToken, setPendingToken] = useState(pending2faToken || null);
 
-  if (token) return <Navigate to="/dashboard" />;
+  if (token) return <Navigate to={primeraRutaDisponible(checkPermisos)} />;
 
   return (
     <>

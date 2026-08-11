@@ -2,7 +2,7 @@ import { useAuth } from '../auth/AuthContextBase';
 
 // Atajos legibles → códigos reales de permiso (deben existir en PermisoSeeder.php
 // y coincidir con lo que exige cada ruta del backend, ver routes/api.php).
-const PERMISOS_MAP = {
+export const PERMISOS_MAP = {
   verDashboard: 'view-dashboard',
   verDashboardCompleto: 'view-dashboard-completo',
   verPOS: 'create-ventas',
@@ -55,6 +55,38 @@ const PERMISOS_MAP = {
   asignarPermisos: 'assign-permisos',
   actualizarCompra: 'update-compras',
 };
+
+// Destino post-login / fallback de "acceso denegado" — antes /dashboard
+// estaba hardcodeado en Login.jsx, OAuthCallback.jsx y PrivateRoute.jsx
+// asumiendo que CUALQUIER rol logueado tiene esa página habilitada. Con el
+// rol "usuario" (vendedor/cajero) sin view-dashboard, esa asunción rompía:
+// apenas iniciaba sesión, PrivateRoute lo mandaba de nuevo a "/" (landing
+// pública) en vez de adentro de la app. Esta lista prueba, en orden, la
+// primera pantalla a la que el rol SÍ tiene acceso — "/" queda como último
+// recurso (caso raro: un rol sin ninguna de estas).
+const RUTAS_LANDING = [
+  ['verDashboard', '/dashboard'],
+  ['verPOS', '/pos'],
+  ['verCompras', '/compras'],
+  ['verClientes', '/clientes'],
+  ['verProveedores', '/proveedores'],
+  ['verCaja', '/caja'],
+  ['verProductos', '/productos'],
+  ['verMovimientos', '/movimientos'],
+  ['verPresupuestos', '/presupuestos'],
+];
+
+// tienePermiso: la misma firma que checkPermisos(permiso) — se le puede pasar
+// el checkPermisos de este hook (usuario ya logueado, permisos en contexto)
+// o una función armada a mano contra el array crudo de códigos que devuelve
+// el login (los permisos recién llegados todavía no están en el contexto en
+// el mismo render en que se decide a dónde navegar).
+export function primeraRutaDisponible(tienePermiso) {
+  for (const [permiso, ruta] of RUTAS_LANDING) {
+    if (tienePermiso(permiso)) return ruta;
+  }
+  return '/';
+}
 
 export default function useHasPermiso() {
   const { myPermisos, user } = useAuth();

@@ -5,20 +5,7 @@ import { router } from './routes'
 import { AxiosInterceptor } from './interceptors/Axios.interceptor'
 import useTokenExpirationCheck from './hooks/useTokenExpirationCheck'
 import ErrorBoundary from './components/shared/ErrorBoundary'
-import { APP_NAME, LOGO_URL_DARK } from './config/brand'
-
-function Loading() {
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-      height: '100dvh', background: '#2B2118', color: '#C7B7A3',
-      fontFamily: 'Geist, ui-sans-serif, system-ui, sans-serif', fontSize: 14,
-    }}>
-      <img src={LOGO_URL_DARK} alt={APP_NAME} style={{ height: 48, width: 'auto' }} />
-      Cargando...
-    </div>
-  );
-}
+import Loading from './components/shared/AppLoading'
 
 function App() {
   useTokenExpirationCheck()

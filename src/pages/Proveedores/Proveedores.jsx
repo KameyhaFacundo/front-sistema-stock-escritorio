@@ -493,11 +493,15 @@ function ModalProveedorDetalle({ open, onClose, proveedor, onPagar }) {
 
 const PROV_COLUMNS = [
   {
+    key: 'codigo', header: 'Código', width: 110,
+    render: (p) => <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 600 }}>{p.codigo || '—'}</Typography>,
+  },
+  {
     key: 'nombre', header: 'Proveedor', flex: true,
     render: (p) => (
       <Box>
         <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600 }}>{p.nombre}</Typography>
-        <Typography sx={{ color: MUTED, fontSize: 12 }}>{[p.codigo, p.cuit].filter(Boolean).join(' · ') || '—'}</Typography>
+        <Typography sx={{ color: MUTED, fontSize: 12 }}>{p.cuit || '—'}</Typography>
       </Box>
     ),
   },
