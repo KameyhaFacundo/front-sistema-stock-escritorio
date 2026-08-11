@@ -13,6 +13,7 @@ import EditIcon         from '@mui/icons-material/Edit';
 import DeleteIcon       from '@mui/icons-material/Delete';
 import FileUploadIcon   from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon  from '@mui/icons-material/CheckCircle';
 
@@ -20,6 +21,8 @@ import { BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, INPUT, HOVER, fieldSx, 
          SUCCESS, SUCCESS_BG, SUCCESS_BORDER, SUCCESS_LIGHT,
          ERROR, ERROR_BG, ERROR_BORDER, modalPaperSx } from '../../theme/tokens';
 import { useToast }    from '../../context/ToastContext';
+import { useAuth }     from '../../auth/AuthContextBase';
+import { PRIMARY_COLOR, COMPANY_NAME } from '../../config/brand';
 import { fmtMoney, fmtDate } from '../../utils/format';
 import { exportarExcel } from '../../utils/excelExport';
 import { leerFilasArchivo, indiceEncabezado } from '../../utils/excelImport';
@@ -43,14 +46,81 @@ function exportarCSVProveedores(rows) {
     sheetName: 'Proveedores',
     subtitle: `Listado de proveedores · ${new Date().toLocaleDateString('es-AR')}`,
     columns: [
+      { header: 'Código',    width: 12 },
       { header: 'Nombre',    width: 30 },
       { header: 'CUIT',      width: 16 },
       { header: 'Teléfono',  width: 16 },
       { header: 'Email',     width: 26 },
       { header: 'Dirección', width: 30 },
     ],
-    rows: rows.map(p => [p.nombre, p.cuit || '', p.telefono || '', p.email || '', p.direccion || '']),
+    rows: rows.map(p => [p.codigo || '', p.nombre, p.cuit || '', p.telefono || '', p.email || '', p.direccion || '']),
   });
+}
+
+/* ── Helper de color para PDF (jsPDF quiere RGB 0-255, no hex) ── */
+function hexToRgb(hex) {
+  const clean = hex.replace('#', '');
+  return [parseInt(clean.slice(0, 2), 16), parseInt(clean.slice(2, 4), 16), parseInt(clean.slice(4, 6), 16)];
+}
+const PDF_PRIMARY = hexToRgb(PRIMARY_COLOR);
+const PDF_INK     = [30, 32, 40];
+const PDF_MUTED   = [110, 116, 130];
+const PDF_BORDER  = [222, 217, 209];
+
+// Mismo criterio ink-light que el comprobante de Compras — nada de bandas de
+// color sólidas, para que imprima limpio en blanco y negro. jsPDF/autoTable
+// se cargan solo acá, al toque de exportar (no en el bundle de siempre).
+async function exportarPDFProveedores(rows, empresaNombre) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'), import('jspdf-autotable'),
+  ]);
+  const doc     = new jsPDF({ orientation: 'landscape' });
+  const pageW   = doc.internal.pageSize.getWidth();
+  const marginX = 14;
+  const hoy     = new Date().toLocaleDateString('es-AR');
+
+  let y = 16;
+  doc.setFontSize(15);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(...PDF_INK);
+  doc.text(empresaNombre || COMPANY_NAME, marginX, y);
+
+  doc.setFontSize(8.5);
+  doc.setFont(undefined, 'normal');
+  doc.setTextColor(...PDF_MUTED);
+  doc.text(`Emitido ${hoy}`, pageW - marginX, y, { align: 'right' });
+
+  y += 5;
+  doc.setFontSize(9.5);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(...PDF_PRIMARY);
+  doc.text('LISTADO DE PROVEEDORES', marginX, y);
+  doc.setFontSize(8.5);
+  doc.setFont(undefined, 'normal');
+  doc.setTextColor(...PDF_MUTED);
+  doc.text(`${rows.length} proveedor${rows.length !== 1 ? 'es' : ''}`, pageW - marginX, y, { align: 'right' });
+
+  y += 4;
+  doc.setDrawColor(...PDF_BORDER);
+  doc.setLineWidth(0.3);
+  doc.line(marginX, y, pageW - marginX, y);
+
+  y += 6;
+  autoTable(doc, {
+    startY: y,
+    head: [[
+      { content: 'Código' }, { content: 'Nombre' }, { content: 'CUIT' },
+      { content: 'Teléfono' }, { content: 'Email' }, { content: 'Dirección' },
+    ]],
+    body: rows.map(p => [p.codigo || '-', p.nombre, p.cuit || '-', p.telefono || '-', p.email || '-', p.direccion || '-']),
+    theme: 'plain',
+    styles:       { fontSize: 9, textColor: PDF_INK, lineColor: PDF_BORDER, lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0 }, cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 } },
+    headStyles:   { textColor: PDF_INK, fontSize: 8.5, fontStyle: 'bold', lineColor: PDF_INK, lineWidth: { top: 0, right: 0, bottom: 0.5, left: 0 } },
+    columnStyles: { 0: { cellWidth: 26 }, 2: { cellWidth: 36 }, 3: { cellWidth: 32 } },
+    margin: { left: marginX, right: marginX },
+  });
+
+  doc.save(`proveedores-${hoy.replaceAll('/', '-')}.pdf`);
 }
 
 
@@ -366,7 +436,7 @@ const PROV_COLUMNS = [
     render: (p) => (
       <Box>
         <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600 }}>{p.nombre}</Typography>
-        <Typography sx={{ color: MUTED, fontSize: 12 }}>{p.cuit || '—'}</Typography>
+        <Typography sx={{ color: MUTED, fontSize: 12 }}>{[p.codigo, p.cuit].filter(Boolean).join(' · ') || '—'}</Typography>
       </Box>
     ),
   },
@@ -418,6 +488,7 @@ const PROV_COLUMNS = [
 
 export default function Proveedores() {
   const toast = useToast();
+  const { user } = useAuth();
   const { checkPermisos } = useHasPermiso();
   const puedeCrear = checkPermisos('crearProveedor');
   const puedeEditar = checkPermisos('actualizarProveedor');
@@ -492,7 +563,7 @@ export default function Proveedores() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q ? proveedores.filter(p => p.nombre.toLowerCase().includes(q) || (p.cuit || '').includes(q)) : proveedores;
+    return q ? proveedores.filter(p => p.nombre.toLowerCase().includes(q) || (p.cuit || '').includes(q) || (p.codigo || '').toLowerCase().includes(q)) : proveedores;
   }, [proveedores, search]);
 
   const totalPages   = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -523,6 +594,7 @@ export default function Proveedores() {
     const header = lines[inicio].map(c => String(c || '').replace(/^"|"$/g, '').toLowerCase().trim());
     const findCol = (...terms) => header.findIndex(c => terms.some(t => c.includes(t)));
     const colNombre = findCol('nombre', 'persona', 'razon', 'razón') !== -1 ? findCol('nombre', 'persona', 'razon', 'razón') : 0;
+    const colCodigo   = findCol('codigo', 'código');
     const colCuit     = findCol('cuit');
     const colTelefono = findCol('telefono', 'teléfono', 'tel');
     const colEmail    = findCol('email', 'correo', 'mail');
@@ -536,6 +608,7 @@ export default function Proveedores() {
       const cuit = colCuit >= 0 ? (cols[colCuit] || '') : '';
       filas.push({
         nombre,
+        codigo:    colCodigo >= 0 ? (cols[colCodigo] || '') : '',
         cuit,
         telefono:  colTelefono >= 0 ? (cols[colTelefono] || '') : '',
         email:     colEmail >= 0 ? (cols[colEmail] || '') : '',
@@ -557,6 +630,7 @@ export default function Proveedores() {
       try {
         const nuevo = await proveedoresService.create({
           persona: f.nombre,
+          codigo: f.codigo || undefined,
           cuit: f.cuit || undefined,
           telefono: f.telefono || undefined,
           email: f.email || undefined,
@@ -613,7 +687,14 @@ export default function Proveedores() {
             <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
               onClick={() => exportarCSVProveedores(filtered)}
               sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Excel</Box>
+            </Button>
+          </Tooltip>
+          <Tooltip title="Exportar PDF">
+            <Button variant="outlined" startIcon={<PictureAsPdfIcon sx={{ fontSize: 15 }} />}
+              onClick={() => exportarPDFProveedores(filtered, user?.empresa?.nombre)}
+              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>PDF</Box>
             </Button>
           </Tooltip>
           {puedeCrear && (
@@ -630,7 +711,7 @@ export default function Proveedores() {
 
       <Box component="input" ref={csvRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleImportarCSV} sx={{ display: 'none' }} />
 
-      <TextField data-tour="prov-buscar" fullWidth placeholder="Buscar por nombre o CUIT..."
+      <TextField data-tour="prov-buscar" fullWidth placeholder="Buscar por nombre, código o CUIT..."
         value={search} onChange={e => { setSearch(e.target.value); setPagina(1); }}
         InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: MUTED }} /></InputAdornment> }}
         sx={{
@@ -680,7 +761,7 @@ export default function Proveedores() {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.75 }}>
                     <Box>
                       <Typography sx={{ color: INK, fontWeight: 600, fontSize: 14 }}>{p.nombre}</Typography>
-                      <Typography sx={{ color: MUTED, fontSize: 12 }}>{p.cuit || '—'}</Typography>
+                      <Typography sx={{ color: MUTED, fontSize: 12 }}>{[p.codigo, p.cuit].filter(Boolean).join(' · ') || '—'}</Typography>
                     </Box>
                     <Chip label={p.activo ? 'Activo' : 'Inactivo'} size="small"
                       sx={{ height: 20, fontSize: 11, fontWeight: 600,
@@ -741,6 +822,7 @@ export default function Proveedores() {
       {importPreview && (() => {
         const importCols = [
           { key: 'nombre',    header: 'Nombre',    width: '1.4fr' },
+          { key: 'codigo',    header: 'Código',    width: '0.8fr' },
           { key: 'cuit',      header: 'CUIT',      width: '1fr' },
           { key: 'telefono',  header: 'Teléfono',  width: '1fr' },
           { key: 'email',     header: 'Email',     width: '1.2fr' },

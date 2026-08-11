@@ -1724,24 +1724,27 @@ export default function Compras() {
 
   const exportarCompraExcel = async (c) => {
     const full = await comprasService.getById(c.id);
+    const codigoProveedor = proveedores.find(p => p.id === c.id_proveedor)?.codigo || '';
     await exportarExcel({
       filename: `compra-${c.proveedor || c.id}-${c.fecha}.xlsx`,
       sheetName: 'Compra',
       title: `Compra a ${c.proveedor}`,
       subtitle: `${c.fecha} · Total: ${fmtMoney(full.total)} · Estado: ${full.estado}`,
       columns: [
+        { header: 'Código proveedor', width: 14 },
         { header: 'Producto', width: 32 },
         { header: 'Cant.',    width: 10, align: 'center' },
         { header: 'Unidad',   width: 12 },
         { header: 'Costo unit.', width: 16, numFmt: '$#,##0.00', align: 'right' },
         { header: 'Subtotal', width: 16, numFmt: '$#,##0.00', align: 'right' },
       ],
-      rows: full.lineas.map(l => [l.nombre, l.cantidad, UNIDAD_LABEL[l.unidadMedida] || UNIDAD_LABEL.unidad, l.precio_compra, l.subtotal]),
+      rows: full.lineas.map(l => [codigoProveedor, l.nombre, l.cantidad, UNIDAD_LABEL[l.unidadMedida] || UNIDAD_LABEL.unidad, l.precio_compra, l.subtotal]),
     });
   };
 
   const exportarCompraPDF = async (c) => {
     const full = await comprasService.getById(c.id);
+    const codigoProveedor = proveedores.find(p => p.id === c.id_proveedor)?.codigo || '';
     // autoTable también diferido — antes quedaba estático arriba mientras
     // jsPDF ya se cargaba de una, así que la mitad del ahorro se perdía igual.
     const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
@@ -1794,7 +1797,7 @@ export default function Compras() {
     doc.setFontSize(11);
     doc.setFont(undefined, 'normal');
     doc.setTextColor(...PDF_INK);
-    doc.text(c.proveedor || '-', marginX, y);
+    doc.text(`${codigoProveedor ? `${codigoProveedor} · ` : ''}${c.proveedor || '-'}`, marginX, y);
     doc.setFontSize(9.5);
     doc.text(`${c.fecha} · ${full.metodo_pago?.replace('_', ' ') || '-'}`, col2, y);
     doc.setFontSize(10.5);
