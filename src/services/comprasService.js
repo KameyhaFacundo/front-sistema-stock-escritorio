@@ -10,6 +10,8 @@ export function mapCompra(c) {
     total:        parseFloat(c.monto_total ?? 0),
     estado:       c.estado || 'pendiente',
     metodo_pago:  c.metodo_pago || 'efectivo',
+    estadoDeuda:  c.estado_deuda || 'pagado',
+    montoPagado:  parseFloat(c.monto_pagado ?? 0),
     usuario:      c.usuario?.des_usu || null,
     comprobanteUrl: c.comprobante_url || null,
     anuladoPor:      c.usuario_anulacion?.des_usu || null,

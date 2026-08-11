@@ -34,6 +34,7 @@ import AyudaButton    from '../../components/shared/AyudaButton';
 import { registerTour } from '../../utils/tour';
 import { proveedoresService } from '../../services/proveedoresService';
 import { deudasService }      from '../../services/deudasService';
+import { comprasService }     from '../../services/comprasService';
 import DEUDA_COLORS from '../../constants/deudaStatus';
 import useHasPermiso from '../../hooks/useHasPermiso';
 
@@ -328,6 +329,12 @@ function ModalProveedorDetalle({ open, onClose, proveedor, onPagar }) {
   const [deudas,     setDeudas]     = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [deudaPagar, setDeudaPagar] = useState(null);
+  // Todas las compras a este proveedor (pagadas incluidas), no solo las que
+  // tienen saldo pendiente — se pide recién al abrir, mismo criterio que el
+  // "Ver historial" de ventas saldadas en Clientes.jsx.
+  const [historialAbierto, setHistorialAbierto] = useState(false);
+  const [todasCompras,     setTodasCompras]     = useState(null);
+  const [loadingTodas,     setLoadingTodas]     = useState(false);
 
   useEffect(() => {
     if (proveedor && open) {
@@ -337,6 +344,18 @@ function ModalProveedorDetalle({ open, onClose, proveedor, onPagar }) {
         .finally(() => setLoading(false));
     }
   }, [proveedor, open]);
+
+  const handleVerHistorial = async () => {
+    const abrir = !historialAbierto;
+    setHistorialAbierto(abrir);
+    if (abrir && todasCompras === null) {
+      setLoadingTodas(true);
+      try {
+        const todas = await comprasService.getAll({ id_proveedor: proveedor.id, sort: 'fecha', dir: 'desc' });
+        setTodasCompras(todas);
+      } catch { setTodasCompras([]); } finally { setLoadingTodas(false); }
+    }
+  };
 
   const handlePagado = (actualizada) => {
     if (actualizada.estado_deuda === 'pagado') {
@@ -413,6 +432,48 @@ function ModalProveedorDetalle({ open, onClose, proveedor, onPagar }) {
               );
             })}
           </>
+        )}
+
+        {!loading && (
+          <Box sx={{ mt: deudas.length > 0 ? 2.5 : 0 }}>
+            <Typography onClick={handleVerHistorial}
+              sx={{ color: P, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'inline-block', '&:hover': { textDecoration: 'underline' } }}>
+              {historialAbierto ? 'Ocultar todas las compras' : 'Ver todas las compras'}
+            </Typography>
+
+            {historialAbierto && (
+              loadingTodas ? (
+                <Typography sx={{ color: MUTED, fontSize: 13, mt: 1 }}>Cargando compras...</Typography>
+              ) : !todasCompras?.length ? (
+                <Typography sx={{ color: MUTED, fontSize: 13, mt: 1 }}>Sin compras registradas a este proveedor.</Typography>
+              ) : (
+                <Box sx={{ mt: 1.5, border: `1px solid ${BORDER}`, borderRadius: '10px', overflow: 'hidden' }}>
+                  {todasCompras.map((c, i) => {
+                    const ec = DEUDA_COLORS[c.estadoDeuda] || DEUDA_COLORS.pagado;
+                    const anulada = c.estado === 'cancelada';
+                    return (
+                      <Box key={c.id} sx={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1,
+                        px: 1.5, py: 1.25, borderBottom: i < todasCompras.length - 1 ? `1px solid ${BORDER}` : 'none',
+                        '&:hover': { bgcolor: HOVER },
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flexWrap: 'wrap' }}>
+                          <Typography sx={{ color: INK2, fontSize: 13, flexShrink: 0 }}>{fmtDate(c.fecha)}</Typography>
+                          <Chip label={anulada ? 'Anulada' : ec.label} size="small"
+                            sx={{
+                              height: 18, fontSize: 10.5, fontWeight: 600,
+                              bgcolor: anulada ? ERROR_BG : ec.bg, color: anulada ? ERROR : ec.fg,
+                              border: `1px solid ${anulada ? ERROR_BORDER : ec.border}`,
+                            }} />
+                        </Box>
+                        <Typography sx={{ color: INK, fontWeight: 700, fontSize: 13.5, flexShrink: 0 }}>{fmtMoney(c.total)}</Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )
+            )}
+          </Box>
         )}
 
         <PaymentModal
