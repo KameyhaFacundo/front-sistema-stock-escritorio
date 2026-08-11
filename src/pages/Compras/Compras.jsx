@@ -137,9 +137,15 @@ function ModalVerComprobante({ open, onClose, url }) {
 // variantes en una opción por talle, igual que hacía productosComprables
 // antes. El "__crear__" pseudo-resultado deja crear un producto nuevo desde
 // acá mismo cuando no existe todavía en el catálogo.
-function AutocompleteLineaProducto({ productoData, error, sx, autoFocus, onSeleccionar, onCrear, onEnterKeyDown, registrarInputRef }) {
+function AutocompleteLineaProducto({ productoData, error, sx, autoFocus, onSeleccionar, onCrear, onEnterKeyDown, registrarInputRef, idProveedor }) {
   const [query, setQuery] = useState(productoData?.nombre || '');
-  const { resultados } = useBusquedaProductos(query, { perPage: 20 });
+  // Con proveedor elegido, prioriza SUS productos (principal o alternativo)
+  // pero sin esconder los que todavía no tienen ningún proveedor cargado —
+  // ver el porqué en ProductosController::index (incluir_sin_proveedor).
+  const busquedaParams = useMemo(() => (
+    idProveedor ? { id_proveedor: idProveedor, incluir_sin_proveedor: 1 } : {}
+  ), [idProveedor]);
+  const { resultados } = useBusquedaProductos(query, { perPage: 20, params: busquedaParams });
 
   const disponibles = useMemo(() => resultados
     .filter(p => !p.esCombo)
@@ -739,6 +745,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                     productoData={l.productoData}
                     error={!!errors[`linea_${idx}_prod`]}
                     sx={{ flex: 1, minWidth: 0 }}
+                    idProveedor={form.id_proveedor}
                     onSeleccionar={(val) => {
                       if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); setComparativas(prev => { const n = { ...prev }; delete n[idx]; return n; }); return; }
                       setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
@@ -869,6 +876,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                         productoData={l.productoData}
                         error={!!errors[`linea_${idx}_prod`]}
                         registrarInputRef={el => { autoRefs.current[idx] = el; }}
+                        idProveedor={form.id_proveedor}
                         onSeleccionar={(val) => {
                           if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); setComparativas(prev => { const n = { ...prev }; delete n[idx]; return n; }); return; }
                           setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
@@ -1256,47 +1264,20 @@ function DetalleCompraItem({ label, value }) {
   );
 }
 
-function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevolucion, onComprobanteActualizado }) {
-  const toast = useToast();
+function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevolucion }) {
   const isMobile = useIsMobile();
   const [pagina, setPagina] = useState(1);
   const [pageSize, setPageSize] = useState(5);
-  const [subiendoComprobante, setSubiendoComprobante] = useState(false);
   const [verTicketOpen, setVerTicketOpen] = useState(false);
   if (!compra) return null;
 
-  const handleArchivoComprobante = async (file) => {
-    if (!file) return;
-    setSubiendoComprobante(true);
-    try {
-      const updated = await comprasService.subirComprobante(compra.id, file);
-      onComprobanteActualizado?.(updated);
-      toast('Ticket adjuntado', 'success');
-    } catch {
-      toast('No se pudo subir el ticket', 'error');
-    } finally {
-      setSubiendoComprobante(false);
-    }
-  };
-
-  const handleEliminarComprobante = async () => {
-    setSubiendoComprobante(true);
-    try {
-      const updated = await comprasService.eliminarComprobante(compra.id);
-      onComprobanteActualizado?.(updated);
-    } catch {
-      toast('No se pudo quitar el ticket', 'error');
-    } finally {
-      setSubiendoComprobante(false);
-    }
-  };
   const ec = ESTADO_COLORS[compra.estado] || ESTADO_COLORS['pendiente'];
   const lineas = compra.lineas || [];
   const totalPages = Math.max(1, Math.ceil(lineas.length / pageSize));
   const paginadas = lineas.slice((pagina - 1) * pageSize, pagina * pageSize);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth
       PaperProps={{ sx: { ...modalPaperSx, borderRadius: isMobile ? '12px' : '14px' } }}>
 
       <Box sx={{
@@ -1335,22 +1316,12 @@ function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevol
           } />
           <DetalleCompraItem label="Ticket del proveedor" value={
             compra.comprobanteUrl ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography onClick={() => setVerTicketOpen(true)}
-                  sx={{ color: P, fontSize: 14, fontWeight: 600, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
-                  Ver ticket
-                </Typography>
-                <IconButton size="small" onClick={handleEliminarComprobante} disabled={subiendoComprobante}
-                  sx={{ color: MUTED, p: 0.25, '&:hover': { color: ERROR } }}>
-                  <CloseIcon sx={{ fontSize: 14 }} />
-                </IconButton>
-              </Box>
+              <Typography onClick={() => setVerTicketOpen(true)}
+                sx={{ color: P, fontSize: 14, fontWeight: 600, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
+                Ver ticket
+              </Typography>
             ) : (
-              <Button component="label" size="small" disabled={subiendoComprobante}
-                sx={{ color: P, textTransform: 'none', fontWeight: 600, fontSize: 13, p: 0, minWidth: 0, '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}>
-                {subiendoComprobante ? 'Subiendo...' : 'Adjuntar ticket'}
-                <input type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf" onChange={e => handleArchivoComprobante(e.target.files?.[0])} />
-              </Button>
+              <Typography sx={{ color: MUTED, fontSize: 14 }}>Sin ticket adjunto</Typography>
             )
           } />
           {compra.estado === 'cancelada' && compra.anuladoPor && (
@@ -2079,7 +2050,6 @@ export default function Compras() {
         compra={compraVer}
         puedeDevolver={puedeDevolver}
         onAbrirDevolucion={() => setModalDevolucion(true)}
-        onComprobanteActualizado={updated => { setCompraVer(updated); handleActualizar(updated); }}
       />
 
       <ModalDevolucionCompra
