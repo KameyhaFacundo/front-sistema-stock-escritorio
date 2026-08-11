@@ -29,6 +29,14 @@ export function VentasProvider({ children, onError, onRecargarFiados }) {
       fecha: (ventaLocal.fecha || toLocalDateStr()).slice(0, 10),
       hora: ventaLocal.hora || nowHora(),
       metodo_pago: ventaLocal.metodo,
+      // Desglose real de "varios métodos" (ver variosPagos en Home.jsx) — sin
+      // esto NUNCA llegaba al backend, así que pagos_venta se quedaba siempre
+      // vacía: toda venta (dividida o no) se contaba como si fuera 100% de un
+      // solo método (el primero elegido). En una venta dividida con efectivo
+      // de por medio, eso inflaba efectivo_actual con el TOTAL de la venta en
+      // vez de solo la porción realmente en efectivo — afectaba el arqueo
+      // físico de caja, no solo los totales que se ven en Resumen.
+      pagos: ventaLocal.pagos ?? null,
       estado: 'confirmada',
       id_cliente: ventaLocal.id_cliente ?? null,
       id_presupuesto: ventaLocal.id_presupuesto ?? undefined,
