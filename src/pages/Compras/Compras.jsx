@@ -1715,10 +1715,11 @@ export default function Compras() {
   const PDF_PRIMARY = hexToRgb(PRIMARY_COLOR);
   const PDF_INK     = [30, 32, 40];
   const PDF_MUTED   = [110, 116, 130];
+  const PDF_BORDER  = [222, 217, 209];
   const PDF_ESTADO  = {
-    confirmada: { fill: [34, 197, 94],  label: 'Confirmada' },
-    pendiente:  { fill: [245, 158, 11], label: 'Pendiente'  },
-    cancelada:  { fill: [239, 68, 68],  label: 'Cancelada'  },
+    confirmada: { color: [22, 163, 74],  label: 'Confirmada' },
+    pendiente:  { color: [217, 119, 6],  label: 'Pendiente'  },
+    cancelada:  { color: [220, 38, 38],  label: 'Cancelada'  },
   };
 
   const exportarCompraExcel = async (c) => {
@@ -1746,50 +1747,66 @@ export default function Compras() {
     const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
       import('jspdf'), import('jspdf-autotable'),
     ]);
-    const doc   = new jsPDF();
-    const pageW = doc.internal.pageSize.getWidth();
-    const hoy   = new Date().toLocaleDateString('es-AR');
-    const estado = PDF_ESTADO[full.estado] || PDF_ESTADO.pendiente;
+    const doc     = new jsPDF();
+    const pageW   = doc.internal.pageSize.getWidth();
+    const marginX = 14;
+    const hoy     = new Date().toLocaleDateString('es-AR');
+    const estado  = PDF_ESTADO[full.estado] || PDF_ESTADO.pendiente;
 
-    /* ── Banda de color ── */
-    doc.setFillColor(...PDF_PRIMARY);
-    doc.rect(0, 0, pageW, 30, 'F');
-    doc.setFontSize(17);
-    doc.setFont(undefined, 'bold');
-    doc.setTextColor(255, 255, 255);
-    doc.text(user?.empresa?.nombre || COMPANY_NAME, 14, 17);
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
-    doc.text('Comprobante de compra', 14, 25);
-
-    doc.setFontSize(9);
-    doc.text(`Emitido: ${hoy}`, pageW - 14, 17, { align: 'right' });
-    doc.text(`Compra N° ${c.id}`, pageW - 14, 25, { align: 'right' });
-
-    /* ── Datos del proveedor ── */
-    let y = 42;
-    doc.setFontSize(13);
+    /* ── Encabezado — texto plano, sin banda de color sólida: una banda
+        entera de tinta se ve como un bloque gris parchado al imprimir en
+        blanco y negro, y no aporta nada que un título en negrita no dé. */
+    let y = 18;
+    doc.setFontSize(15);
     doc.setFont(undefined, 'bold');
     doc.setTextColor(...PDF_INK);
-    doc.text(`Proveedor: ${c.proveedor}`, 14, y);
-    doc.setFontSize(9.5);
+    doc.text(user?.empresa?.nombre || COMPANY_NAME, marginX, y);
+
+    doc.setFontSize(8.5);
     doc.setFont(undefined, 'normal');
     doc.setTextColor(...PDF_MUTED);
-    y += 7;
-    doc.text(`${c.fecha} · Metodo: ${full.metodo_pago?.replace('_', ' ') || '-'}`, 14, y);
+    doc.text(`Compra N° ${c.id}`, pageW - marginX, y - 4, { align: 'right' });
+    doc.text(`Emitido ${hoy}`, pageW - marginX, y, { align: 'right' });
 
-    /* Pill de estado */
-    const pillLabel = estado.label;
-    const pillW = doc.getTextWidth(pillLabel) + 8;
-    doc.setFillColor(...estado.fill);
-    doc.roundedRect(pageW - 14 - pillW, y - 5, pillW, 6.5, 1.5, 1.5, 'F');
-    doc.setFontSize(8.5);
-    doc.setTextColor(255, 255, 255);
-    doc.text(pillLabel, pageW - 14 - pillW / 2, y - 0.7, { align: 'center' });
+    y += 5;
+    doc.setFontSize(9.5);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(...PDF_PRIMARY);
+    doc.text('COMPROBANTE DE COMPRA', marginX, y);
 
-    y += 6;
+    y += 4;
+    doc.setDrawColor(...PDF_BORDER);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, y, pageW - marginX, y);
 
-    /* ── Tabla de productos ── */
+    /* ── Datos generales — tres columnas de texto, nada relleno ── */
+    y += 9;
+    const col2 = marginX + (pageW - marginX * 2) * 0.42;
+    const col3 = pageW - marginX;
+    doc.setFontSize(7.5);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(...PDF_MUTED);
+    doc.text('PROVEEDOR', marginX, y);
+    doc.text('FECHA Y METODO', col2, y);
+    doc.text('ESTADO', col3, y, { align: 'right' });
+
+    y += 5.5;
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(...PDF_INK);
+    doc.text(c.proveedor || '-', marginX, y);
+    doc.setFontSize(9.5);
+    doc.text(`${c.fecha} · ${full.metodo_pago?.replace('_', ' ') || '-'}`, col2, y);
+    doc.setFontSize(10.5);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(...estado.color);
+    doc.text(estado.label, col3, y, { align: 'right' });
+
+    y += 9;
+
+    /* ── Tabla de productos — grilla fina y encabezado en blanco con
+        regla en vez de banda de color, para que imprima limpio y no
+        gaste tinta de más. */
     autoTable(doc, {
       startY: y,
       head: [[
@@ -1808,15 +1825,16 @@ export default function Compras() {
         { content: 'TOTAL COMPRA', colSpan: 3, styles: { halign: 'right' } },
         { content: fmtMoney(full.total),       styles: { halign: 'right' } },
       ]],
-      styles:       { fontSize: 9, textColor: PDF_INK },
-      headStyles:   { fillColor: PDF_PRIMARY, textColor: 255, fontSize: 9, fontStyle: 'bold' },
-      footStyles:   { fillColor: [245, 246, 250], textColor: PDF_INK, fontStyle: 'bold', fontSize: 9.5 },
+      theme: 'plain',
+      styles:       { fontSize: 9, textColor: PDF_INK, lineColor: PDF_BORDER, lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0 }, cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 } },
+      headStyles:   { textColor: PDF_INK, fontSize: 8.5, fontStyle: 'bold', lineColor: PDF_INK, lineWidth: { top: 0, right: 0, bottom: 0.5, left: 0 } },
+      footStyles:   { textColor: PDF_INK, fontStyle: 'bold', fontSize: 10, lineColor: PDF_INK, lineWidth: { top: 0.5, right: 0, bottom: 0, left: 0 } },
       columnStyles: {
         1: { cellWidth: 18 },
         2: { cellWidth: 32 },
         3: { cellWidth: 32 },
       },
-      margin: { left: 14, right: 14 },
+      margin: { left: marginX, right: marginX },
     });
 
     doc.save(`compra-${c.proveedor || c.id}-${c.fecha}.pdf`);
