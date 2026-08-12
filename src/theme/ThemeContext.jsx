@@ -75,6 +75,43 @@ const THEME_PRESETS = {
       '--table-header': '#EFE7D9', '--dropdown': '#FFFFFF', '--modal': '#FFFFFF',
     },
   },
+  // Design handoff "Organic" (design_handoff_stock_manager) — crema/terracota,
+  // radios grandes y sombras suaves en vez de bordes. Valores derivados de
+  // organic-styles.css: --color-bg/--color-surface/--color-text/--color-accent
+  // se usan tal cual; --border, --border-hover, --ink2 y --muted son mezclas
+  // sólidas (no color-mix) de --color-text sobre el fondo correspondiente a
+  // ~16/32/70/45%, para no romper los `${MUTED}20`/`${BG}ec` que concatenan
+  // sufijo hex de alpha en todo el código (ver PaymentModal, Dashboard,
+  // Presupuestos, Landing). --hover reproduce la regla del handoff
+  // (color-mix(text 6%) sobre --color-surface, que es el fondo del sidebar
+  // y las cards). --active-bg/--accent-ink pasan a ser el acento sólido y el
+  // color de fondo propio del modo — el handoff pide "fondo accent, texto
+  // bg" en el ítem de nav activo (ver Sidebar.jsx).
+  organic: {
+    accent: { light: '#c67139', dark: '#e08b52' },
+    dark: {
+      '--bg': '#1a1815', '--bg-sidebar': '#26231e', '--card': '#26231e',
+      '--border': '#413e38', '--border-hover': '#605b53',
+      '--ink': '#f5ead8', '--ink2': '#b3ab9e', '--muted': '#7d776d',
+      '--input': '#26231e', '--hover': '#322f29', '--active-bg': '#e08b52',
+      '--accent-ink': '#1a1815',
+      '--table-header': '#2c2924', '--dropdown': '#26231e', '--modal': '#26231e',
+      '--shadow-sm': '0 1px 2px rgba(0,0,0,0.45)',
+      '--shadow-md': '0 3px 10px rgba(0,0,0,0.5)',
+      '--shadow-lg': '0 12px 32px rgba(0,0,0,0.55)',
+    },
+    light: {
+      '--bg': '#f5ead8', '--bg-sidebar': '#ebddc5', '--card': '#ebddc5',
+      '--border': '#dcd3c4', '--border-hover': '#c0b6a5',
+      '--ink': '#201e1d', '--ink2': '#645c50', '--muted': '#a19786',
+      '--input': '#ebddc5', '--hover': '#dfd2bb', '--active-bg': '#c67139',
+      '--accent-ink': '#f5ead8',
+      '--table-header': '#e5d7c0', '--dropdown': '#ebddc5', '--modal': '#ebddc5',
+      '--shadow-sm': '0 1px 2px rgba(46,43,37,0.14)',
+      '--shadow-md': '0 3px 10px rgba(46,43,37,0.16)',
+      '--shadow-lg': '0 12px 32px rgba(46,43,37,0.22)',
+    },
+  },
 };
 
 // success/success-bg/danger/danger-bg de "clay" quedan guardados acá para
@@ -93,7 +130,7 @@ const SEMANTIC_PRESETS = {
 // ── Preset activo ────────────────────────────────────────────────────────
 // Para volver a "terracota" o "slate": cambiar esta línea nomás, ningún
 // otro archivo depende del nombre del preset.
-const ACTIVE_PRESET = 'clay';
+const ACTIVE_PRESET = 'organic';
 const DARK  = THEME_PRESETS[ACTIVE_PRESET].dark;
 const LIGHT = THEME_PRESETS[ACTIVE_PRESET].light;
 const DARK_ACCENT  = THEME_PRESETS[ACTIVE_PRESET].accent.dark;
@@ -127,16 +164,67 @@ export function ThemeContextProvider({ children }) {
 
   const toggle = () => setMode(m => (m === 'dark' ? 'light' : 'dark'));
 
-  const muiTheme = useMemo(() => createTheme({
-    palette: {
-      mode,
-      background: {
-        default: mode === 'dark' ? DARK['--bg'] : LIGHT['--bg'],
-        paper:   mode === 'dark' ? DARK['--card'] : LIGHT['--card'],
+  const muiTheme = useMemo(() => {
+    const vars = mode === 'dark' ? DARK : LIGHT;
+    return createTheme({
+      palette: {
+        mode,
+        background: {
+          default: vars['--bg'],
+          paper:   vars['--card'],
+        },
+        primary: { main: PRIMARY_COLOR },
       },
-      primary: { main: PRIMARY_COLOR },
-    },
-  }), [mode]);
+      // Radio base "cómodo" del sistema Organic (--radius-md); los
+      // componentes puntuales de abajo pisan esto donde el handoff pide
+      // otra cosa (botones/chips/inputs → píldora, diálogos → 28px).
+      shape: { borderRadius: 16 },
+      typography: {
+        fontFamily: '"Figtree", ui-sans-serif, system-ui, sans-serif',
+        button: { textTransform: 'none', fontWeight: 700 },
+      },
+      components: {
+        MuiButton: {
+          styleOverrides: {
+            root: { borderRadius: 999 },
+          },
+        },
+        MuiPaper: {
+          // MUI aplica un overlay translúcido por elevación en modo oscuro
+          // que desentona con el --card sólido del sistema — se desactiva acá
+          // una sola vez en vez de en cada Card/Menu/Dialog que lo use.
+          styleOverrides: {
+            root: { backgroundImage: 'none' },
+          },
+        },
+        MuiChip: {
+          styleOverrides: {
+            root: { borderRadius: 999 },
+          },
+        },
+        MuiOutlinedInput: {
+          styleOverrides: {
+            root: { borderRadius: 999 },
+          },
+        },
+        MuiMenu: {
+          styleOverrides: {
+            paper: { borderRadius: 16, boxShadow: vars['--shadow-md'] },
+          },
+        },
+        MuiPopover: {
+          styleOverrides: {
+            paper: { borderRadius: 16, boxShadow: vars['--shadow-md'] },
+          },
+        },
+        MuiDialog: {
+          styleOverrides: {
+            paper: { borderRadius: 28, boxShadow: vars['--shadow-lg'] },
+          },
+        },
+      },
+    });
+  }, [mode]);
 
   return (
     <ThemeCtx.Provider value={{ mode, toggle }}>

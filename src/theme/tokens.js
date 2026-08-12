@@ -22,6 +22,9 @@ export const ACTIVE_BG    = 'var(--active-bg)';
 export const TABLE_HEADER = 'var(--table-header)';
 export const DROPDOWN     = 'var(--dropdown)';
 export const MODAL        = 'var(--modal)';
+export const SHADOW_SM    = 'var(--shadow-sm)';
+export const SHADOW_MD    = 'var(--shadow-md)';
+export const SHADOW_LG    = 'var(--shadow-lg)';
 // Color de texto a usar SOBRE un fondo tintado con el acento (ej. el ítem
 // activo del sidebar) — a diferencia de P (fijo, VITE_PRIMARY_COLOR), este
 // sí cambia por tema/modo junto con --active-bg, ver ThemeContext.jsx.
@@ -32,7 +35,7 @@ import { P } from './palette';
 
 export const inputSx = {
   '& .MuiOutlinedInput-root': {
-    bgcolor: INPUT, color: INK, fontSize: 14, borderRadius: '10px',
+    bgcolor: INPUT, color: INK, fontSize: 14, borderRadius: '999px',
     '& fieldset': { borderColor: BORDER },
     '&:hover fieldset': { borderColor: 'var(--border-hover)' },
     '&.Mui-focused fieldset': { borderColor: P, borderWidth: 1 },
@@ -47,7 +50,7 @@ export const inputSmSx = {
 };
 
 export const selectSx = {
-  bgcolor: INPUT, color: INK, fontSize: 14, borderRadius: '8px',
+  bgcolor: INPUT, color: INK, fontSize: 14, borderRadius: '999px',
   '& .MuiOutlinedInput-notchedOutline': { borderColor: BORDER },
   '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--border-hover)' },
   '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: P, borderWidth: 1 },
@@ -58,7 +61,8 @@ export const selectSx = {
 export const menuPaperSx = {
   bgcolor: DROPDOWN,
   border: `1px solid ${BORDER}`,
-  borderRadius: '10px',
+  borderRadius: '16px',
+  boxShadow: SHADOW_MD,
   color: INK,
 };
 
@@ -68,15 +72,15 @@ export const switchSx = {
   '& .MuiSwitch-track': { bgcolor: BORDER },
 };
 
+// Dialogos del sistema Organic: superficie + sombra, sin borde ni la franja
+// de acento que tenía este preset antes (el handoff no la usa).
 export const modalPaperSx = {
   bgcolor: MODAL,
   backgroundImage: 'none',
-  border: `1px solid ${BORDER}`,
-  borderTop: `4px solid ${P}`,
-  borderRadius: '16px',
+  borderRadius: '28px',
   color: INK,
   overflow: 'auto',
-  boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+  boxShadow: SHADOW_LG,
 };
 
 export const modalHeaderSx = {
@@ -89,10 +93,10 @@ export const modalHeaderSx = {
   bgcolor: TABLE_HEADER,
 };
 
-// fieldSx: para inputs dentro de formularios/modales (8px radius, estados error)
+// fieldSx: para inputs dentro de formularios/modales (píldora, estados error)
 export const fieldSx = {
   '& .MuiOutlinedInput-root': {
-    bgcolor: INPUT, color: INK, fontSize: 14, borderRadius: '8px',
+    bgcolor: INPUT, color: INK, fontSize: 14, borderRadius: '999px',
     '& fieldset': { borderColor: BORDER },
     '&:hover fieldset': { borderColor: 'var(--border-hover)' },
     '&.Mui-focused fieldset': { borderColor: P, borderWidth: 1 },

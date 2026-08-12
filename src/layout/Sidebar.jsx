@@ -34,12 +34,11 @@ import { useCaja } from '../context/CajaContextBase';
 import useHasPermiso from '../hooks/useHasPermiso';
 import usePlan from '../hooks/usePlan';
 import {
-  CARD, BG_SIDEBAR, BORDER, INK, INK2, MUTED, P, ACCENT_INK, HOVER, ACTIVE_BG, DROPDOWN,
+  CARD, BORDER, INK, INK2, MUTED, P, ACCENT_INK, HOVER, ACTIVE_BG, DROPDOWN,
   SUCCESS, ERROR, WARNING, ERROR_BG,
 } from '../theme/tokens';
 import { APP_NAME, APP_VERSION } from '../config/brand';
 import useLogo from '../hooks/useLogo';
-import useAppUpdateStatus from '../hooks/useAppUpdateStatus';
 import { useSucursales } from '../hooks/queries/useSucursalesQueries';
 import { SIDEBAR_WIDTH, SIDEBAR_WIDTH_COLLAPSED } from './sidebarConstants';
 
@@ -50,7 +49,7 @@ const buildMenuSections = () => [
   {
     title: 'GENERAL',
     items: [
-      { name: 'Reportes',       icon: GridViewIcon,     path: '/dashboard', permiso: 'verDashboard' },
+      { name: 'Dashboard',      icon: GridViewIcon,     path: '/dashboard', permiso: 'verDashboard' },
       { name: 'Punto de Venta', icon: PointOfSaleIcon,  path: '/pos',     permiso: 'verPOS' },
       { name: 'Compras',        icon: ShoppingCartIcon, path: '/compras', permiso: 'verCompras' },
       { name: 'Presupuestos',   icon: DescriptionIcon,  path: '/presupuestos', permiso: 'verPresupuestos' },
@@ -94,12 +93,12 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
           display: 'flex', alignItems: 'center', gap: 1.5,
           mx: 1, px: 1.25, py: 0.9,
           justifyContent: collapsed ? 'center' : 'flex-start',
-          borderRadius: '6px',
+          borderRadius: '999px',
           textDecoration: 'none',
           bgcolor: isActive ? ACTIVE_BG : 'transparent',
           color:   isActive ? ACCENT_INK : INK2,
           transition: 'all 0.15s',
-          '&:hover': { bgcolor: HOVER, color: INK },
+          '&:hover': { bgcolor: isActive ? ACTIVE_BG : HOVER, color: isActive ? ACCENT_INK : INK },
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: collapsed ? 'auto' : '100%' }}>
@@ -109,7 +108,7 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
               position: 'absolute', top: -2, right: -4,
               width: 7, height: 7, borderRadius: '50%',
               bgcolor: caja.abierta ? SUCCESS : MUTED,
-              border: `1.5px solid ${BG_SIDEBAR}`,
+              border: `1.5px solid ${CARD}`,
             }} />
           </Box>
           {!collapsed && (
@@ -142,12 +141,12 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
         display: 'flex', alignItems: 'center', gap: 1.5,
         mx: 1, px: 1.25, py: 0.9,
         justifyContent: collapsed ? 'center' : 'flex-start',
-        borderRadius: '6px',
+        borderRadius: '999px',
         textDecoration: 'none',
         bgcolor: isActive ? ACTIVE_BG : 'transparent',
         color:   isActive ? ACCENT_INK : INK2,
         transition: 'all 0.15s',
-        '&:hover': { bgcolor: HOVER, color: INK },
+        '&:hover': { bgcolor: isActive ? ACTIVE_BG : HOVER, color: isActive ? ACCENT_INK : INK },
       }}
     >
       <Icon sx={{ fontSize: 16, flexShrink: 0 }} />
@@ -169,7 +168,6 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
   const toast = useToast();
   const { mode, toggle } = useAppTheme();
   const logoSrc = useLogo();
-  const updateDisponible = useAppUpdateStatus();
   const { caja } = useCaja();
   const { alertas } = useApp();
   const location = useLocation();
@@ -242,7 +240,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
         minWidth: { xs: W, md: collapsed ? W_COLLAPSED : W },
         height: '100dvh',
         position: 'fixed', top: 0, left: 0,
-        bgcolor: BG_SIDEBAR,
+        bgcolor: CARD,
         borderRight: `1px solid ${BORDER}`,
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
@@ -377,7 +375,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
                 const content = (
                   <Box component={Link} to="/productos" onClick={handleSidebarClose}
                     onMouseEnter={() => preloadPage('/productos')}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9, justifyContent: collapsed ? 'center' : 'flex-start', borderRadius: '6px', textDecoration: 'none', bgcolor: isActive ? ACTIVE_BG : 'transparent', color: isActive ? ACCENT_INK : INK2, transition: 'all 0.15s', '&:hover': { bgcolor: HOVER, color: INK }, }}>
+                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9, justifyContent: collapsed ? 'center' : 'flex-start', borderRadius: '999px', textDecoration: 'none', bgcolor: isActive ? ACTIVE_BG : 'transparent', color: isActive ? ACCENT_INK : INK2, transition: 'all 0.15s', '&:hover': { bgcolor: isActive ? ACTIVE_BG : HOVER, color: isActive ? ACCENT_INK : INK }, }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: collapsed ? 'auto' : '100%' }}>
                       <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                         <Icon sx={{ fontSize: 16, flexShrink: 0 }} />
@@ -481,23 +479,10 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
         </MenuItem>
       </Menu>
 
-      {collapsed ? (
-        updateDisponible && (
-          <Tooltip title="Hay una actualización lista para instalar" placement="right">
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
-              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: WARNING }} />
-            </Box>
-          </Tooltip>
-        )
-      ) : (
-        <Tooltip title={updateDisponible ? 'Hay una actualización lista — se te va a volver a preguntar cuándo instalarla la próxima vez que abras el programa' : ''} placement="top">
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, py: 0.5 }}>
-            {updateDisponible && <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: WARNING, flexShrink: 0 }} />}
-            <Typography sx={{ color: updateDisponible ? WARNING : MUTED, fontSize: 10, opacity: updateDisponible ? 0.9 : 0.5 }}>
-              v{APP_VERSION}{updateDisponible ? ' · actualización lista' : ''}
-            </Typography>
-          </Box>
-        </Tooltip>
+      {!collapsed && (
+        <Typography sx={{ textAlign: 'center', color: MUTED, fontSize: 10, py: 0.5, opacity: 0.5 }}>
+          v{APP_VERSION}
+        </Typography>
       )}
     </Box>
   );
