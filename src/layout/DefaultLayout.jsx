@@ -45,10 +45,6 @@ export default function DefaultLayout() {
   const { caja, isLoading: cajaCargando, abrirCaja } = useCaja();
   const { checkPermisos } = useHasPermiso();
   const stockBajoCount = alertas?.stockBajo?.length || 0;
-  const trialEndsAt = user?.empresa?.plan === 'free' ? user?.empresa?.trial_ends_at : null;
-  const trialDaysLeft = trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(trialEndsAt) - new Date()) / (1000 * 60 * 60 * 24)))
-    : null;
   const location = useLocation();
   const navigate = useNavigate();
   const [openConfig,      setOpenConfig]      = useState(false);
@@ -132,7 +128,6 @@ export default function DefaultLayout() {
         onOpenAlertas={handleOpenAlertas}
         onConfirmLogout={() => setConfirmarLogout(true)}
         stockBajoCount={stockBajoCount}
-        trialDaysLeft={trialDaysLeft}
       />
 
       {/* ── CONTENIDO ── */}

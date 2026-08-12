@@ -1,7 +1,7 @@
 import { useState, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
-import { loginApi, registerApi, forgotPasswordApi, resetPasswordApi, verificar2faApi } from "../../auth/authServiceApi";
+import { loginApi, forgotPasswordApi, resetPasswordApi, verificar2faApi } from "../../auth/authServiceApi";
 import { AuthContext } from "../../auth/AuthContextBase";
 import {
   Box, Typography, TextField, Button, InputAdornment,
@@ -14,31 +14,24 @@ import ArrowBackIcon          from "@mui/icons-material/ArrowBack";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import WbSunnyOutlinedIcon    from "@mui/icons-material/WbSunnyOutlined";
 import DarkModeOutlinedIcon   from "@mui/icons-material/DarkModeOutlined";
-import PointOfSaleIcon        from "@mui/icons-material/PointOfSale";
-import InventoryIcon          from "@mui/icons-material/Inventory";
-import BarChartIcon           from "@mui/icons-material/BarChart";
-import GroupIcon              from "@mui/icons-material/Group";
-import { APP_NAME, APP_TAGLINE, PRIMARY_COLOR, PRIMARY_HOVER, LOGO_URL } from "../../config/brand";
+import { APP_NAME, PRIMARY_COLOR, PRIMARY_HOVER } from "../../config/brand";
 import { SIDEBAR_COLLAPSED_STORAGE_KEY } from "../../layout/sidebarConstants";
+import useHasPermiso, { PERMISOS_MAP, primeraRutaDisponible } from "../../hooks/useHasPermiso";
 import useLogo from "../../hooks/useLogo";
 import { BG, CARD, BORDER, INK, INK2, MUTED, INPUT, HOVER, ERROR } from "../../theme/tokens";
 import { useAppTheme } from "../../theme/useAppTheme";
-import TiltCard from "../../components/shared/TiltCard";
 
 const SUCCESS_COLOR = '#10b981';
 
 const slideUp   = keyframes`from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}`;
 const slideLeft = keyframes`from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}`;
-const floatBlob = keyframes`0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-18px,22px) scale(1.08)}`;
 
-/* Autofill fix: necesita hex reales (no CSS vars) — mismos valores que
-   --input/--ink del preset "organic" activo en theme/ThemeContext.jsx.
-   Si el preset cambia, esto queda desincronizado (no hay forma de leer un
-   var() resuelto acá sin JS extra); es el mismo trade-off que ya asume
-   getDotPattern() de abajo. */
+/* Autofill fix: necesita hex reales (no CSS vars) */
 const getAutofillFix = (mode) => {
-  const bg   = mode === 'dark' ? '#26231e' : '#ebddc5';
-  const text = mode === 'dark' ? '#f5ead8' : '#201e1d';
+  // Marrón oscuro (a juego con --input/--ink del tema dark, ver ThemeContext.jsx)
+  const bg   = mode === 'dark' ? '#201f1f' : '#f8fafc';
+  const text = mode === 'dark' ? '#f0edec' : '#0f172a';
+  // Slate/Navy dark mode (versión anterior) — comentado: bg '#1e293b' / text '#f1f5f9'
   return `
     input:-webkit-autofill,
     input:-webkit-autofill:hover,
@@ -86,27 +79,6 @@ function Label({ children }) {
   );
 }
 
-/* ── Tab switcher ── */
-function TabBar({ value, onChange }) {
-  return (
-    <Box sx={{ display: 'flex', bgcolor: HOVER, borderRadius: '12px', p: '4px', mb: 3.5, '@media (max-height: 800px)': { mb: 2 } }}>
-      {[{ id: 'login', label: 'Iniciar sesión' }, { id: 'register', label: 'Crear cuenta' }].map(t => (
-        <Box key={t.id} onClick={() => onChange(t.id)}
-          sx={{
-            flex: 1, py: '9px', textAlign: 'center', borderRadius: '9px', cursor: 'pointer',
-            bgcolor: value === t.id ? CARD : 'transparent',
-            boxShadow: value === t.id ? '0 1px 6px rgba(0,0,0,0.09)' : 'none',
-            transition: 'all 0.2s',
-          }}>
-          <Typography sx={{ fontSize: 13.5, fontWeight: value === t.id ? 700 : 500, color: value === t.id ? INK : MUTED, transition: 'all 0.2s', userSelect: 'none' }}>
-            {t.label}
-          </Typography>
-        </Box>
-      ))}
-    </Box>
-  );
-}
-
 /* ══════════════════════════════
    VISTA LOGIN
 ══════════════════════════════ */
@@ -126,6 +98,17 @@ function guardarSesion(res, { setToken, setUser, setMyPermisos }) {
   // si se había dejado colapsado en una sesión anterior.
   localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, 'false');
   setMyPermisos(todos); setToken(res.access_token); setUser(res.user);
+  return todos;
+}
+
+// Justo después de guardarSesion(), el contexto (myPermisos) todavía no se
+// re-renderizó con los permisos nuevos en este mismo tick — por eso acá se
+// arma tienePermiso a mano contra el array crudo que guardarSesion() ya
+// devolvió, en vez de usar el checkPermisos del hook (que leería el estado
+// viejo, de antes de este login).
+function rutaLandingTrasLogin(codigos) {
+  const tienePermiso = (permiso) => codigos.includes(PERMISOS_MAP[permiso] || permiso);
+  return primeraRutaDisponible(tienePermiso);
 }
 
 /* Segundo paso del login cuando la cuenta tiene 2FA activo */
@@ -140,9 +123,9 @@ function View2FA({ pendingToken, onVerificado, onCancelar }) {
     setLoading(true); setError('');
     try {
       const res = await verificar2faApi(pendingToken, data.codigo);
-      guardarSesion(res, authCtx);
+      const codigos = guardarSesion(res, authCtx);
       onVerificado();
-      navigate('/dashboard');
+      navigate(rutaLandingTrasLogin(codigos));
     } catch (e) {
       setError(e.response?.data?.message || 'Código incorrecto');
     } finally { setLoading(false); }
@@ -190,7 +173,7 @@ function View2FA({ pendingToken, onVerificado, onCancelar }) {
   );
 }
 
-function ViewLogin({ onForgot, onRequiere2fa }) {
+function ViewLogin({ onRequiere2fa }) {
   const { control, handleSubmit, formState: { errors } } = useForm({ mode: 'onTouched' });
   const [showPass, setShowPass] = useState(false);
   const [error,    setError]    = useState('');
@@ -198,12 +181,6 @@ function ViewLogin({ onForgot, onRequiere2fa }) {
   const authCtx = useContext(AuthContext);
   const { setToken } = authCtx;
   const navigate = useNavigate();
-
-  const API_URL = import.meta.env.VITE_API_URL;
-
-  const handleGoogleLogin = () => {
-    window.location.href = `${API_URL}auth/google/redirect`;
-  };
 
   const onSubmit = async (data) => {
     setLoading(true); setError('');
@@ -213,8 +190,8 @@ function ViewLogin({ onForgot, onRequiere2fa }) {
         onRequiere2fa(res.pending_token);
         return;
       }
-      guardarSesion(res, authCtx);
-      navigate('/dashboard');
+      const codigos = guardarSesion(res, authCtx);
+      navigate(rutaLandingTrasLogin(codigos));
     } catch (e) {
       setToken(null); localStorage.removeItem('token');
       if (e.response?.status === 429) {
@@ -234,7 +211,7 @@ function ViewLogin({ onForgot, onRequiere2fa }) {
           <Controller name="email" control={control} defaultValue=""
             rules={{ required: 'El correo es obligatorio', pattern: { value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, message: 'Correo inválido' } }}
             render={({ field }) => (
-              <TextField {...field} type="email" placeholder="nombre@empresa.com" fullWidth
+              <TextField {...field} type="email" placeholder="nombre@gmail.com" fullWidth
                 autoComplete="email" autoFocus error={!!errors.email} helperText={errors.email?.message}
                 InputLabelProps={{ shrink: false }} label="" sx={inputSx} />
             )} />
@@ -243,10 +220,11 @@ function ViewLogin({ onForgot, onRequiere2fa }) {
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
             <Label>Contraseña</Label>
-            <Typography onClick={onForgot}
-              sx={{ color: PRIMARY_COLOR, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
-              ¿Olvidaste tu contraseña?
-            </Typography>
+            {/* "¿Olvidaste tu contraseña?" comentado — la instalación de escritorio
+                es local y no tiene un servidor de mail configurado para enviar el
+                link de reseteo (ver ViewForgot/forgotPasswordApi más abajo, que sí
+                quedan intactos por si en algún momento se habilita SMTP). Para
+                reactivar, descomentar este bloque. */}
           </Box>
           <Controller name="password" control={control} defaultValue=""
             render={({ field }) => (
@@ -271,146 +249,7 @@ function ViewLogin({ onForgot, onRequiere2fa }) {
             '&.Mui-disabled': { bgcolor: PRIMARY_COLOR, opacity: 0.45, color: '#fff' } }}>
           {loading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Iniciar sesión'}
         </Button>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, my: 1 }}>
-          <Box sx={{ flex: 1, height: '1px', bgcolor: BORDER }} />
-          <Typography sx={{ color: MUTED, fontSize: 12, fontWeight: 500 }}>o</Typography>
-          <Box sx={{ flex: 1, height: '1px', bgcolor: BORDER }} />
-        </Box>
-
-        <Button
-          variant="outlined"
-          fullWidth
-          onClick={handleGoogleLogin}
-          sx={{
-            py: 1.2,
-            fontSize: 14,
-            fontWeight: 600,
-            borderRadius: '10px',
-            textTransform: 'none',
-            borderColor: BORDER,
-            color: INK,
-            bgcolor: INPUT,
-            '&:hover': { bgcolor: HOVER, borderColor: BORDER },
-          }}
-        >
-          <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continuar con Google
-          </Box>
-        </Button>
       </Stack>
-    </Box>
-  );
-}
-
-/* ══════════════════════════════
-   VISTA REGISTRO
-══════════════════════════════ */
-function ViewRegister({ defaultNombre = '', defaultEmail = '', negocio = '', onboarding = null }) {
-  const { control, handleSubmit, getValues, formState: { errors } } = useForm({ mode: 'onTouched' });
-  const [showPass,    setShowPass]    = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [error,   setError]   = useState('');
-  const [loading, setLoading] = useState(false);
-  const { setToken, setUser, setMyPermisos } = useContext(AuthContext);
-  const navigate = useNavigate();
-
-  const onSubmit = async (data) => {
-    setLoading(true); setError('');
-    try {
-      const res = await registerApi(data.nombre, data.email, data.password, onboarding || { negocio });
-      guardarSesion(res, { setToken, setUser, setMyPermisos });
-      navigate('/bienvenida');
-    } catch (e) {
-      setError(e.response?.data?.message || e.response?.data?.errors?.email?.[0] || 'Error al crear la cuenta. Intentá de nuevo.');
-    } finally { setLoading(false); }
-  };
-
-  return (
-    <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
-      {error && <Alert severity="error" sx={{ mb: 2.5, fontSize: 13, borderRadius: '10px' }}>{error}</Alert>}
-      <Stack spacing={2}>
-        <Box>
-          <Label>Nombre completo</Label>
-          <Controller name="nombre" control={control} defaultValue={defaultNombre}
-            rules={{ required: 'El nombre es obligatorio', minLength: { value: 2, message: 'Mínimo 2 caracteres' } }}
-            render={({ field }) => (
-              <TextField {...field} placeholder="Tu nombre y apellido" fullWidth autoFocus
-                error={!!errors.nombre} helperText={errors.nombre?.message}
-                InputLabelProps={{ shrink: false }} label="" sx={inputSx} />
-            )} />
-        </Box>
-
-        <Box>
-          <Label>Correo electrónico</Label>
-          <Controller name="email" control={control} defaultValue={defaultEmail}
-            rules={{ required: 'El correo es obligatorio', pattern: { value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, message: 'Correo inválido' } }}
-            render={({ field }) => (
-              <TextField {...field} type="email" placeholder="nombre@empresa.com" fullWidth
-                autoComplete="email" error={!!errors.email} helperText={errors.email?.message}
-                InputLabelProps={{ shrink: false }} label="" sx={inputSx} />
-            )} />
-        </Box>
-
-        <Box>
-          <Label>Contraseña</Label>
-          <Controller name="password" control={control} defaultValue=""
-            rules={{ required: 'La contraseña es obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } }}
-            render={({ field }) => (
-              <TextField {...field} type={showPass ? 'text' : 'password'} placeholder="Mínimo 6 caracteres"
-                fullWidth autoComplete="new-password" error={!!errors.password} helperText={errors.password?.message}
-                InputLabelProps={{ shrink: false }} label="" sx={inputSx}
-                InputProps={{ endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPass(v => !v)} edge="end" size="small" tabIndex={-1}
-                      sx={{ color: MUTED, mr: 0.25, '&:hover': { color: INK2, bgcolor: 'transparent' } }}>
-                      {showPass ? <VisibilityOffIcon sx={{ fontSize: 18 }} /> : <VisibilityIcon sx={{ fontSize: 18 }} />}
-                    </IconButton>
-                  </InputAdornment>
-                )}} />
-            )} />
-        </Box>
-
-        <Box>
-          <Label>Confirmar contraseña</Label>
-          <Controller name="confirm" control={control} defaultValue=""
-            rules={{ required: 'Confirmá tu contraseña', validate: v => v === getValues('password') || 'Las contraseñas no coinciden' }}
-            render={({ field }) => (
-              <TextField {...field} type={showConfirm ? 'text' : 'password'} placeholder="Repetí tu contraseña"
-                fullWidth autoComplete="new-password" error={!!errors.confirm} helperText={errors.confirm?.message}
-                InputLabelProps={{ shrink: false }} label="" sx={inputSx}
-                InputProps={{ endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowConfirm(v => !v)} edge="end" size="small" tabIndex={-1}
-                      sx={{ color: MUTED, mr: 0.25, '&:hover': { color: INK2, bgcolor: 'transparent' } }}>
-                      {showConfirm ? <VisibilityOffIcon sx={{ fontSize: 18 }} /> : <VisibilityIcon sx={{ fontSize: 18 }} />}
-                    </IconButton>
-                  </InputAdornment>
-                )}} />
-            )} />
-        </Box>
-
-        <Button type="submit" variant="contained" fullWidth disabled={loading}
-          sx={{ py: 1.45, bgcolor: PRIMARY_COLOR, fontSize: 15, fontWeight: 700, borderRadius: '10px', textTransform: 'none',
-            boxShadow: `0 2px 14px ${PRIMARY_COLOR}35`,
-            '&:hover': { bgcolor: PRIMARY_HOVER, boxShadow: `0 4px 22px ${PRIMARY_COLOR}50` },
-            '&.Mui-disabled': { bgcolor: PRIMARY_COLOR, opacity: 0.45, color: '#fff' } }}>
-          {loading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Crear cuenta gratis →'}
-        </Button>
-      </Stack>
-
-      <Typography sx={{ color: MUTED, fontSize: 12, textAlign: 'center', mt: 2.5, lineHeight: 1.65 }}>
-        Al registrarte aceptás los{' '}
-        <Box component="span" sx={{ color: INK2, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>Términos de uso</Box>
-        {' '}y la{' '}
-        <Box component="span" sx={{ color: INK2, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>Política de privacidad</Box>.
-      </Typography>
     </Box>
   );
 }
@@ -480,7 +319,7 @@ function ViewForgot({ onBack }) {
           <Label>Correo electrónico</Label>
           <Controller name="email" control={control} defaultValue=""
               render={({ field }) => (
-                <TextField {...field} type="email" placeholder="nombre@empresa.com" fullWidth autoFocus
+                <TextField {...field} type="email" placeholder="nombre@gmail.com" fullWidth autoFocus
                   error={!!errors.email} helperText={errors.email?.message}
                   InputLabelProps={{ shrink: false }} label="" sx={inputSx} />
               )} />
@@ -623,148 +462,28 @@ function ViewReset({ token, email, onDone }) {
   );
 }
 
-/* ── Panel de marca (solo desktop) ── */
-const BRAND_FEATURES = [
-  { icon: InventoryIcon,   label: 'Stock y lotes con vencimientos bajo control' },
-  { icon: PointOfSaleIcon, label: 'Ventas y caja en un mismo flujo' },
-  { icon: BarChartIcon,    label: 'Reportes claros para decidir mejor' },
-  { icon: GroupIcon,       label: 'Multiusuario con permisos por rol' },
-];
-
-function FeatureItem({ icon: Icon, label }) {
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-      <Box sx={{
-        width: 32, height: 32, borderRadius: '9px', flexShrink: 0,
-        bgcolor: `${PRIMARY_COLOR}14`, border: `1px solid ${PRIMARY_COLOR}28`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Icon sx={{ fontSize: 17, color: PRIMARY_COLOR }} />
-      </Box>
-      <Typography sx={{ color: INK2, fontSize: 14, fontWeight: 500 }}>{label}</Typography>
-    </Box>
-  );
-}
-
-/* Acentos secundarios de los blobs decorativos — necesitan hex real (van con
-   sufijo de alpha), así que no pueden ser CSS vars. Un verde salvia y un
-   terracota más profundo, en vez del violeta/celeste genérico de antes que
-   no tenía ninguna relación con la marca ni con el resto de la paleta. */
-const getBlobAccents = (mode) => mode === 'dark'
-  ? { sage: '#a3b581', deep: '#8c491a' }
-  : { sage: '#7a8a5e', deep: '#e08b52' };
-
-function BrandPanel({ onLogoClick, mode }) {
-  const { sage, deep } = getBlobAccents(mode);
-  return (
-    <Box sx={{
-      display: { xs: 'none', md: 'flex' },
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      width: '42%', minWidth: 'clamp(300px, 30vw, 420px)', maxWidth: 'clamp(360px, 34vw, 560px)',
-      position: 'relative', overflowX: 'hidden', overflowY: 'auto',
-      background: `linear-gradient(165deg, ${BG} 0%, ${CARD} 100%)`,
-      borderRight: `1px solid ${BORDER}`,
-      p: 'clamp(24px, 3vw, 48px)',
-    }}>
-      {/* Glow blobs */}
-      <Box sx={{ position:'absolute', top:-140, right:-100, width:420, height:420, borderRadius:'50%', background:`radial-gradient(closest-side, ${PRIMARY_COLOR}30, transparent)`, filter:'blur(70px)', animation:`${floatBlob} 12s ease-in-out infinite` }} />
-      <Box sx={{ position:'absolute', bottom:-120, left:-90, width:380, height:380, borderRadius:'50%', background:`radial-gradient(closest-side, ${sage}30, transparent)`, filter:'blur(70px)', animation:`${floatBlob} 15s ease-in-out infinite 2s` }} />
-      <Box sx={{ position:'absolute', top:'40%', left:'52%', width:280, height:280, borderRadius:'50%', background:`radial-gradient(closest-side, ${deep}22, transparent)`, filter:'blur(60px)', animation:`${floatBlob} 18s ease-in-out infinite 4s` }} />
-
-      <Box sx={{
-        position: 'absolute', inset: 0,
-        backgroundImage: getDotPattern(mode),
-        backgroundSize: '26px 26px',
-      }} />
-
-      <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={onLogoClick}>
-        <Box component="img" src={LOGO_URL} alt={APP_NAME}
-          sx={{ height: 'clamp(28px, 3vw, 40px)', width: 'auto', display: 'block' }} />
-      </Box>
-
-      <Box sx={{ position: 'relative' }}>
-        <Typography sx={{ color: INK, fontWeight: 800, fontSize: 'clamp(20px, 2.2vw, 32px)', lineHeight: 1.25, letterSpacing: '-0.02em', mb: 'clamp(8px, 1vw, 12px)' }}>
-          Gestioná tu negocio<br />de punta a punta.
-        </Typography>
-        <Typography sx={{ color: MUTED, fontSize: 'clamp(12.5px, 1vw, 15px)', lineHeight: 1.7, mb: 'clamp(16px, 2.2vw, 28px)', maxWidth: 380 }}>
-          {APP_TAGLINE} — stock, ventas, caja y reportes en un solo lugar, pensado para comercios que necesitan moverse rápido.
-        </Typography>
-
-        {/* Mismo mockup del hero de la Landing, más chico — para que el panel
-            del login no se sienta como una página aparte sin nada de producto. */}
-        <Box sx={{ animation: `${slideUp} 0.5s 0.15s cubic-bezier(0.16,1,0.3,1) both`, mb: 'clamp(16px, 2.2vw, 28px)', maxWidth: 'clamp(220px, 22vw, 320px)' }}>
-          <TiltCard sx={{
-            bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px', p: 2,
-            boxShadow: mode === 'dark' ? '0 24px 60px rgba(0,0,0,0.35)' : '0 24px 60px rgba(60,45,20,0.12)',
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.75 }}>
-              {['#ff5f57', '#febc2e', '#28c840'].map(c => <Box key={c} sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: c }} />)}
-              <Box sx={{ flex: 1, height: 15, bgcolor: INPUT, borderRadius: '5px' }} />
-            </Box>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.25, mb: 1.25 }}>
-              {[['Ventas hoy', '$284.500', PRIMARY_COLOR], ['Stock bajo', '3 items', '#f59e0b']].map(([l, v, c]) => (
-                <Box key={l} sx={{ bgcolor: INPUT, border: `1px solid ${BORDER}`, borderRadius: '9px', p: 1.25 }}>
-                  <Typography sx={{ color: MUTED, fontSize: 10.5 }}>{l}</Typography>
-                  <Typography sx={{ color: c, fontWeight: 800, fontSize: 15, mt: 0.25 }}>{v}</Typography>
-                </Box>
-              ))}
-            </Box>
-            <Box sx={{ bgcolor: INPUT, border: `1px solid ${BORDER}`, borderRadius: '9px', p: 1.25 }}>
-              <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'flex-end', height: 28 }}>
-                {[40, 65, 50, 80, 55, 90, 70].map((h, i) => (
-                  <Box key={i} sx={{ flex: 1, height: `${h}%`, bgcolor: PRIMARY_COLOR, opacity: i === 5 ? 1 : 0.3, borderRadius: '2px 2px 0 0' }} />
-                ))}
-              </Box>
-            </Box>
-          </TiltCard>
-        </Box>
-
-        <Stack spacing={1.5}>
-          {BRAND_FEATURES.map(f => <FeatureItem key={f.label} icon={f.icon} label={f.label} />)}
-        </Stack>
-      </Box>
-
-      <Typography sx={{ position: 'relative', color: MUTED, fontSize: 12.5 }}>
-        © {new Date().getFullYear()} {APP_NAME} · Todos los derechos reservados
-      </Typography>
-    </Box>
-  );
-}
-
 /* ══════════════════════════════
    COMPONENTE PRINCIPAL
 ══════════════════════════════ */
 export default function Login() {
   const { token }           = useContext(AuthContext);
+  const { checkPermisos }   = useHasPermiso();
   const navigate            = useNavigate();
   const location            = useLocation();
   const { mode, toggle }    = useAppTheme();
   const logoSrc             = useLogo();
-  const onboarding           = location.state?.onboarding || null;
   const searchParams = new URLSearchParams(location.search);
   const resetToken  = searchParams.get('token');
   const resetEmail  = searchParams.get('email');
 
-  const googleError     = searchParams.get('error');
   const pending2faToken = searchParams.get('pending_2fa');
-  const googleName      = searchParams.get('google_name');
-  const googleEmail     = searchParams.get('google_email');
-  const urlView         = searchParams.get('view');
 
-  const initialTab = (location.state?.view === 'register' || urlView === 'register')
-    ? 'register'
-    : 'login';
   const initialView = pending2faToken ? '2fa' : (resetToken ? 'reset' : 'main');
 
-  const [tab,  setTab]  = useState(initialTab);
   const [view, setView] = useState(initialView);
   const [pendingToken, setPendingToken] = useState(pending2faToken || null);
-  const oauthError = googleError || null;
 
-  if (token) return <Navigate to="/dashboard" />;
-
-  const handleTabChange = (newTab) => { setTab(newTab); setView('main'); };
+  if (token) return <Navigate to={primeraRutaDisponible(checkPermisos)} />;
 
   return (
     <>
@@ -773,10 +492,8 @@ export default function Login() {
         position: 'fixed', inset: 0,
         bgcolor: BG,
         display: 'flex',
-        fontFamily: "'Figtree', ui-sans-serif, system-ui, sans-serif",
+        fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
       }}>
-
-        <BrandPanel onLogoClick={() => navigate('/')} mode={mode} />
 
         {/* ── Panel del formulario ── */}
         <Box sx={{
@@ -790,28 +507,21 @@ export default function Login() {
 
           {/* ── Top bar ── */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'space-between', md: 'flex-end' }, px: { xs: 3, sm: 5 }, py: { xs: 1.5, md: 2.5 } }}>
-            <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', cursor: 'pointer' }} onClick={() => navigate('/')}>
+            <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center' }}>
               <Box component="img" src={logoSrc} alt={APP_NAME}
                 sx={{ height: 40, width: 'auto', display: 'block' }} />
             </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Tooltip title={mode === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
-                <IconButton onClick={toggle} size="small"
-                  sx={{ color: MUTED, bgcolor: HOVER, borderRadius: '8px', p: '7px',
-                    '&:hover': { color: INK, bgcolor: BORDER } }}>
-                  {mode === 'dark'
-                    ? <WbSunnyOutlinedIcon sx={{ fontSize: 18 }} />
-                    : <DarkModeOutlinedIcon sx={{ fontSize: 18 }} />
-                  }
-                </IconButton>
-              </Tooltip>
-              <Button onClick={() => navigate('/')}
-                sx={{ color: MUTED, textTransform: 'none', fontWeight: 500, fontSize: 13, borderRadius: '8px',
-                  '&:hover': { bgcolor: HOVER, color: INK } }}>
-                ← Volver al inicio
-              </Button>
-            </Box>
+            <Tooltip title={mode === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
+              <IconButton onClick={toggle} size="small"
+                sx={{ color: MUTED, bgcolor: HOVER, borderRadius: '8px', p: '7px',
+                  '&:hover': { color: INK, bgcolor: BORDER } }}>
+                {mode === 'dark'
+                  ? <WbSunnyOutlinedIcon sx={{ fontSize: 18 }} />
+                  : <DarkModeOutlinedIcon sx={{ fontSize: 18 }} />
+                }
+              </IconButton>
+            </Tooltip>
           </Box>
 
           {/* ── Card centrada ── */}
@@ -854,37 +564,23 @@ export default function Login() {
                         '@media (max-height: 800px)': { height: 36, mb: 1 },
                       }} />
                     <Typography sx={{ color: INK, fontWeight: 800, fontSize: 22, letterSpacing: '-0.025em', mb: 0.5 }}>
-                      {tab === 'login' ? 'Bienvenido' : 'Empezá gratis hoy'}
+                      Bienvenido
                     </Typography>
                     <Typography sx={{ color: MUTED, fontSize: 13.5 }}>
-                      {tab === 'login' ? 'Accedé a tu panel de control.' : '7 días de prueba · Sin tarjeta de crédito.'}
+                      Accedé a tu panel de control.
                     </Typography>
                   </Box>
 
-                  <TabBar value={tab} onChange={handleTabChange} />
-
-                  {oauthError && (
-                    <Alert severity="error" sx={{ mb: 2.5, fontSize: 13, borderRadius: '10px' }}>
-                      {oauthError === 'google_auth_failed' && 'No se pudo autenticar con Google. Intentá de nuevo.'}
-                      {oauthError === 'google_no_email' && 'Google no compartió tu correo. Intentá con otro método.'}
-                      {oauthError === 'oauth_no_token' && 'El inicio de sesión con Google no se completó correctamente.'}
-                      {oauthError === 'oauth_failed' && 'No se pudo verificar tu cuenta. Probá iniciar sesión con correo y contraseña.'}
-                    </Alert>
-                  )}
-
-                  <Box key={tab} sx={{ animation: `${slideLeft} 0.25s ease` }}>
-                    {tab === 'login'
-                      ? <ViewLogin onForgot={() => setView('forgot')} onRequiere2fa={(token) => { setPendingToken(token); setView('2fa'); }} />
-                      : <ViewRegister defaultNombre={googleName || onboarding?.nombre || ''} defaultEmail={googleEmail || onboarding?.email || ''} negocio={onboarding?.negocio || ''} onboarding={onboarding} />
-                    }
+                  <Box sx={{ animation: `${slideLeft} 0.25s ease` }}>
+                    <ViewLogin onRequiere2fa={(token) => { setPendingToken(token); setView('2fa'); }} />
                   </Box>
                 </>
               )}
             </Box>
           </Box>
 
-          {/* ── Footer (solo mobile, en desktop vive en el panel de marca) ── */}
-          <Box sx={{ display: { xs: 'block', md: 'none' }, textAlign: 'center', px: 3, pb: 3 }}>
+          {/* ── Footer ── */}
+          <Box sx={{ textAlign: 'center', px: 3, pb: 3 }}>
             <Typography sx={{ color: MUTED, fontSize: 12 }}>
               © {new Date().getFullYear()} {APP_NAME} · Todos los derechos reservados
             </Typography>
