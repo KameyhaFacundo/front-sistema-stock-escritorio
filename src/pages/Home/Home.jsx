@@ -43,7 +43,7 @@ import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import AyudaButton from '../../components/shared/AyudaButton';
 import CampoPrecio from '../../components/shared/CampoPrecio';
 import { imprimirTicket } from '../../utils/imprimirTicket';
-import { BG, CARD, BORDER, INK, INK2, MUTED, P as PRIMARY, P_HOVER, INPUT, HOVER, DROPDOWN, MODAL, modalPaperSx,
+import { BG, CARD, BORDER, INK, INK2, MUTED, P as PRIMARY, P_HOVER, INPUT, HOVER, MODAL, modalPaperSx,
          SUCCESS, SUCCESS_BG, SUCCESS_BORDER, ERROR, ERROR_BG, ERROR_BORDER, MONEY, PURPLE, ORANGE, GOLD } from '../../theme/tokens';
 import { APP_NAME, POINT_HABILITADO } from '../../config/brand';
 import useHasPermiso from '../../hooks/useHasPermiso';
@@ -65,6 +65,32 @@ import QRCode from 'qrcode';
 import ReceiptIcon    from '@mui/icons-material/Receipt';
 import HandshakeIcon  from '@mui/icons-material/Handshake';
 
+
+// ── Columna de checkout: paleta fija del panel oscuro ───────────────────────
+// La columna derecha es una "isla" de fondo fijo (no sigue claro/oscuro del
+// sitio, ver el comentario en su JSX) — estos son los equivalentes locales
+// de INK/INK2/MUTED/BORDER/HOVER/CARD para legibilidad sobre ese fondo. Los
+// hex de acento (bg/texto) son los mismos que el hero de Reportes en
+// Dashboard.jsx (accent-800/accent-100 del sistema "Organic").
+const CHECKOUT_INK      = '#fff2eb';
+const CHECKOUT_INK2     = 'rgba(255,242,235,0.72)';
+const CHECKOUT_MUTED    = 'rgba(255,242,235,0.55)';
+const CHECKOUT_BORDER   = 'rgba(255,242,235,0.16)';
+const CHECKOUT_HOVER    = 'rgba(255,242,235,0.12)';
+const CHECKOUT_FIELD_BG = 'rgba(255,242,235,0.08)';
+const CHECKOUT_ACCENT   = '#ffc6a5';       // acento-300 — píldora seleccionada / CTA
+const CHECKOUT_ACCENT_INK = '#4a2412';     // texto oscuro sobre CHECKOUT_ACCENT
+// Se combina con el `inputSx` normal (spread primero) para pisar sus colores
+// —radio/tipografía/números-sin-flechitas de inputSx se mantienen igual.
+const CHECKOUT_INPUT_SX = {
+  '& .MuiOutlinedInput-root': {
+    bgcolor: CHECKOUT_FIELD_BG, color: CHECKOUT_INK,
+    '& fieldset': { borderColor: CHECKOUT_BORDER },
+    '&:hover fieldset': { borderColor: CHECKOUT_ACCENT },
+    '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT, borderWidth: 1 },
+  },
+  '& .MuiInputBase-input::placeholder': { color: CHECKOUT_MUTED, opacity: 1 },
+};
 
 // Fuera del componente — las funciones impuras no se analizan como render
 function generarTicketId() {
@@ -1232,7 +1258,7 @@ function Home() {
       {/* Header */}
       <Box sx={{ px: 3, py: 1.25, borderBottom: `1px solid ${BORDER}`, flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
         {/* Gradiente de acento */}
-        <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${PRIMARY}, ${MONEY}, ${ORANGE})` }} />
+        <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY}80 65%, transparent 100%)` }} />
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
             <Box sx={{ width: 34, height: 34, borderRadius: '10px', bgcolor: `${PRIMARY}18`, border: `1px solid ${PRIMARY}30`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1760,9 +1786,19 @@ function Home() {
         </Box>
         )}
 
-        {/* Columna derecha — checkout completo, siempre visible */}
+        {/* Columna derecha — checkout completo, siempre visible.
+            Panel oscuro fijo (no sigue el modo claro/oscuro del sitio) —
+            mismo tratamiento "isla" que el hero de Reportes en Dashboard.jsx,
+            con los mismos hex de acento-800/acento-100. Los CHECKOUT_* de
+            abajo son los equivalentes locales de INK/INK2/MUTED/BORDER/HOVER
+            para legibilidad sobre ese fondo fijo (no pueden ser las CSS vars
+            del tema porque este panel no cambia con el modo). */}
         {(!isMobile || mobileTab === 1) && (
-        <Box sx={{ flex: 1, minWidth: { xs: 0, md: 380 }, maxWidth: { md: 420 }, display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 1.25 }, overflowY: 'auto', p: { xs: 2, md: 0 }, pb: { md: 1.5 } }}
+        <Box sx={{
+          flex: 1, minWidth: { xs: 0, md: 380 }, maxWidth: { md: 420 }, display: 'flex', flexDirection: 'column',
+          gap: { xs: 1.5, md: 1.25 }, overflowY: 'auto', p: { xs: 2.5, md: 2.5 }, pb: { md: 2.5 },
+          bgcolor: '#643312', color: '#fff2eb', borderRadius: '28px',
+        }}
           onKeyDown={(e) => {
             // Catch-all: los campos con un paso siguiente definido (Cliente,
             // Métodos de Pago, Recibido, Descuento) frenan la propagación del
@@ -1774,14 +1810,14 @@ function Home() {
           }}>
 
           {/* Cliente */}
-          <Box data-tour="pos-cliente" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', p: 1.75, flexShrink: 0 }}>
+          <Box data-tour="pos-cliente" sx={{ pb: 1.75, borderBottom: `1px solid ${CHECKOUT_BORDER}`, flexShrink: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
-              <Box sx={{ width: 28, height: 28, borderRadius: '8px', bgcolor: `${PRIMARY}14`, border: `1px solid ${PRIMARY}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <PersonOutlineIcon sx={{ color: PRIMARY, fontSize: 15 }} />
+              <Box sx={{ width: 28, height: 28, borderRadius: '999px', bgcolor: CHECKOUT_FIELD_BG, border: `1px solid ${CHECKOUT_BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <PersonOutlineIcon sx={{ color: CHECKOUT_INK, fontSize: 15 }} />
               </Box>
               <Box>
-                <Typography sx={{ color: INK, fontWeight: 700, fontSize: 13.5 }}>Cliente</Typography>
-                <Typography sx={{ color: MUTED, fontSize: 11 }}>Seleccioná para la venta</Typography>
+                <Typography sx={{ color: CHECKOUT_INK, fontWeight: 700, fontSize: 13.5 }}>Cliente</Typography>
+                <Typography sx={{ color: CHECKOUT_MUTED, fontSize: 11 }}>Seleccioná para la venta</Typography>
               </Box>
             </Box>
             {!nuevoCliente.active ? (
@@ -1812,8 +1848,8 @@ function Home() {
                   return (
                     <li key={key} {...rest}>
                       {opt._crear
-                        ? <Typography sx={{ color: PRIMARY, fontWeight: 600, fontSize: 13 }}>+ Crear cliente &quot;{opt.nombre}&quot;</Typography>
-                        : <Typography sx={{ fontSize: 13, color: INK }}>{opt.nombre}</Typography>}
+                        ? <Typography sx={{ color: CHECKOUT_ACCENT, fontWeight: 600, fontSize: 13 }}>+ Crear cliente &quot;{opt.nombre}&quot;</Typography>
+                        : <Typography sx={{ fontSize: 13, color: CHECKOUT_INK }}>{opt.nombre}</Typography>}
                     </li>
                   );
                 }}
@@ -1835,35 +1871,35 @@ function Home() {
                       }
                     }}
                     sx={{
-                      ...inputSx,
+                      ...inputSx, ...CHECKOUT_INPUT_SX,
                       '& .MuiInputBase-root': { py: 0, pr: '9px !important' },
                       '& .MuiInputBase-input': { py: '10px !important', px: '4px', fontSize: 13 },
                     }} />
                 )}
                 slotProps={{
-                  paper: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, borderRadius: '10px', '& .MuiAutocomplete-option': { color: INK, '&:hover, &[aria-selected="true"]': { bgcolor: HOVER } } } },
+                  paper: { sx: { bgcolor: '#4a2412', border: `1px solid ${CHECKOUT_BORDER}`, borderRadius: '16px', '& .MuiAutocomplete-option': { color: CHECKOUT_INK, '&:hover, &[aria-selected="true"]': { bgcolor: CHECKOUT_HOVER } } } },
                 }}
-                noOptionsText={<Typography sx={{ color: MUTED, fontSize: 13 }}>Sin resultados</Typography>}
+                noOptionsText={<Typography sx={{ color: CHECKOUT_MUTED, fontSize: 13 }}>Sin resultados</Typography>}
               />
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <TextField fullWidth size="small" placeholder="Nombre o razón social" value={nuevoCliente.nombre}
                   onChange={e => setNuevoCliente(nc => ({ ...nc, nombre: e.target.value }))}
-                  sx={{ ...inputSx, '& .MuiInputBase-input': { py: '10px', fontSize: 13 } }} />
+                  sx={{ ...inputSx, ...CHECKOUT_INPUT_SX, '& .MuiInputBase-input': { py: '10px', fontSize: 13 } }} />
                 <TextField fullWidth size="small" placeholder="CUIT / DNI (opcional)" value={nuevoCliente.cuit}
                   onChange={e => setNuevoCliente(nc => ({ ...nc, cuit: e.target.value }))}
-                  sx={{ ...inputSx, '& .MuiInputBase-input': { py: '10px', fontSize: 13 } }} />
+                  sx={{ ...inputSx, ...CHECKOUT_INPUT_SX, '& .MuiInputBase-input': { py: '10px', fontSize: 13 } }} />
                 <TextField fullWidth size="small" placeholder="Teléfono (opcional)" value={nuevoCliente.telefono}
                   onChange={e => setNuevoCliente(nc => ({ ...nc, telefono: e.target.value }))}
-                  sx={{ ...inputSx, '& .MuiInputBase-input': { py: '10px', fontSize: 13 } }} />
+                  sx={{ ...inputSx, ...CHECKOUT_INPUT_SX, '& .MuiInputBase-input': { py: '10px', fontSize: 13 } }} />
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Button fullWidth size="small" onClick={resetNuevoCliente}
-                    sx={{ ...outlinedBtn, borderRadius: '8px', py: 0.75 }} variant="outlined">
+                    sx={{ color: CHECKOUT_INK2, borderColor: CHECKOUT_BORDER, py: 0.75, textTransform: 'none', '&:hover': { borderColor: CHECKOUT_ACCENT, bgcolor: CHECKOUT_HOVER, color: CHECKOUT_INK } }} variant="outlined">
                     Cancelar
                   </Button>
                   <Button fullWidth size="small" variant="contained" onClick={handleCrearCliente}
                     disabled={creandoCliente || !nuevoCliente.nombre.trim()}
-                    sx={{ bgcolor: PRIMARY, borderRadius: '8px', py: 0.75, textTransform: 'none', fontWeight: 600, '&:hover': { bgcolor: P_HOVER } }}>
+                    sx={{ bgcolor: CHECKOUT_ACCENT, color: CHECKOUT_ACCENT_INK, py: 0.75, textTransform: 'none', fontWeight: 700, '&:hover': { bgcolor: CHECKOUT_ACCENT, filter: 'brightness(0.94)' } }}>
                     {creandoCliente ? 'Creando...' : 'Crear cliente'}
                   </Button>
                 </Box>
@@ -1872,26 +1908,29 @@ function Home() {
           </Box>
 
           {/* Métodos de Pago */}
-          <Box data-tour="pos-pago" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', p: 1.75, display: 'flex', flexDirection: 'column', gap: 1.25, flexShrink: 0 }}>
+          <Box data-tour="pos-pago" sx={{ pb: 1.75, borderBottom: `1px solid ${CHECKOUT_BORDER}`, display: 'flex', flexDirection: 'column', gap: 1.25, flexShrink: 0 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box>
-                <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14 }}>Métodos de Pago</Typography>
-                <Typography sx={{ color: MUTED, fontSize: 11.5 }}>Seleccioná cómo paga el cliente</Typography>
+                <Typography sx={{ color: CHECKOUT_INK, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cómo paga</Typography>
+                <Typography sx={{ color: CHECKOUT_MUTED, fontSize: 11.5 }}>Seleccioná cómo paga el cliente</Typography>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Switch checked={variosPagos} onChange={(_, v) => { setVariosPagos(v); setPagosAplicados([]); if (v && (metodoPago === 'point' || metodoPago === 'qr')) setMetodoPago('efectivo'); }} size="small"
-                  sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: PRIMARY }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: PRIMARY } }} />
-                <Typography sx={{ color: INK, fontSize: 12.5, fontWeight: 500 }}>Varios</Typography>
+                  sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: CHECKOUT_ACCENT }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: CHECKOUT_ACCENT }, '& .MuiSwitch-track': { bgcolor: CHECKOUT_BORDER } }} />
+                <Typography sx={{ color: CHECKOUT_INK, fontSize: 12.5, fontWeight: 500 }}>Varios</Typography>
               </Box>
             </Box>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
               {/* Point deshabilitado temporalmente a pedido — ver metodosPagoOpciones
-                  más arriba, controlado por VITE_POINT_HABILITADO. */}
+                  más arriba, controlado por VITE_POINT_HABILITADO. Los íconos
+                  ya no llevan el color propio de cada método (verde/dorado/
+                  violeta/naranja) — sobre el panel oscuro fijo, la única señal
+                  de "seleccionado" es la píldora clara (mismo idioma que el
+                  resto del sistema Organic: un solo acento, no un semáforo). */}
               {metodosPagoOpciones.map(opt => {
                 const disponible = opt.disponible !== false;
                 const isActive = metodoPago === opt.key;
-                const activeBg = `${opt.color}26`;
 
                 const boton = (
                   <Button key={opt.key} fullWidth disabled={!disponible}
@@ -1899,19 +1938,20 @@ function Home() {
                     onClick={() => { seleccionarMetodoPago(opt.key); }}
                     onKeyDown={(e) => avanzarMetodoPago(e, opt.key)}
                     sx={{
-                      py: 0.875, flexDirection: 'column', gap: 0.375, textTransform: 'none', borderRadius: '10px',
-                      border: `1px solid ${isActive ? opt.color + '60' : BORDER}`,
-                      bgcolor: isActive ? activeBg : 'transparent',
-                      color: isActive ? INK : INK2,
-                      '&:hover': { bgcolor: activeBg, borderColor: opt.color + '60' },
-                      '&.Mui-disabled': { color: MUTED, borderColor: BORDER, opacity: 0.55 },
+                      py: 1, flexDirection: 'column', gap: 0.375, textTransform: 'none', borderRadius: '999px',
+                      border: `1px solid ${isActive ? CHECKOUT_ACCENT : CHECKOUT_BORDER}`,
+                      bgcolor: isActive ? CHECKOUT_ACCENT : CHECKOUT_FIELD_BG,
+                      color: isActive ? CHECKOUT_ACCENT_INK : CHECKOUT_INK,
+                      '&:hover': { bgcolor: isActive ? CHECKOUT_ACCENT : CHECKOUT_HOVER, borderColor: CHECKOUT_ACCENT },
+                      '&.Mui-disabled': { color: CHECKOUT_MUTED, borderColor: CHECKOUT_BORDER, opacity: 0.5 },
                     }}>
-                    <Box sx={{ width: 30, height: 30, borderRadius: '8px', bgcolor: disponible ? opt.color : MUTED, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <opt.Icon sx={{ fontSize: 16, color: '#fff' }} />
-                    </Box>
+                    <opt.Icon sx={{ fontSize: 16 }} />
                     <Typography sx={{ fontWeight: isActive ? 700 : 500, fontSize: 11.5 }}>{opt.label}</Typography>
                     {opt.badge && (
-                      <Typography sx={{ color: opt.badgeColor || SUCCESS, fontSize: 9, fontWeight: 700, mt: -0.5 }}>{opt.badge}</Typography>
+                      <Typography sx={{
+                        color: isActive ? CHECKOUT_ACCENT_INK : (opt.badge === 'manual' ? CHECKOUT_MUTED : SUCCESS),
+                        fontSize: 9, fontWeight: 700, mt: -0.5,
+                      }}>{opt.badge}</Typography>
                     )}
                   </Button>
                 );
@@ -1925,8 +1965,8 @@ function Home() {
               })}
             </Box>
 
-            <Box sx={{ bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '10px', p: 1.25 }}>
-              <Typography sx={{ color: INK, fontWeight: 600, fontSize: 12.5, mb: 0.75 }}>
+            <Box sx={{ bgcolor: CHECKOUT_FIELD_BG, border: `1px solid ${CHECKOUT_BORDER}`, borderRadius: '16px', p: 1.25 }}>
+              <Typography sx={{ color: CHECKOUT_INK, fontWeight: 600, fontSize: 12.5, mb: 0.75 }}>
                 Monto para {METODO_LABELS[metodoPago]}
               </Typography>
 
@@ -1934,17 +1974,17 @@ function Home() {
                 <>
                   {pagosAplicados.map((p, i) => (
                     <Box key={i} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
-                      <Typography sx={{ color: INK2, fontSize: 13 }}>{METODO_LABELS[p.metodo]}</Typography>
+                      <Typography sx={{ color: CHECKOUT_INK2, fontSize: 13 }}>{METODO_LABELS[p.metodo]}</Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Typography sx={{ color: INK, fontWeight: 600, fontSize: 13 }}>{fmtMoney(p.monto)}</Typography>
+                        <Typography sx={{ color: CHECKOUT_INK, fontWeight: 600, fontSize: 13 }}>{fmtMoney(p.monto)}</Typography>
                         <IconButton size="small" onClick={() => setPagosAplicados(prev => prev.filter((_, idx) => idx !== i))}
-                          sx={{ color: MUTED, p: 0.25, '&:hover': { color: ERROR, bgcolor: ERROR_BG } }}>
+                          sx={{ color: CHECKOUT_MUTED, p: 0.25, '&:hover': { color: ERROR, bgcolor: `${ERROR}22` } }}>
                           <CloseIcon sx={{ fontSize: 14 }} />
                         </IconButton>
                       </Box>
                     </Box>
                   ))}
-                  {pagosAplicados.length > 0 && <Divider sx={{ borderColor: BORDER, my: 1 }} />}
+                  {pagosAplicados.length > 0 && <Divider sx={{ borderColor: CHECKOUT_BORDER, my: 1 }} />}
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                     <TextField size="small" fullWidth
                       placeholder={`Máx: ${fmtMoney(total - pagosAplicados.reduce((a, p) => a + p.monto, 0))}`}
@@ -1955,11 +1995,11 @@ function Home() {
                         e.stopPropagation();
                         handleAgregarPagoSplit();
                       }}
-                      InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: MUTED }}>$</InputAdornment> }}
-                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: MODAL, color: INK, '& fieldset': { borderColor: BORDER }, '&.Mui-focused fieldset': { borderColor: PRIMARY } }, '& .MuiInputBase-input::placeholder': { color: MUTED, opacity: 1 } }}
+                      InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: CHECKOUT_MUTED }}>$</InputAdornment> }}
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#4a2412', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } }, '& .MuiInputBase-input::placeholder': { color: CHECKOUT_MUTED, opacity: 1 } }}
                     />
                     <Button variant="contained" onClick={handleAgregarPagoSplit}
-                      sx={{ bgcolor: PRIMARY, textTransform: 'none', fontWeight: 600, borderRadius: '8px', whiteSpace: 'nowrap', px: 2, '&:hover': { bgcolor: P_HOVER } }}>
+                      sx={{ bgcolor: CHECKOUT_ACCENT, color: CHECKOUT_ACCENT_INK, textTransform: 'none', fontWeight: 700, whiteSpace: 'nowrap', px: 2, '&:hover': { bgcolor: CHECKOUT_ACCENT, filter: 'brightness(0.94)' } }}>
                       Agregar
                     </Button>
                   </Box>
@@ -1967,7 +2007,7 @@ function Home() {
               ) : metodoPago === 'efectivo' ? (
                 <>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <Typography sx={{ color: MUTED, fontSize: 12.5, flexShrink: 0 }}>Recibido:</Typography>
+                    <Typography sx={{ color: CHECKOUT_MUTED, fontSize: 12.5, flexShrink: 0 }}>Recibido:</Typography>
                     <CampoPrecio size="small" fullWidth
                       disabled={procesando}
                       placeholder={String(total)}
@@ -1977,26 +2017,26 @@ function Home() {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); avanzarDesdeRecibido(); }
                       }}
-                      InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: MUTED }}>$</InputAdornment> }}
-                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: MODAL, color: INK, '& fieldset': { borderColor: BORDER }, '&.Mui-focused fieldset': { borderColor: PRIMARY } }, '& .MuiInputBase-input::placeholder': { color: MUTED, opacity: 1 } }}
+                      InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: CHECKOUT_MUTED }}>$</InputAdornment> }}
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#4a2412', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } }, '& .MuiInputBase-input::placeholder': { color: CHECKOUT_MUTED, opacity: 1 } }}
                     />
                   </Box>
                   <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: efectivoNum > 0 ? 1.25 : 0.25 }}>
                     <Chip label={`Exacto (${fmtMoney(total)})`} size="small" clickable
                       onClick={() => setEfectivoRecibido(String(total))}
-                      sx={{ bgcolor: `${SUCCESS}18`, color: SUCCESS, fontWeight: 600, fontSize: 11.5, border: `1px solid ${SUCCESS_BORDER}`, '&:hover': { bgcolor: `${SUCCESS}28` } }} />
+                      sx={{ bgcolor: `${SUCCESS}22`, color: '#c7f0d8', fontWeight: 600, fontSize: 11.5, border: `1px solid ${SUCCESS}55`, '&:hover': { bgcolor: `${SUCCESS}35` } }} />
                     {sugerirMontosRapidos(total).map(monto => (
                       <Chip key={monto} label={fmtMoney(monto)} size="small" clickable
                         onClick={() => setEfectivoRecibido(String(monto))}
-                        sx={{ bgcolor: CARD, color: INK2, fontWeight: 600, fontSize: 11.5, border: `1px solid ${BORDER}`, '&:hover': { bgcolor: `${PRIMARY}18`, color: PRIMARY, borderColor: `${PRIMARY}40` } }} />
+                        sx={{ bgcolor: CHECKOUT_FIELD_BG, color: CHECKOUT_INK2, fontWeight: 600, fontSize: 11.5, border: `1px solid ${CHECKOUT_BORDER}`, '&:hover': { bgcolor: CHECKOUT_ACCENT, color: CHECKOUT_ACCENT_INK, borderColor: CHECKOUT_ACCENT } }} />
                     ))}
                   </Box>
                   {efectivoNum > 0 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1.5, py: 1, borderRadius: '8px', bgcolor: vuelto >= 0 ? SUCCESS_BG : ERROR_BG, border: `1px solid ${vuelto >= 0 ? SUCCESS_BORDER : ERROR_BORDER}` }}>
-                      <Typography sx={{ color: vuelto >= 0 ? SUCCESS : ERROR, fontSize: 13, fontWeight: 600 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1.5, py: 1, borderRadius: '10px', bgcolor: vuelto >= 0 ? `${SUCCESS}22` : `${ERROR}22`, border: `1px solid ${vuelto >= 0 ? SUCCESS : ERROR}55` }}>
+                      <Typography sx={{ color: vuelto >= 0 ? '#c7f0d8' : '#ffd0cb', fontSize: 13, fontWeight: 600 }}>
                         {vuelto >= 0 ? 'Vuelto:' : 'Falta:'}
                       </Typography>
-                      <Typography sx={{ color: vuelto >= 0 ? SUCCESS : ERROR, fontSize: 17, fontWeight: 800 }}>
+                      <Typography sx={{ color: vuelto >= 0 ? '#c7f0d8' : '#ffd0cb', fontSize: 17, fontWeight: 800 }}>
                         {fmtMoney(Math.abs(vuelto))}
                       </Typography>
                     </Box>
@@ -2004,8 +2044,8 @@ function Home() {
                 </>
               ) : (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography sx={{ color: MUTED, fontSize: 12.5 }}>Total a cobrar: {fmtMoney(total)}</Typography>
-                  <Chip label="Listo" size="small" sx={{ bgcolor: SUCCESS_BG, color: SUCCESS, fontWeight: 600 }} />
+                  <Typography sx={{ color: CHECKOUT_MUTED, fontSize: 12.5 }}>Total a cobrar: {fmtMoney(total)}</Typography>
+                  <Chip label="Listo" size="small" sx={{ bgcolor: `${SUCCESS}22`, color: '#c7f0d8', fontWeight: 600 }} />
                 </Box>
               )}
             </Box>
@@ -2015,11 +2055,11 @@ function Home() {
           {puedeAplicarDescuento && (() => {
             const hayDescuento = Number(ajuste.valor) > 0;
             return (
-              <Box data-tour="pos-descuento" sx={{ bgcolor: hayDescuento ? SUCCESS_BG : CARD, border: `1px solid ${hayDescuento ? SUCCESS_BORDER : BORDER}`, borderRadius: '12px', p: 1.5, flexShrink: 0 }}>
+              <Box data-tour="pos-descuento" sx={{ pb: 1.5, borderBottom: `1px solid ${CHECKOUT_BORDER}`, flexShrink: 0 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography sx={{ color: hayDescuento ? SUCCESS : INK2, fontSize: 13, fontWeight: 700 }}>Descuento</Typography>
+                  <Typography sx={{ color: hayDescuento ? '#c7f0d8' : CHECKOUT_INK2, fontSize: 13, fontWeight: 700 }}>Descuento</Typography>
                   {hayDescuento && (
-                    <IconButton size="small" onClick={clearAjuste} sx={{ color: MUTED, p: 0.25, '&:hover': { color: INK } }}>
+                    <IconButton size="small" onClick={clearAjuste} sx={{ color: CHECKOUT_MUTED, p: 0.25, '&:hover': { color: CHECKOUT_INK } }}>
                       <CloseIcon sx={{ fontSize: 14 }} />
                     </IconButton>
                   )}
@@ -2036,17 +2076,17 @@ function Home() {
                       if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); abrirConfirmacion(); }
                     }}
                     onWheel={e => e.target.blur()}
-                    InputProps={{ endAdornment: <InputAdornment position="end" sx={{ color: MUTED }}>{ajuste.calculo === 'porcentaje' ? '%' : '$'}</InputAdornment> }}
-                    sx={{ '& .MuiOutlinedInput-root': { bgcolor: MODAL, color: INK, '& fieldset': { borderColor: BORDER }, '&.Mui-focused fieldset': { borderColor: SUCCESS } } }}
+                    InputProps={{ endAdornment: <InputAdornment position="end" sx={{ color: CHECKOUT_MUTED }}>{ajuste.calculo === 'porcentaje' ? '%' : '$'}</InputAdornment> }}
+                    sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#4a2412', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } } }}
                   />
-                  <Box sx={{ display: 'flex', border: `1px solid ${BORDER}`, borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+                  <Box sx={{ display: 'flex', border: `1px solid ${CHECKOUT_BORDER}`, borderRadius: '999px', overflow: 'hidden', flexShrink: 0 }}>
                     {[['porcentaje', '%'], ['monto', '$']].map(([key, label]) => (
                       <Button key={key} onClick={() => setAjuste(a => ({ ...a, calculo: key }))}
                         sx={{
                           minWidth: 36, px: 1.25, borderRadius: 0, textTransform: 'none', fontSize: 13, fontWeight: 700,
-                          bgcolor: ajuste.calculo === key ? SUCCESS : 'transparent',
-                          color: ajuste.calculo === key ? '#fff' : INK2,
-                          '&:hover': { bgcolor: ajuste.calculo === key ? SUCCESS : HOVER },
+                          bgcolor: ajuste.calculo === key ? CHECKOUT_ACCENT : 'transparent',
+                          color: ajuste.calculo === key ? CHECKOUT_ACCENT_INK : CHECKOUT_INK2,
+                          '&:hover': { bgcolor: ajuste.calculo === key ? CHECKOUT_ACCENT : CHECKOUT_HOVER },
                         }}>
                         {label}
                       </Button>
@@ -2059,13 +2099,13 @@ function Home() {
 
           {/* Canje de puntos */}
           {puntosActivo && clienteId && puntosCliente > 0 && (
-            <Box sx={{ bgcolor: puntosCanjearNum > 0 ? `${PRIMARY}14` : CARD, border: `1px solid ${puntosCanjearNum > 0 ? PRIMARY : BORDER}`, borderRadius: '12px', p: 1.5, flexShrink: 0 }}>
+            <Box sx={{ pb: 1.5, borderBottom: `1px solid ${CHECKOUT_BORDER}`, flexShrink: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                <Typography sx={{ color: puntosCanjearNum > 0 ? PRIMARY : INK2, fontSize: 13, fontWeight: 700 }}>
+                <Typography sx={{ color: puntosCanjearNum > 0 ? CHECKOUT_ACCENT : CHECKOUT_INK2, fontSize: 13, fontWeight: 700 }}>
                   {clienteNombre} tiene {puntosCliente} puntos ({fmtMoney(puntosCliente * valorPunto)})
                 </Typography>
                 {puntosCanjearNum > 0 && (
-                  <IconButton size="small" onClick={() => setPuntosCanjear('')} sx={{ color: MUTED, p: 0.25, '&:hover': { color: INK } }}>
+                  <IconButton size="small" onClick={() => setPuntosCanjear('')} sx={{ color: CHECKOUT_MUTED, p: 0.25, '&:hover': { color: CHECKOUT_INK } }}>
                     <CloseIcon sx={{ fontSize: 14 }} />
                   </IconButton>
                 )}
@@ -2076,10 +2116,10 @@ function Home() {
                   onChange={e => setPuntosCanjear(e.target.value)}
                   onWheel={e => e.target.blur()}
                   inputProps={{ min: 0, max: puntosCliente }}
-                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: MODAL, color: INK, '& fieldset': { borderColor: BORDER }, '&.Mui-focused fieldset': { borderColor: PRIMARY } } }}
+                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#4a2412', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } } }}
                 />
                 <Button onClick={() => setPuntosCanjear(String(puntosCliente))}
-                  sx={{ color: PRIMARY, textTransform: 'none', fontWeight: 700, fontSize: 13, border: `1px solid ${PRIMARY}55`, borderRadius: '8px', whiteSpace: 'nowrap', px: 1.5 }}>
+                  sx={{ color: CHECKOUT_ACCENT_INK, bgcolor: CHECKOUT_ACCENT, textTransform: 'none', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', px: 1.5, '&:hover': { bgcolor: CHECKOUT_ACCENT, filter: 'brightness(0.94)' } }}>
                   Usar todos
                 </Button>
               </Box>
@@ -2087,27 +2127,27 @@ function Home() {
           )}
 
           {/* Resumen */}
-          <Box sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', p: 1.75, flexShrink: 0 }}>
+          <Box sx={{ flexShrink: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ReceiptIcon sx={{ color: PRIMARY, fontSize: 16 }} />
-                <Typography sx={{ color: INK, fontWeight: 700, fontSize: 13.5 }}>Resumen</Typography>
+                <ReceiptIcon sx={{ color: CHECKOUT_INK, fontSize: 16 }} />
+                <Typography sx={{ color: CHECKOUT_INK, fontWeight: 700, fontSize: 13.5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Resumen</Typography>
               </Box>
               <Chip label={`${totalQty} items`} size="small"
-                sx={{ bgcolor: HOVER, color: INK2, fontSize: 11, fontWeight: 600, border: `1px solid ${BORDER}` }} />
+                sx={{ bgcolor: CHECKOUT_FIELD_BG, color: CHECKOUT_INK2, fontSize: 11, fontWeight: 600, border: `1px solid ${CHECKOUT_BORDER}` }} />
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography sx={{ color: MUTED, fontSize: 13.5 }}>Subtotal</Typography>
-              <Typography sx={{ color: INK, fontSize: 13.5, fontWeight: 500 }}>{fmtMoney(subtotal)}</Typography>
+              <Typography sx={{ color: CHECKOUT_MUTED, fontSize: 13.5 }}>Subtotal</Typography>
+              <Typography sx={{ color: CHECKOUT_INK, fontSize: 13.5, fontWeight: 500 }}>{fmtMoney(subtotal)}</Typography>
             </Box>
 
             {ajuste.activo && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography sx={{ color: ajuste.tipo === 'descuento' ? SUCCESS : ERROR, fontSize: 13.5 }}>
+                <Typography sx={{ color: ajuste.tipo === 'descuento' ? '#c7f0d8' : '#ffd0cb', fontSize: 13.5 }}>
                   {ajuste.tipo === 'descuento' ? 'Descuento' : 'Recargo'}
                 </Typography>
-                <Typography sx={{ color: ajuste.tipo === 'descuento' ? SUCCESS : ERROR, fontSize: 13.5, fontWeight: 700 }}>
+                <Typography sx={{ color: ajuste.tipo === 'descuento' ? '#c7f0d8' : '#ffd0cb', fontSize: 13.5, fontWeight: 700 }}>
                   {ajuste.tipo === 'descuento' ? '-' : '+'}{fmtMoney(montoAjuste)}
                 </Typography>
               </Box>
@@ -2115,19 +2155,15 @@ function Home() {
 
             {puntosCanjearNum > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography sx={{ color: PRIMARY, fontSize: 13.5 }}>{puntosCanjearNum} puntos canjeados</Typography>
-                <Typography sx={{ color: PRIMARY, fontSize: 13.5, fontWeight: 700 }}>-{fmtMoney(descuentoPuntos)}</Typography>
+                <Typography sx={{ color: CHECKOUT_ACCENT, fontSize: 13.5 }}>{puntosCanjearNum} puntos canjeados</Typography>
+                <Typography sx={{ color: CHECKOUT_ACCENT, fontSize: 13.5, fontWeight: 700 }}>-{fmtMoney(descuentoPuntos)}</Typography>
               </Box>
             )}
 
-            <Divider sx={{ borderColor: BORDER, my: 1 }} />
-            <Box sx={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              px: 1.75, py: 1.1, borderRadius: '10px',
-              bgcolor: `${PRIMARY}0c`, border: `1px solid ${PRIMARY}18`,
-            }}>
-              <Typography sx={{ color: INK, fontSize: 15, fontWeight: 700 }}>Total</Typography>
-              <Typography sx={{ color: PRIMARY, fontSize: 20, fontWeight: 800, letterSpacing: '-0.02em' }}>
+            <Divider sx={{ borderColor: CHECKOUT_BORDER, my: 1 }} />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography sx={{ color: CHECKOUT_MUTED, fontSize: 13 }}>Total a cobrar</Typography>
+              <Typography sx={{ color: CHECKOUT_INK, fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em' }}>
                 {fmtMoney(total)}
               </Typography>
             </Box>
@@ -2137,7 +2173,7 @@ function Home() {
           <Box sx={{ flexShrink: 0 }}>
             {!caja.abierta && (
               <Typography component={Link} to="/caja"
-                sx={{ display: 'block', color: ORANGE, fontSize: 12, fontWeight: 600, textAlign: 'center', mb: 0.75, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                sx={{ display: 'block', color: CHECKOUT_ACCENT, fontSize: 12, fontWeight: 600, textAlign: 'center', mb: 0.75, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
                 Abrí la caja antes de vender →
               </Typography>
             )}
@@ -2150,12 +2186,11 @@ function Home() {
                   disabled={cart.length === 0 || !caja.abierta || confirmarVentaDisabled}
                   onClick={abrirConfirmacion}
                   sx={{
-                    py: 1.25, fontSize: 15, fontWeight: 700,
-                    textTransform: 'none', borderRadius: '12px',
-                    background: `linear-gradient(135deg, ${PRIMARY}, ${P_HOVER})`,
-                    boxShadow: cart.length > 0 && caja.abierta ? `0 4px 24px ${PRIMARY}45` : 'none',
-                    '&:hover': { boxShadow: `0 6px 32px ${PRIMARY}60` },
-                    '&.Mui-disabled': { background: `linear-gradient(135deg, ${PRIMARY}80, ${P_HOVER}80)`, color: '#fff', opacity: 0.5 },
+                    py: 1.6, fontSize: 15, fontWeight: 700,
+                    textTransform: 'none', borderRadius: '999px',
+                    bgcolor: CHECKOUT_ACCENT, color: CHECKOUT_ACCENT_INK,
+                    '&:hover': { bgcolor: CHECKOUT_ACCENT, filter: 'brightness(0.94)' },
+                    '&.Mui-disabled': { bgcolor: CHECKOUT_ACCENT, color: CHECKOUT_ACCENT_INK, opacity: 0.4 },
                   }}
                 >
                   {!variosPagos && metodoPago === 'point' ? 'Cobrar con Point' : (!variosPagos && metodoPago === 'qr' && qrDisponible) ? 'Generar QR' : 'Confirmar Venta'}

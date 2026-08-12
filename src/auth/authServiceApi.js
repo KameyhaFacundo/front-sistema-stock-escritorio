@@ -22,6 +22,38 @@ export const verificar2faApi = async (pendingToken, codigo) => {
   return response.data;
 };
 
+export const registerApi = async (des_usu, email, password, onboarding = {}) => {
+  if (DEMO_MODE) {
+    return {
+      success: true,
+      access_token: DEMO_TOKEN,
+      token_type: 'bearer',
+      expires_in: DEMO_EXPIRES,
+      user: {
+        ...DEMO_USER,
+        des_usu: des_usu || DEMO_USER.des_usu,
+        email:   email   || DEMO_USER.email,
+        empresa: { ...DEMO_USER.empresa, nombre: onboarding.negocio || des_usu || DEMO_USER.empresa.nombre },
+      },
+    };
+  }
+  try {
+    const response = await api.post('register', {
+      des_usu,
+      email,
+      password,
+      nombre_empresa: onboarding.negocio || des_usu,
+      tipo:           onboarding.tipo  || null,
+      arca:           onboarding.arca  === 'si',
+      pos:            onboarding.pos   || null,
+    });
+    return response.data;
+  } catch (e) {
+    const msg = e.response?.data?.message || e.response?.data?.error || 'Error al registrar';
+    throw new Error(msg);
+  }
+};
+
 export const forgotPasswordApi = async (email) => {
   try {
     const response = await api.post('forgot-password', { email });

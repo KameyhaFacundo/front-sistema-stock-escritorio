@@ -16,7 +16,7 @@ import HistoryIcon from '@mui/icons-material/History';
 
 import {
   BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, INPUT, HOVER, TABLE_HEADER, DROPDOWN,
-  fieldSx, selectSx as selectFieldSx, modalPaperSx, SUCCESS_LIGHT, ERROR, GOLD,
+  fieldSx, selectSx as selectFieldSx, modalPaperSx, SUCCESS, SUCCESS_LIGHT, ERROR, GOLD,
 } from '../../theme/tokens';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WatchLaterIcon  from '@mui/icons-material/WatchLater';
@@ -38,14 +38,19 @@ import ConfirmDialog from '../../components/shared/ConfirmDialog';
 // admin ahora usa P (el color primario configurable, ver config/brand.js) y
 // gerente usa GOLD (acento dorado de la misma paleta), en vez de hardcodear
 // un azul que no tiene nada que ver.
+// "usuario" usaba un verde menta clarito (#86efac) pensado para leerse sobre
+// un fondo oscuro tipo slate — con el tema "organic" (fondo claro/crema por
+// default) ese texto quedaba casi invisible. SUCCESS (el mismo verde que ya
+// se usa en el resto de la app para chips de estado) tiene contraste sólido
+// contra CARD tanto en claro como en oscuro.
 const ROL_COLORS = {
   default:       { bg: `${P}22`, fg: P, border: `${P}44` },
   admin:         { bg: `${P}22`, fg: P, border: `${P}44` },
   gerente:       { bg: `${GOLD}22`, fg: GOLD, border: `${GOLD}44` },
-  usuario:       { bg: '#65a30d22', fg: '#86efac', border: '#65a30d44' },
+  usuario:       { bg: `${SUCCESS}22`, fg: SUCCESS, border: `${SUCCESS}44` },
   Administrador: { bg: `${P}22`, fg: P, border: `${P}44` },
   Gerente:       { bg: `${GOLD}22`, fg: GOLD, border: `${GOLD}44` },
-  Usuario:       { bg: '#65a30d22', fg: '#86efac', border: '#65a30d44' },
+  Usuario:       { bg: `${SUCCESS}22`, fg: SUCCESS, border: `${SUCCESS}44` },
 };
 
 

@@ -977,7 +977,7 @@ export default function Caja() {
     <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
 
       <Box sx={{ mb: 3, position: 'relative' }}>
-        <Box sx={{ position: 'absolute', top: -12, left: -12, right: -12, height: 3, background: `linear-gradient(90deg, ${P}, ${SUCCESS}, ${ORANGE})`, borderRadius: '0 0 2px 2px' }} />
+        <Box sx={{ position: 'absolute', top: -12, left: -12, right: -12, height: 3, background: `linear-gradient(90deg, ${P} 0%, ${P}80 65%, transparent 100%)`, borderRadius: '0 0 2px 2px' }} />
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, pt: 0.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Box sx={{ width: 42, height: 42, borderRadius: '12px', bgcolor: `${SUCCESS}16`, border: `1px solid ${SUCCESS}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

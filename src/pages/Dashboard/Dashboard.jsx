@@ -11,7 +11,6 @@ import FileDownloadIcon  from '@mui/icons-material/FileDownload';
 import AttachMoneyIcon   from '@mui/icons-material/AttachMoney';
 import BarChartIcon      from '@mui/icons-material/BarChart';
 import ReceiptLongIcon   from '@mui/icons-material/ReceiptLong';
-import ReceiptIcon       from '@mui/icons-material/Receipt';
 import CreditCardIcon    from '@mui/icons-material/CreditCard';
 import ShoppingBagIcon   from '@mui/icons-material/ShoppingBag';
 import WarningAmberIcon  from '@mui/icons-material/WarningAmber';
@@ -31,10 +30,11 @@ import DeleteSweepIcon  from '@mui/icons-material/DeleteSweep';
 import {
   BG, CARD, BORDER, INK, INK2, MUTED, P, HOVER, TABLE_HEADER,
   SUCCESS, SUCCESS_BG, ERROR, ERROR_BG, ERROR_BORDER, WARNING, WARNING_BG,
-  MONEY, PURPLE, ORANGE, modalPaperSx,
+  MONEY, PURPLE, ORANGE, modalPaperSx, SHADOW_SM,
 } from '../../theme/tokens';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useApp } from '../../context/AppContextBase';
+import { useCaja } from '../../context/CajaContextBase';
 import { useVentas } from '../../context/VentasContextBase';
 import { useVencimientosProximos } from '../../hooks/queries/useLotesQueries';
 import { useIsMobile } from '../../utils/responsive';
@@ -64,7 +64,7 @@ const METODO_LABELS  = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia
 const METODO_COLORS  = { efectivo: MONEY, tarjeta: PRIMARY_COLOR, transferencia: PURPLE, qr: ORANGE, fiado: ERROR };
 const PIE_COLORS     = [PRIMARY_COLOR, MONEY, PURPLE, ORANGE, WARNING];
 const TABS           = ['Resumen', 'Ventas', 'Compras', 'Productos', 'Métodos de pago', 'Historial de Caja'];
-const card           = { bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px' };
+const card           = { bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '28px', boxShadow: SHADOW_SM };
 const COL_TH         = { color: MUTED, fontSize: 13, fontWeight: 600, py: 1.5, px: 2, textAlign: 'left', borderBottom: `1px solid ${BORDER}`, whiteSpace: 'nowrap', bgcolor: TABLE_HEADER };
 const COL_TD         = { color: INK,   fontSize: 13, py: 1.5, px: 2, borderBottom: `1px solid ${BORDER}` };
 
@@ -1640,6 +1640,7 @@ export default function Dashboard() {
   const { mode } = useAppTheme();
   const ventasCtx = useVentas().ventas;
   const { statsHoy, loadingData, recargarDashboardStats } = useApp();
+  const { caja } = useCaja();
   const [dashStats, setDashStats] = useState(null);
   // Pestaña sensible (detectar mal uso de "vaciar carrito") — a diferencia
   // del resto de las pestañas, esta se oculta del todo sin el permiso, no
@@ -1770,13 +1771,7 @@ export default function Dashboard() {
   const totalVentasN   = dashStats?.totalVentas ?? ventasActivas.length;
   const ticketPromedio = dashStats?.ticketPromedio ?? (totalVentasN ? ingresos / totalVentasN : 0);
   const stockBajoCount = dashStats?.stockBajo?.length ?? 0;
-
-  const statsData = [
-    { label: 'Ingresos del período', value: fmtMoney(ingresos),      Icon: AttachMoneyIcon, color: MONEY  },
-    { label: 'Total de Ventas',      value: String(totalVentasN),     Icon: BarChartIcon,    color: P      },
-    { label: 'Ticket Promedio',      value: fmtMoney(ticketPromedio), Icon: ReceiptLongIcon, color: ORANGE  },
-    { label: 'Ventas hoy',           value: statsHoy.totalVentas,     Icon: ReceiptIcon,     color: PRIMARY_COLOR },
-  ];
+  const unidadesIngresadas = dashStats?.unidadesIngresadas ?? 0;
 
   const lineData = useMemo(() => {
     const result = [];
@@ -1791,6 +1786,17 @@ export default function Dashboard() {
     return result.length ? result : [{ dia: '01', ingresos: 0 }];
   }, [ventasActivas, desde, hasta]);
 
+  // Sparkline del hero — mismos datos de lineData, resueltos a un path SVG
+  // (sin ejes/tooltip, es solo la silueta decorativa del hero de ingresos).
+  const heroSparkline = useMemo(() => {
+    const vals = lineData.map(d => d.ingresos);
+    const max  = Math.max(...vals, 1);
+    const n    = vals.length;
+    const W = 620, H = 170;
+    const pts = vals.map((v, i) => [n > 1 ? (i / (n - 1)) * W : 0, H - (v / max) * H]);
+    const line = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    return { line, area: `${line} L${W},${H} L0,${H} Z`, W, H };
+  }, [lineData]);
 
   const ventasPorDia = useMemo(() => {
     const dias = [];
@@ -1833,7 +1839,7 @@ export default function Dashboard() {
       {/* Header — fijo arriba, no scrollea con el resto */}
       <Box sx={{ flexShrink: 0, position: 'relative', zIndex: 2, bgcolor: BG, borderBottom: `1px solid ${BORDER}`, px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 2 }}>
         {/* Gradiente de acento */}
-        <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${P}, ${MONEY}, ${ORANGE})` }} />
+        <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${P} 0%, ${P}80 65%, transparent 100%)` }} />
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1.5, pt: 0.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Box sx={{ width: 42, height: 42, borderRadius: '12px', bgcolor: `${P}16`, border: `1px solid ${P}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1893,31 +1899,55 @@ export default function Dashboard() {
       {/* Resto de la página — esto sí scrollea, el header de arriba queda fijo */}
       <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: { xs: 2, md: 3 }, pt: 2.5, pb: { xs: 2, md: 3 } }}>
 
-      {/* KPI cards */}
-      <Box data-tour="dash-kpis" sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' }, gap: 2, mb: 2.5 }}>
-        {statsData.map(stat => (
-          <Box key={stat.label} sx={{
-            ...card, p: { xs: 2, md: 2.5 },
-            display: 'flex', flexDirection: 'column', gap: 1.5,
-            position: 'relative', overflow: 'hidden',
-            borderColor: `${stat.color}30`,
-            '&:hover': { borderColor: `${stat.color}50`, transform: 'translateY(-1px)' },
-            transition: 'all 0.2s',
-          }}>
-            <Box sx={{ position: 'absolute', top: -12, right: -12, width: 60, height: 60, borderRadius: '50%', bgcolor: `${stat.color}0c`, border: `1px solid ${stat.color}18` }} />
-            <Box sx={{ width: 38, height: 38, borderRadius: '10px', bgcolor: `${stat.color}18`, border: `1px solid ${stat.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <stat.Icon sx={{ color: stat.color, fontSize: 19 }} />
+      {/* Hero — ingresos del período. Reemplaza la vieja grilla de 4 KPIs
+          iguales; los mismos 4 datos (ingresos, total de ventas, ticket
+          promedio, ventas hoy) siguen todos acá, solo que recompuestos en
+          cifra principal + línea de contexto + píldoras, más el sparkline
+          del período (mismos datos que "Ingresos por día" de abajo). */}
+      <Box data-tour="dash-kpis" sx={{
+        display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.15fr 1fr' }, gap: { xs: 2.5, md: 4 },
+        p: { xs: 2.5, md: '34px 38px' }, mb: 2.5, borderRadius: '34px',
+        bgcolor: '#643312', color: '#fff2eb', position: 'relative', overflow: 'hidden',
+      }}>
+        <Box sx={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', bgcolor: 'rgba(245,234,216,0.07)', right: -70, bottom: -90 }} />
+        <Box sx={{ position: 'relative', zIndex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.75, mb: 1 }}>
+            Ingresos del período
+          </Typography>
+          <Typography sx={{ fontSize: { xs: 32, sm: 44, md: 56 }, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1.05, mb: 1, overflowWrap: 'anywhere' }}>
+            {fmtMoney(ingresos)}
+          </Typography>
+          <Typography sx={{ fontSize: 14, opacity: 0.8, mb: 2 }}>
+            {totalVentasN} venta{totalVentasN !== 1 ? 's' : ''} · ticket promedio {fmtMoney(ticketPromedio)}
+            {caja.abierta && caja.horaApertura && ` · caja abierta desde las ${caja.horaApertura}`}
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            <Box sx={{ px: 1.75, py: 0.75, borderRadius: '999px', bgcolor: 'rgba(245,234,216,0.16)', fontSize: 12.5, fontWeight: 600 }}>
+              {statsHoy.totalVentas} venta{statsHoy.totalVentas !== 1 ? 's' : ''} hoy
             </Box>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ color: INK, fontWeight: 800, fontSize: { xs: 18, sm: 22, md: 26 }, letterSpacing: '-0.02em', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {stat.value}
-              </Typography>
-              <Typography sx={{ color: INK2, fontSize: { xs: 11, md: 12 }, fontWeight: 500, mt: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {stat.label}
-              </Typography>
+            <Box sx={{ px: 1.75, py: 0.75, borderRadius: '999px', bgcolor: 'rgba(245,234,216,0.16)', fontSize: 12.5, fontWeight: 600 }}>
+              {unidadesIngresadas > 0 ? '+' : ''}{unidadesIngresadas} unidad{unidadesIngresadas !== 1 ? 'es' : ''} ingresada{unidadesIngresadas !== 1 ? 's' : ''}
+            </Box>
+            <Box sx={{
+              px: 1.75, py: 0.75, borderRadius: '999px', fontSize: 12.5, fontWeight: 600,
+              bgcolor: stockBajoCount > 0 ? 'rgba(245,234,216,0.16)' : '#728157',
+              color: stockBajoCount > 0 ? 'inherit' : '#f0fae1',
+            }}>
+              {stockBajoCount > 0 ? `${stockBajoCount} alerta${stockBajoCount !== 1 ? 's' : ''} de stock` : '0 alertas de stock'}
             </Box>
           </Box>
-        ))}
+        </Box>
+        <Box sx={{ position: 'relative', zIndex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+          <Box component="svg" viewBox={`0 0 ${heroSparkline.W} ${heroSparkline.H}`} preserveAspectRatio="none"
+            sx={{ width: '100%', height: { xs: 100, md: 170 }, display: 'block' }}>
+            <path d={heroSparkline.area} fill="rgba(255,198,165,0.22)" stroke="none" />
+            <path d={heroSparkline.line} fill="none" stroke="#ffc6a5" strokeWidth={3} strokeLinecap="round" />
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.6, mt: 1 }}>
+            <span>{fmtDate(desde)}</span>
+            <span>{fmtDate(hasta)}</span>
+          </Box>
+        </Box>
       </Box>
 
       {/* Vencimientos próximos */}

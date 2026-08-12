@@ -3,6 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { logoutApi } from "./authServiceApi";
 import { AuthContext } from "./AuthContextBase";
 import api from "../api/client";
+import { superAdminService } from "../services/superAdminService";
+import { SIDEBAR_COLLAPSED_STORAGE_KEY } from "../layout/sidebarConstants";
 
 export const AuthProvider = ({ children }) => {
   const queryClient = useQueryClient();
@@ -17,6 +19,11 @@ export const AuthProvider = ({ children }) => {
   });
   const [sidebarShow, setSidebarShow] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [isImpersonating, setIsImpersonating] = useState(() => !!localStorage.getItem("impersonator_token"));
+  const [impersonandoEmpresa, setImpersonandoEmpresa] = useState(() => {
+    const stored = localStorage.getItem("impersonando_empresa");
+    return stored || null;
+  });
 
   const recargarPermisos = useCallback(async () => {
     try {
@@ -79,6 +86,54 @@ export const AuthProvider = ({ children }) => {
     window.location.href = "/signin";
   };
 
+  // "Entrar como" — el super admin toma la sesión de un usuario de la empresa
+  // para dar soporte sin pedirle la contraseña al cliente. Guarda su propia
+  // sesión aparte para poder volver con volverDeImpersonar().
+  const impersonarEmpresa = useCallback(async (empresaId, empresaNombre, idUsuario) => {
+    const res = await superAdminService.impersonar(empresaId, idUsuario);
+
+    localStorage.setItem("impersonator_token", localStorage.getItem("token") || "");
+    localStorage.setItem("impersonator_user", localStorage.getItem("user") || "");
+    localStorage.setItem("impersonator_permisos", localStorage.getItem("permisos") || "");
+    localStorage.setItem("impersonator_expires_at", localStorage.getItem("expires_at") || "");
+    localStorage.setItem("impersonando_empresa", empresaNombre || res.impersonando?.empresa || "");
+
+    localStorage.setItem("token", res.access_token);
+    localStorage.setItem("expires_at", new Date(Date.now() + res.expires_in * 1000).toISOString());
+    localStorage.setItem("user", JSON.stringify(res.user));
+    const permisos = (res.permisos || []).map(p => p.codigo?.toLowerCase()).filter(Boolean);
+    localStorage.setItem("permisos", JSON.stringify(permisos));
+    localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, "false");
+
+    setMyPermisos(permisos);
+    setToken(res.access_token);
+    setUser(res.user);
+    setIsImpersonating(true);
+    setImpersonandoEmpresa(empresaNombre || res.impersonando?.empresa || null);
+    queryClient.clear();
+    window.location.href = "/dashboard";
+  }, [queryClient]);
+
+  const volverDeImpersonar = useCallback(() => {
+    const origToken = localStorage.getItem("impersonator_token");
+    if (!origToken) return;
+
+    localStorage.setItem("token", origToken);
+    localStorage.setItem("user", localStorage.getItem("impersonator_user") || "");
+    localStorage.setItem("permisos", localStorage.getItem("impersonator_permisos") || "");
+    localStorage.setItem("expires_at", localStorage.getItem("impersonator_expires_at") || "");
+    localStorage.removeItem("impersonator_token");
+    localStorage.removeItem("impersonator_user");
+    localStorage.removeItem("impersonator_permisos");
+    localStorage.removeItem("impersonator_expires_at");
+    localStorage.removeItem("impersonando_empresa");
+
+    setIsImpersonating(false);
+    setImpersonandoEmpresa(null);
+    queryClient.clear();
+    window.location.href = "/super-admin";
+  }, [queryClient]);
+
   function getUser() {
     const userData = localStorage.getItem("user");
     return userData ? JSON.parse(userData) : null;
@@ -100,6 +155,10 @@ export const AuthProvider = ({ children }) => {
         setMyPermisos,
         recargarPermisos,
         switchSucursal,
+        isImpersonating,
+        impersonandoEmpresa,
+        impersonarEmpresa,
+        volverDeImpersonar,
       }}
     >
       {children}

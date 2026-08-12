@@ -5,7 +5,6 @@ import api from "../../api/client";
 import { Box, CircularProgress, Typography } from "@mui/material";
 import { BG, INK, MUTED } from "../../theme/tokens";
 import { APP_NAME, PRIMARY_COLOR } from "../../config/brand";
-import { PERMISOS_MAP, primeraRutaDisponible } from "../../hooks/useHasPermiso";
 
 export default function OAuthCallback() {
   const navigate = useNavigate();
@@ -42,10 +41,7 @@ export default function OAuthCallback() {
         setMyPermisos(todos);
         setToken(token);
         setUser(user);
-        // Mismo motivo que rutaLandingTrasLogin en Login.jsx: "/dashboard"
-        // hardcodeado asumía que todo rol logueado lo tiene habilitado.
-        const tienePermiso = (permiso) => todos.includes(PERMISOS_MAP[permiso] || permiso);
-        navigate(primeraRutaDisponible(tienePermiso), { replace: true });
+        navigate("/dashboard", { replace: true });
       })
       .catch(() => {
         localStorage.removeItem("token");
@@ -65,7 +61,7 @@ export default function OAuthCallback() {
         alignItems: "center",
         justifyContent: "center",
         gap: 2,
-        fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+        fontFamily: "'Figtree', ui-sans-serif, system-ui, sans-serif",
       }}
     >
       <CircularProgress size={32} sx={{ color: PRIMARY_COLOR }} />
