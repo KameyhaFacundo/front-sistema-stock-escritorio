@@ -55,7 +55,8 @@ import { categoriasService } from '../../services/categoriasService';
 import iaService             from '../../services/iaService';
 import usePlan                from '../../hooks/usePlan';
 import EscanearModal from './EscanearModal';
-import ImportarExcelModal, { descargarPlantillaCompra } from './ImportarExcelModal';
+import ImportarExcelModal from './ImportarExcelModal';
+import { descargarPlantillaCompra } from '../../utils/excelImport';
 import { ModalNuevoProveedor } from '../Proveedores/Proveedores';
 import { NuevoProducto } from '../Productos/Productos';
 

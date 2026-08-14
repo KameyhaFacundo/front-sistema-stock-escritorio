@@ -1176,6 +1176,40 @@ function TabCatalogoUpsell() {
   );
 }
 
+/* ─────────────────── TAB FACTURACIÓN (upsell) ───────────────────
+   Mismo criterio que TabCatalogoUpsell de arriba: la pestaña real de ARCA
+   (TabFacturacion, más abajo) queda comentada — usaba el sistema de planes
+   del SaaS que ya no aplica a este build de escritorio white-label. En vez
+   de esconder la pestaña, se muestra este aviso con contacto por WhatsApp. */
+function TabFacturacionUpsell() {
+  const mensaje = encodeURIComponent('Hola, quiero activar la facturación electrónica (ARCA) para mi negocio.');
+  return (
+    <Box>
+      <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 18, sm: 22 }, mb: 0.5 }}>Facturación</Typography>
+      <Typography sx={{ color: MUTED, fontSize: 13.5, mb: 2.5 }}>
+        Emití facturas electrónicas con ARCA (ex AFIP) directo desde el punto de venta, con tu propio CUIT.
+      </Typography>
+
+      <Box sx={{ ...card, p: 2.5, bgcolor: `${P}0c`, border: `1px solid ${P}40` }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+          <Box sx={{ width: 40, height: 40, borderRadius: '10px', bgcolor: `${P}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <ReceiptLongIcon sx={{ color: P, fontSize: 20 }} />
+          </Box>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14 }}>¿Querés facturar electrónicamente?</Typography>
+        </Box>
+        <Typography sx={{ color: MUTED, fontSize: 12.5, mb: 2 }}>
+          Este negocio todavía no tiene el módulo de facturación activado. Escribime y te cuento cómo sumarlo.
+        </Typography>
+        <Button component="a" href={`https://wa.me/${WA_NUMBER}?text=${mensaje}`}
+          target="_blank" rel="noopener noreferrer" startIcon={<WhatsAppIcon sx={{ fontSize: 18 }} />}
+          sx={{ bgcolor: '#25D366', color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: 13, borderRadius: '8px', '&:hover': { bgcolor: '#1fb955' } }}>
+          Contactar por WhatsApp
+        </Button>
+      </Box>
+    </Box>
+  );
+}
+
 /* ─────────────────────────── TAB SUCURSALES ─────────────────────────── */
 // Comentada junto con su entrada en `tabs` más arriba — ver esa nota.
 /*
@@ -1969,10 +2003,12 @@ export function ConfigModal({ open, onClose }) {
     // Cobros es enteramente sobre conectar Mercado Pago para Point — con Point
     // deshabilitado (VITE_POINT_HABILITADO=false) no tiene sentido mostrarla.
     ...(POINT_HABILITADO ? [{ label: 'Cobros', render: () => <TabCobros /> }] : []),
-    // Facturación (ARCA) comentada a pedido, para más adelante — mismo
-    // criterio que Sucursales más arriba. Descomentar esta línea y la
-    // función TabFacturacion más abajo alcanza para reactivarla.
-    // { label: 'Facturación', render: () => <TabFacturacion /> },
+    // Facturación (ARCA): la pestaña real (TabFacturacion, comentada más
+    // abajo — usaba el sistema de planes del SaaS que ya no aplica acá) no
+    // está activa para este cliente. Mismo criterio que Catálogo: se
+    // muestra igual, con un aviso de contacto por WhatsApp en vez de
+    // esconder que el módulo existe.
+    { label: 'Facturación', render: () => <TabFacturacionUpsell /> },
     { label: 'Seguridad', render: () => <TabSeguridad /> },
   ], [puedeConfigurar]);
 

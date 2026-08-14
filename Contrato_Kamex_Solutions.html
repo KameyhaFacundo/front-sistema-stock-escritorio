@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Contrato de Servicios – Kamex Solutions</title>
+<style>
+  @page {
+    size: A4;
+    margin: 2.5cm 2cm 2.5cm 2cm;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 11pt;
+    line-height: 1.65;
+    color: #1a1a1a;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 20px;
+    background: #fff;
+  }
+  @media print {
+    body { padding: 0; }
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 34px;
+    padding-bottom: 24px;
+    border-bottom: 3px solid #5c6ef8;
+  }
+  .header .logo {
+    font-size: 28pt;
+    font-weight: 800;
+    color: #5c6ef8;
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+  }
+  .header .tagline {
+    font-size: 11pt;
+    color: #555;
+    font-style: italic;
+  }
+  .header .doc-title {
+    font-size: 16pt;
+    font-weight: 700;
+    margin-top: 22px;
+    color: #1a1a1a;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ── Sections ── */
+  h2 {
+    font-size: 12.5pt;
+    font-weight: 700;
+    color: #5c6ef8;
+    margin: 28px 0 10px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #ddd;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  h3 {
+    font-size: 11pt;
+    font-weight: 600;
+    margin: 16px 0 6px 0;
+    color: #333;
+  }
+  p { margin-bottom: 8px; text-align: justify; }
+  ul, ol { margin: 6px 0 12px 28px; }
+  li { margin-bottom: 4px; }
+
+  /* ── Placeholders ── */
+  .placeholder {
+    display: inline-block;
+    min-width: 140px;
+    border-bottom: 1.5px dashed #999;
+    padding: 0 6px;
+    color: #666;
+    font-style: italic;
+  }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 16px 0;
+    font-size: 10.5pt;
+  }
+  table th {
+    background: #5c6ef8;
+    color: #fff;
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+  }
+  table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  table tr:nth-child(even) td { background: #f8f9ff; }
+
+  /* ── Firmas ── */
+  .signatures {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 60px;
+    gap: 40px;
+  }
+  .signature-box {
+    flex: 1;
+    text-align: center;
+  }
+  .signature-box .line {
+    border-top: 1.5px solid #333;
+    width: 100%;
+    margin: 40px auto 8px;
+  }
+  .signature-box .name {
+    font-weight: 700;
+    font-size: 11pt;
+  }
+  .signature-box .role {
+    font-size: 9.5pt;
+    color: #666;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: 50px;
+    padding-top: 16px;
+    border-top: 1px solid #ddd;
+    font-size: 8.5pt;
+    color: #888;
+    text-align: center;
+  }
+
+  /* ── Special ── */
+  .destacado {
+    background: #f0f3ff;
+    border-left: 4px solid #5c6ef8;
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .nota {
+    font-size: 9.5pt;
+    color: #777;
+    font-style: italic;
+  }
+
+  /* ── Print button ── */
+  .print-btn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: #5c6ef8;
+    color: white;
+    border: none;
+    padding: 10px 22px;
+    font-size: 13pt;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(92,110,248,0.35);
+  }
+  .print-btn:hover { background: #4a5cf0; }
+</style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  ENCABEZADO                                                              -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="header">
+  <div class="logo">KAMEX SOLUTIONS</div>
+  <div class="tagline">Sistema de Gestión de Inventario y Punto de Venta</div>
+  <div class="doc-title">Contrato de Licencia de Software — Despliegue Local</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  1. PARTES                                                               -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>1. Partes</h2>
+<p>
+  El presente contrato se celebra entre:
+</p>
+<p>
+  <strong>EL PROVEEDOR:</strong> <span class="placeholder">[Nombre o Razón Social del Proveedor]</span>,
+  con domicilio en <span class="placeholder">[Dirección]</span>, en adelante <strong>"Kamex Solutions"</strong> o <strong>"El Proveedor"</strong>.
+</p>
+<p>
+  <strong>EL CLIENTE:</strong> <span class="placeholder">[Nombre o Razón Social del Cliente]</span>,
+  con domicilio en <span class="placeholder">[Dirección]</span>, CUIT N° <span class="placeholder">[CUIT]</span>,
+  en adelante <strong>"El Cliente"</strong>.
+</p>
+<p>
+  Ambas partes, en adelante <strong>"Las Partes"</strong>, acuerdan celebrar el presente contrato de licencia de uso de software y prestación de servicios, sujeto a las cláusulas siguientes.
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  2. OBJETO                                                               -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <h2>2. Objeto</h2>
+<p>
+  El Proveedor se obliga a otorgar al Cliente una <strong>licencia de uso perpetua, no exclusiva e intransferible</strong> del software <strong>Kamex Solutions</strong> —sistema integral de gestión de inventario, punto de venta (POS) y administración comercial—, así como a prestar los servicios de instalación, configuración, capacitación, soporte técnico y mantenimiento que se detallan en las cláusulas siguientes.
+</p>
+<p>
+  El sistema se entrega bajo la modalidad <strong>on-premise (despliegue local)</strong>: el software se instala y ejecuta en servidores o equipos provistos por El Cliente dentro de su propia infraestructura o red local. El acceso se realiza mediante navegador web desde los puestos de trabajo de la red del Cliente. La instancia se entrega personalizada (white-label) con nombre de negocio, logotipo y colores institucionales del Cliente.
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  3. DESCRIPCIÓN DEL SISTEMA                                             -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>3. Módulos y Funcionalidades del Sistema</h2>
+<p>Kamex Solutions está compuesto por los siguientes módulos:</p>
+
+<h3>3.1. Panel de Control (Dashboard)</h3>
+<ul>
+  <li>Estadísticas diarias: facturación, cantidad de ventas, ticket promedio.</li>
+  <li>Alertas de stock bajo, deudas a proveedores y créditos a clientes (fiados).</li>
+  <li>Ranking de productos más vendidos y detección de productos sin rotación.</li>
+  <li>Exportación de reportes a Excel y PDF.</li>
+</ul>
+
+<h3>3.2. Punto de Venta (POS)</h3>
+<ul>
+  <li>Carga de productos por nombre, código o escaneo de código de barras con cámara.</li>
+  <li>Gestión de carrito de compra con edición de precios y cantidades.</li>
+  <li>Selección de cliente, aplicación de descuentos y recargos.</li>
+  <li>Sistema de fidelización por puntos.</li>
+  <li>Múltiples medios de pago: efectivo, tarjeta, transferencia, QR (Mercado Pago), fiado y pagos combinados.</li>
+  <li>Integración con Mercado Pago (QR y terminal Point).</li>
+  <li>Emisión de factura electrónica (ARCA/AFIP).</li>
+  <li>Impresión de ticket y envío por WhatsApp.</li>
+  <li>Atajos de teclado para operación ágil.</li>
+</ul>
+
+<h3>3.3. Productos</h3>
+<ul>
+  <li>Alta, baja y modificación de productos con precio de costo, precio de venta, código, código de barras, categoría, proveedor, imagen y stock mínimo.</li>
+  <li>Soporte de variantes y talles (grupos de talles) con stock por variante.</li>
+  <li>Manejo de lotes con fecha de vencimiento.</li>
+  <li>Productos compuestos (combos).</li>
+  <li>Importación masiva desde archivos Excel.</li>
+  <li>Unidad de medida configurable (unidad, peso, longitud).</li>
+  <li>Historial de precios.</li>
+</ul>
+
+<h3>3.4. Compras</h3>
+<ul>
+  <li>Registro de compras a proveedores con detalle de productos, cantidades, costos y precios de venta.</li>
+  <li>Estados: pendiente, confirmada, anulada.</li>
+  <li>Devoluciones parciales a proveedores.</li>
+  <li>Registro de pagos y control de deuda pendiente por proveedor.</li>
+  <li>Importación de compras desde Excel.</li>
+  <li>Escaneo de facturas en papel mediante OCR.</li>
+</ul>
+
+<h3>3.5. Stock y Movimientos</h3>
+<ul>
+  <li>Registro automático de todos los movimientos de inventario: ventas, compras, devoluciones, ajustes manuales (entrada/salida) y mermas.</li>
+  <li>Filtros por fecha, tipo de movimiento y producto.</li>
+  <li>Resumen de movimientos agrupado por producto.</li>
+</ul>
+
+<h3>3.6. Facturación y Ventas</h3>
+<ul>
+  <li>Historial de ventas con número de ticket, fecha, cliente, total, medio de pago y estado.</li>
+  <li>Anulación de ventas con generación automática de Nota de Crédito electrónica.</li>
+  <li>Devoluciones parciales de clientes.</li>
+  <li>Detalle de pagos múltiples por venta.</li>
+  <li>Factura electrónica AFIP/ARCA: emisión desde el POS, estados pendiente/aprobado, polling automático.</li>
+</ul>
+
+<h3>3.7. Presupuestos</h3>
+<ul>
+  <li>Creación y gestión de presupuestos con productos, cantidades y precios.</li>
+  <li>Estados: vigente, convertido a venta, vencido.</li>
+  <li>Conversión directa de presupuesto a venta.</li>
+</ul>
+
+<h3>3.8. Caja</h3>
+<ul>
+  <li>Apertura y cierre de caja por turno.</li>
+  <li>Registro de monto inicial, monto final contado, monto esperado y diferencia.</li>
+  <li>Desglose de ventas por medio de pago.</li>
+  <li>Registro de movimientos manuales de caja (gastos, extracciones, depósitos).</li>
+  <li>Historial completo de turnos.</li>
+</ul>
+
+<h3>3.9. Clientes y Proveedores</h3>
+<ul>
+  <li>Gestión de clientes con CUIT, domicilio, teléfono, email, condición de IVA y estado activo/inactivo.</li>
+  <li>Sistema de puntos de fidelización por cliente.</li>
+  <li>Gestión de proveedores con datos de contacto y control de deuda.</li>
+  <li>Control de créditos a clientes (fiados) con registro de cobros.</li>
+</ul>
+
+<h3>3.10. Etiquetas</h3>
+<ul>
+  <li>Diseñador visual de etiquetas de precio personalizables.</li>
+  <li>Impresión de códigos de barras y QR.</li>
+  <li>Impresión por lotes de productos seleccionados.</li>
+  <li>Plantillas guardables con tamaños, márgenes y columnas configurables.</li>
+</ul>
+
+<h3>3.11. Usuarios y Permisos</h3>
+<ul>
+  <li>Alta, baja y modificación de usuarios del sistema.</li>
+  <li>Roles predefinidos con conjuntos de permisos asignables.</li>
+  <li>Permisos granulares por usuario: dashboard, POS, productos, compras, ventas, presupuestos, movimientos, caja, clientes, proveedores, usuarios, etiquetas, configuraciones, descuentos, anulaciones y más.</li>
+  <li>Perfil de usuario autogestionable (cambio de nombre, email y contraseña).</li>
+  <li>Autenticación en dos factores (2FA) mediante TOTP.</li>
+</ul>
+
+<h3>3.12. Catálogo Público</h3>
+<ul>
+  <li>Vitrina online de productos accesible sin autenticación.</li>
+  <li>Configurable por negocio (habilitar/deshabilitar).</li>
+  <li>URL personalizada por catálogo.</li>
+</ul>
+
+<h3>3.13. Múltiples Sucursales</h3>
+<ul>
+  <li>Soporte multi-sucursal con stock, caja y operaciones independientes por sucursal.</li>
+  <li>Cambio de sucursal activa desde la interfaz sin cerrar sesión.</li>
+</ul>
+
+<h3>3.14. Personalización White-Label</h3>
+<ul>
+  <li>Nombre del sistema y eslogan personalizados.</li>
+  <li>Logotipo del negocio en barra lateral, tickets y pantalla de inicio.</li>
+  <li>Colores institucionales aplicados a toda la interfaz.</li>
+  <li>Dominio y URL propios.</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  4. SERVICIOS INCLUIDOS                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>4. Servicios Incluidos</h2>
+
+<h3>4.1. Instalación y Puesta en Marcha</h3>
+<ul>
+  <li>Relevamiento de infraestructura del Cliente y requisitos técnicos.</li>
+  <li>Instalación y configuración del sistema en el/los equipo/s designado/s por El Cliente.</li>
+  <li>Personalización white-label (nombre, logo, colores).</li>
+  <li>Carga inicial de productos, clientes y proveedores (a definir alcance).</li>
+  <li>Configuración de sucursales, cajas y permisos de usuarios.</li>
+  <li>Integración con Mercado Pago (opcional).</li>
+  <li>Configuración de facturación electrónica ARCA/AFIP (opcional).</li>
+</ul>
+
+<h3>4.2. Capacitación</h3>
+<ul>
+  <li>Capacitación presencial o virtual para el personal del Cliente.</li>
+  <li>Cantidad de sesiones: <span class="placeholder">[Número de sesiones]</span>.</li>
+  <li>Manual de uso digital y tours guiados interactivos incluidos en el sistema.</li>
+</ul>
+
+<h3>4.3. Soporte Técnico</h3>
+<ul>
+  <li>Soporte por WhatsApp y correo electrónico en horario hábil.</li>
+  <li>Tiempo de respuesta máximo: <span class="placeholder">[X horas]</span>.</li>
+  <li>Resolución de incidencias, errores y consultas de uso.</li>
+  <li>Asistencia en la operatoria de facturación electrónica y medios de pago.</li>
+</ul>
+
+<h3>4.4. Mantenimiento y Actualizaciones</h3>
+<ul>
+  <li>Corrección de errores (bugs) reportados por El Cliente.</li>
+  <li>Actualizaciones periódicas del sistema con nuevas funcionalidades, instaladas por El Proveedor de forma remota o presencial según se acuerde.</li>
+  <li>Parches de seguridad para vulnerabilidades detectadas en el software.</li>
+  <li>Este servicio tiene un <strong>compromiso mínimo de <span class="placeholder">[2 años]</span></strong> desde la puesta en marcha (ver cláusula 7.2). Cumplido dicho plazo, El Cliente podrá renovarlo anualmente o darlo por finalizado.</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  5. LICENCIA Y PROPIEDAD INTELECTUAL                                    -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>5. Licencia y Propiedad Intelectual</h2>
+<p>
+  El Proveedor conserva la <strong>titularidad exclusiva</strong> de todos los derechos de propiedad intelectual sobre el software Kamex Solutions, incluyendo —pero no limitándose a— el código fuente, la interfaz de usuario, la documentación, las marcas y cualquier material relacionado.
+</p>
+<p>
+  El Cliente recibe una <strong>licencia de uso limitada, no exclusiva, intransferible y revocable</strong> del sistema durante la vigencia del contrato y exclusivamente para su operación comercial interna. El Cliente no podrá:
+</p>
+<ul>
+  <li>Copiar, modificar, descompilar, realizar ingeniería inversa ni crear obras derivadas del software.</li>
+  <li>Sublicenciar, alquilar, vender, ceder o transferir el acceso al sistema a terceros.</li>
+  <li>Utilizar el software para fines distintos a los pactados en este contrato.</li>
+</ul>
+<p>
+  Al finalizar el contrato de mantenimiento, El Cliente conserva la licencia de uso perpetua del sistema y el acceso completo a su base de datos alojada en su propia infraestructura. El Proveedor no retiene ni bloquea los datos del Cliente, los cuales permanecen bajo su exclusivo control y responsabilidad.
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  6. OBLIGACIONES DE LAS PARTES                                          -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>6. Obligaciones de las Partes</h2>
+
+<h3>6.1. Obligaciones del Proveedor</h3>
+<ul>
+  <li>Instalar y configurar el sistema en condiciones de funcionamiento en el/los equipo/s del Cliente en la fecha acordada.</li>
+  <li>Brindar soporte técnico dentro de los plazos acordados en la cláusula 4.3.</li>
+  <li>Proveer las actualizaciones y correcciones pactadas durante la vigencia del mantenimiento.</li>
+  <li>Mantener la confidencialidad de los datos comerciales del Cliente a los que acceda durante tareas de soporte o mantenimiento.</li>
+  <li>Notificar con antelación sobre intervenciones de mantenimiento que requieran detener el sistema.</li>
+</ul>
+
+<h3>6.2. Obligaciones del Cliente</h3>
+<ul>
+  <li>Abonar las facturas en los plazos estipulados.</li>
+  <li>Proveer información veraz y completa para la configuración del sistema.</li>
+  <li>Proveer y mantener el equipamiento (servidor/PC) y la red local necesarios para el funcionamiento del sistema, conforme a los requisitos técnicos informados por El Proveedor.</li>
+  <li>Realizar copias de seguridad periódicas de la base de datos del sistema. El Proveedor no será responsable por la pérdida de datos ante fallas de hardware o software en los equipos del Cliente.</li>
+  <li>Designar al menos un responsable interno como interlocutor para soporte y capacitación.</li>
+  <li>No compartir credenciales de acceso con terceros no autorizados.</li>
+  <li>Mantener actualizados los datos de facturación electrónica (certificados ARCA) si aplica.</li>
+  <li>Notificar de inmediato cualquier incidencia o uso no autorizado del sistema.</li>
+  <li>Garantizar al Proveedor el acceso remoto necesario (VPN, escritorio remoto o similar) para realizar tareas de soporte y mantenimiento cuando corresponda.</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  7. PRECIO Y CONDICIONES DE PAGO                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>7. Precio y Condiciones de Pago</h2>
+
+<table>
+  <tr>
+    <th>Concepto</th>
+    <th>Modalidad</th>
+    <th>Precio</th>
+  </tr>
+  <tr>
+    <td>Licencia de uso perpetua del sistema</td>
+    <td>Pago único</td>
+    <td><span class="placeholder">$ [Monto]</span></td>
+  </tr>
+  <tr>
+    <td>Instalación, configuración y personalización white-label</td>
+    <td>Pago único (incluido en licencia)</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td>Mantenimiento, soporte técnico y actualizaciones</td>
+    <td>Anual (permanente)</td>
+    <td><span class="placeholder">$ [Monto]</span></td>
+  </tr>
+  <tr>
+    <td>Capacitación</td>
+    <td>Incluida (<span class="placeholder">[N°]</span> sesiones)</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td>Capacitación adicional</td>
+    <td>Por sesión</td>
+    <td><span class="placeholder">$ [Monto]</span></td>
+  </tr>
+</table>
+
+<h3>7.1. Modalidad de Pago</h3>
+<ul>
+  <li>La licencia de uso perpetua se abona <span class="placeholder">[50%]</span> al inicio del proyecto y el <span class="placeholder">[50%]</span> restante al finalizar la instalación y puesta en marcha.</li>
+  <li>El mantenimiento y soporte anual se abona por adelantado al inicio de cada período de renovación.</li>
+  <li>Medio de pago: <span class="placeholder">[Transferencia bancaria / Efectivo / Otro]</span>.</li>
+</ul>
+
+<h3>7.2. Compromiso Mínimo y Renovación</h3>
+<p>
+  El Cliente se compromete a abonar el mantenimiento y soporte anual durante un período mínimo de <span class="placeholder">[2 años]</span> desde la fecha de puesta en marcha. Cumplido dicho plazo, El Cliente podrá optar por renovar el mantenimiento por períodos anuales adicionales o darlo por finalizado. En caso de no renovar, conserva la licencia de uso perpetua del sistema en la última versión instalada, pero sin derecho a recibir actualizaciones, soporte técnico ni corrección de errores.
+</p>
+
+<h3>7.3. Ajuste de Precios</h3>
+<p>
+  El Proveedor podrá ajustar el valor del mantenimiento y soporte anual al inicio de cada nuevo período, notificando al Cliente con al menos <span class="placeholder">[30]</span> días de anticipación al vencimiento. Dicho ajuste no podrá superar el índice de inflación oficial (IPC) acumulado del último año, salvo acuerdo expreso entre las partes.
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  8. NIVEL DE SERVICIO (SLA)                                             -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>8. Garantía de Funcionamiento</h2>
+<p>
+  El Proveedor garantiza que el software funcionará conforme a las especificaciones descriptas en la cláusula 3 del presente contrato. Durante los primeros <span class="placeholder">[90]</span> días posteriores a la instalación, El Proveedor corregirá sin cargo cualquier defecto o error imputable al software que impida su normal funcionamiento (período de garantía).
+</p>
+<p>
+  La presente garantía no cubre:
+</p>
+<ul>
+  <li>Fallos originados por modificaciones no autorizadas del sistema, su configuración o su entorno de ejecución.</li>
+  <li>Problemas derivados de fallas en el hardware, sistema operativo, red eléctrica o red de datos provistos por El Cliente.</li>
+  <li>Incompatibilidades con software de terceros instalado por El Cliente en el mismo equipo.</li>
+  <li>Errores causados por uso indebido, capacitación insuficiente u operación contraria a la documentación del sistema.</li>
+</ul>
+<p>
+  Finalizado el período de garantía, la corrección de errores queda cubierta por el contrato de mantenimiento y soporte anual (cláusula 4.4), siempre que el mismo se encuentre vigente.
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  9. CONFIDENCIALIDAD Y PROTECCIÓN DE DATOS                              -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>9. Confidencialidad y Protección de Datos</h2>
+
+<h3>9.1. Confidencialidad</h3>
+<p>
+  Ambas partes se obligan a mantener la más estricta confidencialidad sobre toda la información comercial, financiera, técnica y operativa a la que accedan en el marco de este contrato. Esta obligación subsistirá incluso después de finalizado el vínculo contractual por un plazo de <span class="placeholder">[2 años]</span>.
+</p>
+
+<h3>9.2. Protección de Datos Personales</h3>
+<p>
+  En cumplimiento de la <strong>Ley N° 25.326 de Protección de Datos Personales</strong> de la República Argentina y normativas complementarias:
+</p>
+<ul>
+  <li>Los datos personales ingresados al sistema (clientes, usuarios, proveedores) residen exclusivamente en los equipos de infraestructura del Cliente. El Cliente es el <strong>responsable del tratamiento</strong> de dichos datos.</li>
+  <li>El Proveedor solo accederá a los datos del Cliente en el marco de tareas de soporte o mantenimiento expresamente solicitadas, actuando como <strong>encargado del tratamiento</strong> durante dichas intervenciones.</li>
+  <li>El Cliente es responsable de obtener el consentimiento de los titulares de los datos para su tratamiento y de implementar las medidas de seguridad físicas y lógicas en su propia infraestructura (control de acceso al servidor, backups, antivirus, etc.).</li>
+  <li>El Proveedor implementa medidas de seguridad en el software: encriptación de contraseñas, autenticación en dos factores, control de acceso basado en roles y transmisión segura de datos (HTTPS/TLS). La efectividad de estas medidas en el entorno local depende de la correcta configuración por parte del Cliente.</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  10. DURACIÓN Y TERMINACIÓN                                             -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>10. Duración y Terminación</h2>
+
+<h3>10.1. Vigencia</h3>
+<p>
+  La <strong>licencia de uso perpetua</strong> del software se otorga de manera definitiva una vez abonado el precio total de la misma.
+</p>
+<p>
+  El <strong>contrato de mantenimiento y soporte</strong> entra en vigor el <span class="placeholder">[Día]</span> de <span class="placeholder">[Mes]</span> de <span class="placeholder">[Año]</span> —fecha de instalación y puesta en marcha— y tendrá una duración inicial de <span class="placeholder">[12 meses]</span>, renovándose automáticamente por períodos iguales, salvo que alguna de las partes comunique su voluntad de no renovar con al menos <span class="placeholder">[30]</span> días de anticipación al vencimiento del período en curso.
+</p>
+
+<h3>10.2. Rescisión Anticipada</h3>
+<p>Cualquiera de las partes podrá rescindir el contrato de mantenimiento de forma anticipada en los siguientes casos:</p>
+<ul>
+  <li><strong>Por incumplimiento:</strong> Si la otra parte incumple gravemente sus obligaciones y no subsana el incumplimiento en un plazo de <span class="placeholder">[15]</span> días hábiles desde la notificación fehaciente.</li>
+  <li><strong>Por mutuo acuerdo:</strong> En cualquier momento, mediante acuerdo por escrito entre ambas partes.</li>
+  <li><strong>Por falta de pago:</strong> Durante el período de compromiso mínimo, El Proveedor podrá suspender el soporte y las actualizaciones si El Cliente acumula una deuda superior a <span class="placeholder">[60]</span> días desde el vencimiento de la factura de mantenimiento anual, previa notificación con <span class="placeholder">[10]</span> días de anticipación. La licencia de uso no se verá afectada, pero los servicios quedarán suspendidos hasta la regularización de la deuda.</li>
+</ul>
+
+<h3>10.3. Efectos de la Terminación</h3>
+<ul>
+  <li>Durante el período de compromiso mínimo (<span class="placeholder">[2 años]</span>), si El Cliente incumple el pago del mantenimiento, El Proveedor podrá suspender el soporte y las actualizaciones hasta que la deuda sea regularizada.</li>
+  <li>Cumplido el compromiso mínimo, si El Cliente opta por no renovar, conserva la licencia de uso perpetua del sistema en la última versión instalada, sin derecho a actualizaciones, soporte ni correcciones.</li>
+  <li>En caso de rescisión definitiva del contrato por incumplimiento grave, El Cliente deberá abonar todos los saldos pendientes a la fecha de terminación.</li>
+  <li>Las obligaciones de confidencialidad subsistirán conforme a la cláusula 9.</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  11. LIMITACIÓN DE RESPONSABILIDAD                                      -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>11. Limitación de Responsabilidad</h2>
+<ul>
+  <li>El Proveedor no será responsable por daños indirectos, lucro cesante, pérdida de oportunidades comerciales o cualquier perjuicio no directamente causado por un incumplimiento comprobado del software.</li>
+  <li>El Proveedor no será responsable por la pérdida de datos, interrupciones del servicio o fallas de funcionamiento derivadas de problemas en el hardware, sistema operativo, red de datos, energía eléctrica u otros componentes de la infraestructura provista por El Cliente. Es responsabilidad del Cliente implementar y mantener rutinas de backup.</li>
+  <li>La responsabilidad total del Proveedor frente al Cliente, por cualquier causa, no excederá el monto efectivamente abonado por El Cliente en concepto de licencia.</li>
+  <li>El software se entrega "tal cual" (as-is), sin garantías implícitas adicionales a las expresamente pactadas en este contrato.</li>
+  <li>El Proveedor no será responsable por la exactitud o consecuencias de la información fiscal generada por el Cliente a través del sistema; es responsabilidad del Cliente verificar los comprobantes emitidos ante ARCA/AFIP.</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  12. DISPOSICIONES GENERALES                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>12. Disposiciones Generales</h2>
+
+<h3>12.1. Cesión</h3>
+<p>Ninguna de las partes podrá ceder total o parcialmente los derechos y obligaciones de este contrato sin el consentimiento previo y por escrito de la otra parte.</p>
+
+<h3>12.2. Modificaciones</h3>
+<p>Cualquier modificación a este contrato deberá constar por escrito y ser firmada por ambas partes.</p>
+
+<h3>12.3. Independencia de Cláusulas</h3>
+<p>Si alguna disposición de este contrato resultara nula o inaplicable, las restantes conservarán plena vigencia.</p>
+
+<h3>12.4. Notificaciones</h3>
+<p>Todas las notificaciones se dirigirán a los siguientes medios:</p>
+<ul>
+  <li><strong>Al Proveedor:</strong> <span class="placeholder">[Email del Proveedor]</span></li>
+  <li><strong>Al Cliente:</strong> <span class="placeholder">[Email del Cliente]</span></li>
+</ul>
+
+<h3>12.5. Ley Aplicable y Jurisdicción</h3>
+<p>
+  Este contrato se rige por las leyes de la República Argentina. Para cualquier controversia derivada de este contrato, las partes se someten a la jurisdicción de los tribunales ordinarios de <span class="placeholder">[Ciudad / Provincia]</span>, renunciando expresamente a cualquier otro fuero o jurisdicción que pudiera corresponderles.
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  FIRMAS                                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+
+<div class="header" style="border-bottom-color: #ccc;">
+  <div class="doc-title" style="font-size: 14pt;">Anexo de Firmas</div>
+</div>
+
+<p style="margin-top: 30px;">
+  En conformidad con todas las cláusulas precedentes, las partes firman el presente contrato en dos ejemplares de un mismo tenor y a un solo efecto, en la ciudad de <span class="placeholder">[Ciudad]</span>, a los <span class="placeholder">[Día]</span> días del mes de <span class="placeholder">[Mes]</span> de <span class="placeholder">[Año]</span>.
+</p>
+
+<div class="signatures">
+  <div class="signature-box">
+    <div class="line"></div>
+    <div class="name"><span class="placeholder">[Nombre del Representante]</span></div>
+    <div class="role">El Proveedor — Kamex Solutions</div>
+  </div>
+  <div class="signature-box">
+    <div class="line"></div>
+    <div class="name"><span class="placeholder">[Nombre del Representante]</span></div>
+    <div class="role">El Cliente</div>
+  </div>
+</div>
+
+<div class="signatures" style="margin-top: 50px;">
+  <div class="signature-box">
+    <div class="line"></div>
+    <div class="name">Aclaración</div>
+    <div class="role">DNI N° <span class="placeholder">[N° Documento]</span></div>
+  </div>
+  <div class="signature-box">
+    <div class="line"></div>
+    <div class="name">Aclaración</div>
+    <div class="role">DNI N° <span class="placeholder">[N° Documento]</span></div>
+  </div>
+</div>
+
+<div class="footer">
+  Kamex Solutions — Contrato de Licencia de Software (Despliegue Local) &nbsp;|&nbsp; Página 1 de 1
+</div>
+
+</body>
+</html>

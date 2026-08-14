@@ -222,7 +222,7 @@ function abrirWhatsAppResumen(cliente, saldo) {
 }
 
 /* ── Modal cliente (crear + editar, un solo componente) ── */
-function ModalCliente({ open, onClose, onGuardar, cliente }) {
+export function ModalCliente({ open, onClose, onGuardar, cliente }) {
   const toast = useToast();
   const esEdicion = Boolean(cliente);
   const empty = { persona: '', telefono: '', cuit: '', email: '', direccion: '', condicionIva: '' };

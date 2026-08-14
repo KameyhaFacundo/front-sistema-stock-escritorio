@@ -10,30 +10,7 @@ import CheckCircleIcon  from '@mui/icons-material/CheckCircle';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { BORDER, INK, INK2, MUTED, P, HOVER, TABLE_HEADER, modalPaperSx } from '../../theme/tokens';
-import { leerExcelCompra } from '../../utils/excelImport';
-import { exportarExcel } from '../../utils/excelExport';
-
-// Plantilla lista para completar y volver a subir — mismas columnas, mismo
-// orden, que espera leerExcelCompra() de abajo (nombre, código, cantidad,
-// precio), vacía (sin filas de ejemplo) para completar directo. El código es
-// opcional pero, si se completa, matchea contra el catálogo de forma exacta
-// y trae el nombre real del producto solo — no hace falta tipear también el
-// nombre a mano (ver matchProducto en comprasMatching.js).
-export function descargarPlantillaCompra() {
-  exportarExcel({
-    filename: 'plantilla_importar_compra.xlsx',
-    sheetName: 'Compra',
-    title: 'Plantilla de importación de compra',
-    subtitle: 'Completá una fila por producto y volvé a subir este mismo archivo. Si completás el código no hace falta escribir el nombre: se busca solo en el catálogo por código, que es más confiable que el nombre.',
-    columns: [
-      { header: 'Código',   width: 18 },
-      { header: 'Nombre',   width: 32 },
-      { header: 'Cantidad', width: 14, align: 'right' },
-      { header: 'Precio',   width: 16, numFmt: '"$" #,##0.00', align: 'right' },
-    ],
-    rows: [],
-  });
-}
+import { leerExcelCompra, descargarPlantillaCompra } from '../../utils/excelImport';
 import { matchProducto, precioVentaSugerido } from './comprasMatching';
 import { productosService } from '../../services/productosService';
 import { toLocalDateStr } from '../../utils/format';
@@ -120,7 +97,7 @@ export default function ImportarExcelModal({ open, onClose, onConfirm, proveedor
             id_producto: l.producto_match.id,
             cantidad: l.cantidad,
             precio_compra: l.precio_compra,
-            precio_venta: precioVentaSugerido(l.precio_compra, l.producto_match),
+            precio_venta: precioVentaSugerido(l.precio_compra),
           }))
         : [{ id_producto: '', cantidad: 1, precio_compra: '' }],
     });

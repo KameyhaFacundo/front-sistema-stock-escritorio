@@ -13,6 +13,7 @@ import VisibilityIcon     from '@mui/icons-material/Visibility';
 import DescriptionIcon    from '@mui/icons-material/Description';
 import FilterListIcon     from '@mui/icons-material/FilterList';
 import PictureAsPdfIcon   from '@mui/icons-material/PictureAsPdf';
+import PersonAddIcon      from '@mui/icons-material/PersonAdd';
 import ShoppingCartCheckoutIcon from '@mui/icons-material/ShoppingCartCheckout';
 import {
   BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, HOVER, DROPDOWN, TABLE_HEADER, modalPaperSx,
@@ -30,7 +31,8 @@ import useHasPermiso from '../../hooks/useHasPermiso';
 import useBusquedaProductos from '../../hooks/useBusquedaProductos';
 import useDropdownKeyboardNav from '../../hooks/useDropdownKeyboardNav';
 import { clientesService } from '../../services/clientesService';
-import { COMPANY_NAME } from '../../config/brand';
+import { ModalCliente } from '../Clientes/Clientes';
+import { COMPANY_NAME, PRIMARY_COLOR } from '../../config/brand';
 import {
   usePresupuestos, usePresupuesto, useCrearPresupuesto, useEliminarPresupuesto,
 } from '../../hooks/queries/usePresupuestosQueries';
@@ -43,51 +45,81 @@ const ESTADO_COLORS = {
   cancelado:  { bg: `${MUTED}18`, fg: MUTED, border: `${MUTED}40` },
 };
 
-// jsPDF/autoTable se cargan solo acá, al toque de exportar — evita bajarlos
-// siempre que alguien abre Presupuestos, use o no la exportación a PDF.
+/* ── Helper de color para PDF (jsPDF quiere RGB 0-255, no hex) ── */
+function hexToRgb(hex) {
+  const clean = hex.replace('#', '');
+  return [parseInt(clean.slice(0, 2), 16), parseInt(clean.slice(2, 4), 16), parseInt(clean.slice(4, 6), 16)];
+}
+const PDF_PRIMARY = hexToRgb(PRIMARY_COLOR);
+const PDF_INK     = [30, 32, 40];
+const PDF_MUTED   = [110, 116, 130];
+const PDF_BORDER  = [222, 217, 209];
+
+// Mismo criterio ink-light que exportarPDFProveedores en Proveedores.jsx —
+// nada de bandas de color sólidas, para que imprima limpio en blanco y
+// negro. jsPDF/autoTable se cargan solo acá, al toque de exportar.
 async function generarPdfPresupuesto(presupuesto, empresa) {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'), import('jspdf-autotable'),
   ]);
-  const doc   = new jsPDF();
-  const pageW = doc.internal.pageSize.getWidth();
+  const doc     = new jsPDF();
+  const pageW   = doc.internal.pageSize.getWidth();
+  const marginX = 14;
+  const hoy     = new Date().toLocaleDateString('es-AR');
 
-  doc.setFontSize(16);
+  let y = 16;
+  doc.setFontSize(15);
   doc.setFont(undefined, 'bold');
-  doc.setTextColor(20, 20, 20);
-  doc.text(empresa?.nombre || COMPANY_NAME, 14, 18);
-  doc.setFontSize(11);
+  doc.setTextColor(...PDF_INK);
+  doc.text(empresa?.nombre || COMPANY_NAME, marginX, y);
+
+  doc.setFontSize(8.5);
   doc.setFont(undefined, 'normal');
-  doc.setTextColor(80, 80, 80);
-  doc.text(`Presupuesto #${presupuesto.id}`, 14, 26);
+  doc.setTextColor(...PDF_MUTED);
+  doc.text(`Emitido ${hoy}`, pageW - marginX, y, { align: 'right' });
 
-  doc.setFontSize(9);
-  doc.text(`Fecha: ${fmtDate(presupuesto.fecha)}`, pageW - 14, 18, { align: 'right' });
-  doc.text(`Cliente: ${presupuesto.cliente}`, pageW - 14, 26, { align: 'right' });
+  y += 5;
+  doc.setFontSize(9.5);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(...PDF_PRIMARY);
+  doc.text(`PRESUPUESTO #${presupuesto.id}`, marginX, y);
+  doc.setFontSize(8.5);
+  doc.setFont(undefined, 'normal');
+  doc.setTextColor(...PDF_MUTED);
+  doc.text(`Cliente: ${presupuesto.cliente} · ${fmtDate(presupuesto.fecha)}`, pageW - marginX, y, { align: 'right' });
 
+  y += 4;
+  doc.setDrawColor(...PDF_BORDER);
+  doc.setLineWidth(0.3);
+  doc.line(marginX, y, pageW - marginX, y);
+
+  y += 6;
   autoTable(doc, {
-    startY: 36,
-    head: [['Producto', 'Cantidad', 'Precio', 'Subtotal']],
+    startY: y,
+    head: [[
+      { content: 'Producto' }, { content: 'Cantidad' }, { content: 'Precio' }, { content: 'Subtotal' },
+    ]],
     body: presupuesto.lineas.map(l => [l.nombre, String(l.cantidad), fmtMoney(l.precio_venta), fmtMoney(l.subtotal)]),
-    styles: { fontSize: 9, textColor: [30, 30, 30], lineColor: [210, 210, 210], lineWidth: 0.1 },
-    headStyles: { fillColor: [245, 245, 245], textColor: [30, 30, 30], fontStyle: 'bold', fontSize: 9 },
+    theme: 'plain',
+    styles:       { fontSize: 9, textColor: PDF_INK, lineColor: PDF_BORDER, lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0 }, cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 } },
+    headStyles:   { textColor: PDF_INK, fontSize: 8.5, fontStyle: 'bold', lineColor: PDF_INK, lineWidth: { top: 0, right: 0, bottom: 0.5, left: 0 } },
     columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
-    margin: { left: 14, right: 14 },
+    margin: { left: marginX, right: marginX },
     foot: [['', '', 'Total', fmtMoney(presupuesto.total)]],
-    footStyles: { fillColor: [255, 255, 255], textColor: [20, 20, 20], fontStyle: 'bold', fontSize: 10 },
+    footStyles: { textColor: PDF_INK, fontStyle: 'bold', fontSize: 10, lineWidth: { top: 0.3, right: 0, bottom: 0, left: 0 }, lineColor: PDF_BORDER },
   });
 
   if (presupuesto.notas) {
     const finalY = doc.lastAutoTable.finalY + 10;
     doc.setFontSize(9);
-    doc.setTextColor(80, 80, 80);
-    doc.text('Notas:', 14, finalY);
-    doc.text(doc.splitTextToSize(presupuesto.notas, pageW - 28), 14, finalY + 6);
+    doc.setTextColor(...PDF_MUTED);
+    doc.text('Notas:', marginX, finalY);
+    doc.text(doc.splitTextToSize(presupuesto.notas, pageW - marginX * 2), marginX, finalY + 6);
   }
 
   doc.setFontSize(8);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Este documento no tiene validez fiscal — es un presupuesto, no una factura.', 14, doc.internal.pageSize.getHeight() - 10);
+  doc.setTextColor(...PDF_MUTED);
+  doc.text('Este documento no tiene validez fiscal — es un presupuesto, no una factura.', marginX, doc.internal.pageSize.getHeight() - 10);
 
   doc.save(`presupuesto-${presupuesto.id}.pdf`);
 }
@@ -113,6 +145,7 @@ function ModalNuevoPresupuesto({ open, onClose }) {
   const [lineas, setLineas] = useState([]);
   const [search, setSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [modalClienteOpen, setModalClienteOpen] = useState(false);
 
   useEffect(() => {
     if (open) clientesService.getAll().then(setClientes).catch(() => {});
@@ -120,7 +153,7 @@ function ModalNuevoPresupuesto({ open, onClose }) {
 
   const handleClose = () => {
     setClienteId(null); setFecha(toLocalDateStr()); setNotas('');
-    setLineas([]); setSearch(''); setShowDropdown(false);
+    setLineas([]); setSearch(''); setShowDropdown(false); setModalClienteOpen(false);
     onClose();
   };
 
@@ -176,17 +209,26 @@ function ModalNuevoPresupuesto({ open, onClose }) {
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2.5 }}>
           <Box>
             <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Cliente</Typography>
-            <Autocomplete
-              size="small"
-              options={clientes}
-              value={clientes.find(c => c.id === clienteId) ?? null}
-              getOptionLabel={(opt) => opt.nombre || ''}
-              isOptionEqualToValue={(opt, val) => opt.id === val?.id}
-              onChange={(_, val) => setClienteId(val?.id ?? null)}
-              renderInput={(params) => <TextField {...params} placeholder="Consumidor Final" sx={fieldSx} />}
-              slotProps={{ paper: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, borderRadius: '10px', '& .MuiAutocomplete-option': { color: INK, '&:hover, &[aria-selected="true"]': { bgcolor: HOVER } } } } }}
-              noOptionsText={<Typography sx={{ color: MUTED, fontSize: 13 }}>Sin resultados</Typography>}
-            />
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Autocomplete
+                fullWidth
+                size="small"
+                options={clientes}
+                value={clientes.find(c => c.id === clienteId) ?? null}
+                getOptionLabel={(opt) => opt.nombre || ''}
+                isOptionEqualToValue={(opt, val) => opt.id === val?.id}
+                onChange={(_, val) => setClienteId(val?.id ?? null)}
+                renderInput={(params) => <TextField {...params} placeholder="Consumidor Final" sx={fieldSx} />}
+                slotProps={{ paper: { sx: { bgcolor: DROPDOWN, border: `1px solid ${BORDER}`, borderRadius: '10px', '& .MuiAutocomplete-option': { color: INK, '&:hover, &[aria-selected="true"]': { bgcolor: HOVER } } } } }}
+                noOptionsText={<Typography sx={{ color: MUTED, fontSize: 13 }}>Sin resultados</Typography>}
+              />
+              <Tooltip title="Nuevo cliente">
+                <IconButton onClick={() => setModalClienteOpen(true)}
+                  sx={{ bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '8px', color: INK2, flexShrink: 0, '&:hover': { color: INK, bgcolor: BORDER } }}>
+                  <PersonAddIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
           </Box>
           <Box>
             <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Fecha</Typography>
@@ -256,6 +298,13 @@ function ModalNuevoPresupuesto({ open, onClose }) {
           {crearPresupuesto.isPending ? 'Guardando...' : 'Guardar presupuesto'}
         </Button>
       </DialogContent>
+
+      <ModalCliente open={modalClienteOpen} onClose={() => setModalClienteOpen(false)}
+        cliente={null}
+        onGuardar={(nuevo) => {
+          setClientes(cs => [...cs, nuevo]);
+          setClienteId(nuevo.id);
+        }} />
     </Dialog>
   );
 }

@@ -137,7 +137,7 @@ export default function EscanearModal({ open, onClose, onConfirm, proveedores })
             id_producto: l.id_producto,
             cantidad: l.cantidad,
             precio_compra: l.precio_compra,
-            precio_venta: precioVentaSugerido(l.precio_compra, l.producto_match),
+            precio_venta: precioVentaSugerido(l.precio_compra),
           }))
         : [{ id_producto: '', cantidad: 1, precio_compra: '' }],
     });

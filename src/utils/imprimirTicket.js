@@ -210,13 +210,34 @@ async function generarTicketHtml(data, empresa, factura) {
 </html>`;
 }
 
+// Convierte el PDF (base64, devuelto por Electron) en un archivo descargado
+// — mismo mecanismo que jsPDF's doc.save() usa por dentro (Blob + <a
+// download> disparado a mano), para que el ticket se baje exactamente igual
+// que cualquier otro PDF del sistema (Productos, Proveedores, etc.).
+function descargarPdfBase64(base64, filename) {
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /**
  * Si la app de escritorio tiene una impresora del sistema disponible, imprime
  * directo y en silencio (sin diálogo) vía el puente de Electron
- * (electron/preload.js + main.js). Si no hay impresora, o estamos en
- * `pnpm dev`/demo mode (window.electronAPI no existe ahí), cae al flujo de
- * siempre: abre una ventana con el ticket armado y dispara el diálogo de
- * impresión del navegador — mismo enfoque que front-comercial.
+ * (electron/preload.js + main.js). Si no hay impresora (o el intento
+ * falla), baja el ticket como PDF directo en vez de abrir una ventana con el
+ * diálogo de impresión del navegador — ese diálogo depende de que Windows
+ * tenga una impresora virtual "Imprimir a PDF" instalada y funcionando, algo
+ * que no se puede garantizar en la PC de cada cliente. Solo si tampoco existe
+ * `generarTicketPdf` (o estamos en `pnpm dev`/demo mode, donde
+ * window.electronAPI no existe) cae al flujo de ventana + print() de
+ * siempre — mismo enfoque que front-comercial.
  */
 export async function imprimirTicket(data, empresa, factura) {
   if (!data) return;
@@ -227,8 +248,17 @@ export async function imprimirTicket(data, empresa, factura) {
       const { printed } = await window.electronAPI.imprimirTicket(html);
       if (printed) return;
     } catch {
-      // Sigue al flujo de ventana de abajo — no hay impresora o falló, el
-      // usuario igual necesita ver el ticket.
+      // Sigue abajo — no hay impresora o falló, el usuario igual necesita el ticket.
+    }
+
+    if (window.electronAPI?.generarTicketPdf) {
+      try {
+        const base64 = await window.electronAPI.generarTicketPdf(html);
+        descargarPdfBase64(base64, `ticket-${data.ticketId ?? Date.now()}.pdf`);
+        return;
+      } catch {
+        // Sigue al flujo de ventana de abajo como último recurso.
+      }
     }
   }
 

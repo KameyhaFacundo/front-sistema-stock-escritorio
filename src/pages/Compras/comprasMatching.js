@@ -29,14 +29,16 @@ const MARGEN_DEFAULT_PORCENTAJE = 0.30;
 
 /**
  * Precio de venta sugerido para una línea de compra importada (escáner de IA
- * o Excel): si el producto ya existe en el catálogo, respeta el precio de
- * venta que ya tiene cargado (igual que al elegirlo a mano en el formulario).
- * Si es un producto nuevo sin precio de referencia, sugiere costo + 30% en
- * vez de dejarlo en $0 — el usuario lo revisa y ajusta antes de confirmar.
+ * o Excel): siempre costo + 30%, sin importar si el producto ya existe en el
+ * catálogo. Antes, si ya existía, se respetaba el precio de venta que ya
+ * tenía cargado — pero ese precio quedaba calculado contra un costo VIEJO,
+ * no el de esta compra: si el costo nuevo subió mucho, el margen daba
+ * negativo (venta por debajo del costo) sin que nadie lo pidiera. Se revisa
+ * y ajusta antes de confirmar de cualquier forma, así que directamente se
+ * parte siempre del mismo 30% en vez de dejarlo en $0 (producto nuevo) o en
+ * un margen roto (producto existente con costo desactualizado).
  */
-export function precioVentaSugerido(costo, productoMatch) {
-  const existente = productoMatch?.precioFinal ?? productoMatch?.precio;
-  if (existente) return existente;
+export function precioVentaSugerido(costo) {
   const c = Number(costo) || 0;
   return c ? Math.round(c * (1 + MARGEN_DEFAULT_PORCENTAJE) * 100) / 100 : '';
 }

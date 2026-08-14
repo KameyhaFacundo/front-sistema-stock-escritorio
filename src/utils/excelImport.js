@@ -3,6 +3,8 @@
 // parseo directo de celdas), así que no tiene costo de tokens ni
 // depende de ningún proveedor externo.
 
+import { exportarExcel } from './excelExport';
+
 const ALIAS_NOMBRE    = ['nombre', 'producto', 'artículo', 'articulo', 'descripcion', 'descripción', 'detalle'];
 const ALIAS_CANTIDAD  = ['cantidad', 'cant', 'cant.', 'unidades', 'qty'];
 const ALIAS_PRECIO    = ['precio', 'costo', 'precio unitario', 'precio_unitario', 'valor', 'importe'];
@@ -150,6 +152,31 @@ export async function leerExcelCompra(file) {
     });
   }
   return lineas;
+}
+
+// Plantilla lista para completar y volver a subir — mismas columnas, mismo
+// orden, que espera leerExcelCompra() de arriba (nombre, código, cantidad,
+// precio), vacía (sin filas de ejemplo) para completar directo. El código es
+// opcional pero, si se completa, matchea contra el catálogo de forma exacta
+// y trae el nombre real del producto solo — no hace falta tipear también el
+// nombre a mano (ver matchProducto en comprasMatching.js). Vive acá junto a
+// leerExcelCompra (y no en ImportarExcelModal.jsx, que la usaba antes) porque
+// un archivo de componente no puede exportar también una función suelta sin
+// romper el Fast Refresh de Vite.
+export function descargarPlantillaCompra() {
+  exportarExcel({
+    filename: 'plantilla_importar_compra.xlsx',
+    sheetName: 'Compra',
+    title: 'Plantilla de importación de compra',
+    subtitle: 'Completá una fila por producto y volvé a subir este mismo archivo. Si completás el código no hace falta escribir el nombre: se busca solo en el catálogo por código, que es más confiable que el nombre.',
+    columns: [
+      { header: 'Código',   width: 18 },
+      { header: 'Nombre',   width: 32 },
+      { header: 'Cantidad', width: 14, align: 'right' },
+      { header: 'Precio',   width: 16, numFmt: '"$" #,##0.00', align: 'right' },
+    ],
+    rows: [],
+  });
 }
 
 /**
