@@ -14,7 +14,6 @@ import BadgeIcon                 from '@mui/icons-material/Badge';
 import SettingsIcon              from '@mui/icons-material/Settings';
 import LogoutIcon                from '@mui/icons-material/Logout';
 import LockOpenIcon              from '@mui/icons-material/LockOpen';
-import KeyboardArrowUpIcon       from '@mui/icons-material/KeyboardArrowUp';
 import WbSunnyOutlinedIcon       from '@mui/icons-material/WbSunnyOutlined';
 import DarkModeOutlinedIcon      from '@mui/icons-material/DarkModeOutlined';
 import NotificationsIcon         from '@mui/icons-material/Notifications';
@@ -34,7 +33,7 @@ import { useCaja } from '../context/CajaContextBase';
 import useHasPermiso from '../hooks/useHasPermiso';
 import usePlan from '../hooks/usePlan';
 import {
-  CARD, BORDER, INK, INK2, MUTED, P, ACCENT_INK, HOVER, ACTIVE_BG, DROPDOWN,
+  CARD, BORDER, INK, MUTED, P, ACCENT_INK, HOVER, ACTIVE_BG, DROPDOWN,
   SUCCESS, ERROR, WARNING, ERROR_BG,
 } from '../theme/tokens';
 import { APP_NAME, APP_VERSION } from '../config/brand';
@@ -96,7 +95,7 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
           borderRadius: '999px',
           textDecoration: 'none',
           bgcolor: isActive ? ACTIVE_BG : 'transparent',
-          color:   isActive ? ACCENT_INK : INK2,
+          color:   isActive ? ACCENT_INK : INK,
           transition: 'all 0.15s',
           '&:hover': { bgcolor: isActive ? ACTIVE_BG : HOVER, color: isActive ? ACCENT_INK : INK },
         }}
@@ -113,7 +112,7 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
           </Box>
           {!collapsed && (
             <>
-              <Typography sx={{ fontSize: 13.5, fontWeight: isActive ? 600 : 400, lineHeight: 1 }}>
+              <Typography sx={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1 }}>
                 {item.name}
               </Typography>
               <Chip
@@ -144,14 +143,14 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
         borderRadius: '999px',
         textDecoration: 'none',
         bgcolor: isActive ? ACTIVE_BG : 'transparent',
-        color:   isActive ? ACCENT_INK : INK2,
+        color:   isActive ? ACCENT_INK : INK,
         transition: 'all 0.15s',
         '&:hover': { bgcolor: isActive ? ACTIVE_BG : HOVER, color: isActive ? ACCENT_INK : INK },
       }}
     >
       <Icon sx={{ fontSize: 16, flexShrink: 0 }} />
       {!collapsed && (
-        <Typography sx={{ fontSize: 13.5, fontWeight: isActive ? 600 : 400, lineHeight: 1 }}>
+        <Typography sx={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1 }}>
           {item.name}
         </Typography>
       )}
@@ -171,7 +170,6 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
   const { caja } = useCaja();
   const { alertas } = useApp();
   const location = useLocation();
-  const [userMenuAnchor, setUserMenuAnchor] = useState(null);
   const [sucursalAnchor, setSucursalAnchor] = useState(null);
   const [cambiandoSucursal, setCambiandoSucursal] = useState(false);
   const [alertasVistas, setAlertasVistas] = useState(() => parseInt(localStorage.getItem('alertas_vistas') || '0', 10));
@@ -238,12 +236,11 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
       sx={{
         width: { xs: W, md: collapsed ? W_COLLAPSED : W },
         minWidth: { xs: W, md: collapsed ? W_COLLAPSED : W },
-        height: '100dvh',
-        position: 'fixed', top: 0, left: 0,
+        position: 'fixed', top: 0, left: 0, bottom: 0,
         bgcolor: CARD,
         borderRight: `1px solid ${BORDER}`,
         display: 'flex', flexDirection: 'column',
-        overflow: 'hidden',
+        overflowX: 'hidden', overflowY: 'auto',
         zIndex: 100,
         transform: {
           xs: sidebarOpen ? 'translateX(0)' : `translateX(-${W}px)`,
@@ -375,7 +372,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
                 const content = (
                   <Box component={Link} to="/productos" onClick={handleSidebarClose}
                     onMouseEnter={() => preloadPage('/productos')}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9, justifyContent: collapsed ? 'center' : 'flex-start', borderRadius: '999px', textDecoration: 'none', bgcolor: isActive ? ACTIVE_BG : 'transparent', color: isActive ? ACCENT_INK : INK2, transition: 'all 0.15s', '&:hover': { bgcolor: isActive ? ACTIVE_BG : HOVER, color: isActive ? ACCENT_INK : INK }, }}>
+                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9, justifyContent: collapsed ? 'center' : 'flex-start', borderRadius: '999px', textDecoration: 'none', bgcolor: isActive ? ACTIVE_BG : 'transparent', color: isActive ? ACCENT_INK : INK, transition: 'all 0.15s', '&:hover': { bgcolor: isActive ? ACTIVE_BG : HOVER, color: isActive ? ACCENT_INK : INK }, }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: collapsed ? 'auto' : '100%' }}>
                       <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                         <Icon sx={{ fontSize: 16, flexShrink: 0 }} />
@@ -383,15 +380,15 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
                           <Box sx={{
                             position: 'absolute', top: -2, right: -4,
                             width: 7, height: 7, borderRadius: '50%',
-                            bgcolor: WARNING, border: `1.5px solid ${CARD}`,
+                            bgcolor: ERROR, border: `1.5px solid ${CARD}`,
                           }} />
                         )}
                       </Box>
                       {!collapsed && (
                         <>
-                          <Typography sx={{ fontSize: 13.5, fontWeight: isActive ? 600 : 400, lineHeight: 1 }}>{item.name}</Typography>
+                          <Typography sx={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1 }}>{item.name}</Typography>
                           <Chip label={stockBajoCount} size="small"
-                            sx={{ height: 18, fontSize: 10, fontWeight: 700, ml: 'auto', bgcolor: `${WARNING}20`, color: WARNING, border: `1px solid ${WARNING}40`, '& .MuiChip-label': { px: 0.75 } }} />
+                            sx={{ height: 18, fontSize: 10, fontWeight: 700, ml: 'auto', bgcolor: '#fff', color: ERROR, border: `1px solid ${ERROR}`, '& .MuiChip-label': { px: 0.75 } }} />
                         </>
                       )}
                     </Box>
@@ -408,15 +405,71 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
             })}
           </Box>
         ))}
+
+        {/* Sistema — antes vivían acá abajo, escondidos en un menú desplegable
+            que abría hacia arriba desde el pie del sidebar; en ventanas más
+            chicas ese menú podía quedar cortado y "Cerrar sesión" no se veía
+            ni se podía tocar. Ítems fijos en el nav, siempre visibles y
+            siempre alcanzables con scroll normal, igual que el resto. */}
+        <Box sx={{ mb: 0.5 }}>
+          {collapsed ? (
+            <Divider sx={{ borderColor: BORDER, mx: 1.5, my: 1 }} />
+          ) : (
+            <Typography sx={{ px: 2, pt: 1.5, pb: 0.5, fontSize: 10.5, fontWeight: 700, color: MUTED, letterSpacing: '0.07em' }}>
+              SISTEMA
+            </Typography>
+          )}
+          {puedeConfigurar && (
+            collapsed ? (
+              <Tooltip title="Configuración" placement="right">
+                <Box onClick={onOpenConfig} sx={{
+                  display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9,
+                  justifyContent: 'center', borderRadius: '999px', cursor: 'pointer',
+                  color: INK, transition: 'all 0.15s', '&:hover': { bgcolor: HOVER, color: INK },
+                }}>
+                  <SettingsIcon sx={{ fontSize: 16, flexShrink: 0 }} />
+                </Box>
+              </Tooltip>
+            ) : (
+              <Box onClick={onOpenConfig} sx={{
+                display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9,
+                borderRadius: '999px', cursor: 'pointer',
+                color: INK, transition: 'all 0.15s', '&:hover': { bgcolor: HOVER, color: INK },
+              }}>
+                <SettingsIcon sx={{ fontSize: 16, flexShrink: 0 }} />
+                <Typography sx={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1 }}>Configuración</Typography>
+              </Box>
+            )
+          )}
+          {collapsed ? (
+            <Tooltip title="Cerrar sesión" placement="right">
+              <Box onClick={onConfirmLogout} sx={{
+                display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9,
+                justifyContent: 'center', borderRadius: '999px', cursor: 'pointer',
+                color: ERROR, transition: 'all 0.15s', '&:hover': { bgcolor: ERROR_BG },
+              }}>
+                <LogoutIcon sx={{ fontSize: 16, flexShrink: 0 }} />
+              </Box>
+            </Tooltip>
+          ) : (
+            <Box onClick={onConfirmLogout} sx={{
+              display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9,
+              borderRadius: '999px', cursor: 'pointer',
+              color: ERROR, transition: 'all 0.15s', '&:hover': { bgcolor: ERROR_BG },
+            }}>
+              <LogoutIcon sx={{ fontSize: 16, flexShrink: 0 }} />
+              <Typography sx={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1 }}>Cerrar sesión</Typography>
+            </Box>
+          )}
+        </Box>
       </Box>
 
       {/* Usuario */}
       <Divider sx={{ borderColor: BORDER }} />
-      <Box sx={{ px: collapsed ? 1 : 1.5, py: 1.25, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between' }}>
+      <Box sx={{ px: collapsed ? 1 : 1.5, py: 1.25, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
           <Tooltip title={collapsed ? userName : ''} placement="right">
-            <Avatar onClick={collapsed ? (e) => setUserMenuAnchor(e.currentTarget) : undefined}
-              sx={{ width: 28, height: 28, bgcolor: HOVER, border: `1px solid ${BORDER}`, fontSize: 12, fontWeight: 700, color: INK, flexShrink: 0, cursor: collapsed ? 'pointer' : 'default' }}>
+            <Avatar sx={{ width: 28, height: 28, bgcolor: HOVER, border: `1px solid ${BORDER}`, fontSize: 12, fontWeight: 700, color: INK, flexShrink: 0 }}>
               {userName[0]?.toUpperCase()}
             </Avatar>
           </Tooltip>
@@ -431,53 +484,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
             </Box>
           )}
         </Box>
-        {!collapsed && (
-          <IconButton
-            size="small"
-            onClick={(e) => setUserMenuAnchor(e.currentTarget)}
-            sx={{
-              color: MUTED,
-              '&:hover': { color: INK, bgcolor: HOVER },
-              transform: userMenuAnchor ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.2s',
-            }}
-          >
-            <KeyboardArrowUpIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        )}
       </Box>
-
-      <Menu
-        anchorEl={userMenuAnchor}
-        open={Boolean(userMenuAnchor)}
-        onClose={() => setUserMenuAnchor(null)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        PaperProps={{
-          sx: {
-            bgcolor: DROPDOWN, border: `1px solid ${BORDER}`,
-            borderRadius: '10px', minWidth: 190,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-          },
-        }}
-      >
-        {puedeConfigurar && (
-          <MenuItem
-            onClick={() => { setUserMenuAnchor(null); onOpenConfig(); }}
-            sx={{ fontSize: 13.5, color: INK, gap: 1.5, py: 1.25, '&:hover': { bgcolor: HOVER } }}
-          >
-            <SettingsIcon sx={{ fontSize: 16, color: MUTED }} />
-            Configuraciones
-          </MenuItem>
-        )}
-        <MenuItem
-          onClick={() => { setUserMenuAnchor(null); onConfirmLogout(); }}
-          sx={{ fontSize: 13.5, color: ERROR, gap: 1.5, py: 1.25, '&:hover': { bgcolor: ERROR_BG } }}
-        >
-          <LogoutIcon sx={{ fontSize: 16 }} />
-          Cerrar sesión
-        </MenuItem>
-      </Menu>
 
       {!collapsed && (
         <Typography sx={{ textAlign: 'center', color: MUTED, fontSize: 10, py: 0.5, opacity: 0.5 }}>

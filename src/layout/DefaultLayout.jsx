@@ -1,7 +1,7 @@
 import { useContext, useState, useEffect, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Chip, CircularProgress, IconButton, Badge, Popover,
+  Box, Typography, Chip, IconButton, Badge, Popover,
   Dialog, DialogContent, Button, InputAdornment,
 } from '@mui/material';
 import CloseIcon                 from '@mui/icons-material/Close';
@@ -23,6 +23,7 @@ import CommandPalette  from '../components/shared/CommandPalette';
 import ConfirmDialog   from '../components/shared/ConfirmDialog';
 import AsistenteIA     from '../components/shared/AsistenteIA';
 import CampoPrecio     from '../components/shared/CampoPrecio';
+import AppLoading      from '../components/shared/AppLoading';
 import useNotificaciones from '../hooks/useNotificaciones';
 import {
   BG, CARD, BORDER, INK, MUTED, P, HOVER, DROPDOWN,
@@ -108,13 +109,13 @@ export default function DefaultLayout() {
   const handleCloseAlertas = () => setAlertasAnchor(null);
 
   return (
-    <Box sx={{ position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh', display: 'flex', overflow: 'hidden', bgcolor: BG }}>
+    <Box sx={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', overflow: 'hidden', bgcolor: BG }}>
 
       {/* ── OVERLAY MOBILE ── */}
       {sidebarOpen && (
         <Box
           onClick={() => setSidebarOpen(false)}
-          sx={{ position: 'fixed', top: 0, left: 0, right: 0, height: '100dvh', bgcolor: 'rgba(0,0,0,0.5)', zIndex: 99, display: { md: 'none' } }}
+          sx={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, bgcolor: 'rgba(0,0,0,0.5)', zIndex: 99, display: { md: 'none' } }}
         />
       )}
 
@@ -155,7 +156,7 @@ export default function DefaultLayout() {
           </Box>
         </Box>
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          <Suspense fallback={<Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><CircularProgress size={24} sx={{ color: MUTED }} /></Box>}>
+          <Suspense fallback={<AppLoading fullScreen={false} />}>
             <Outlet />
           </Suspense>
         </Box>

@@ -941,6 +941,11 @@ export default function Proveedores() {
                           InputProps={{ disableUnderline: true }} sx={celdaSx} />
                       </Box>
                       <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
+                        <TextField fullWidth variant="standard" value={f.codigo} placeholder="Sin código"
+                          onChange={e => handleEditarFilaImport(f._idx, 'codigo', e.target.value)}
+                          InputProps={{ disableUnderline: true }} sx={celdaSx} />
+                      </Box>
+                      <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75 }}>
                         <TextField fullWidth variant="standard" value={f.cuit} placeholder="Sin CUIT"
                           onChange={e => handleEditarFilaImport(f._idx, 'cuit', e.target.value)}
                           InputProps={{ disableUnderline: true }} sx={celdaSx} />

@@ -1133,6 +1133,8 @@ export default function Clientes() {
   const toast = useToast();
   const { checkPermisos } = useHasPermiso();
   const puedeCrear = checkPermisos('crearCliente');
+  const puedeImportar = checkPermisos('importarClientes');
+  const puedeExportar = checkPermisos('exportarClientes');
   const [clientes,     setClientes]     = useState([]);
   const [deudaResumen, setDeudaResumen] = useState([]);
   const [search,       setSearch]       = useState('');
@@ -1306,7 +1308,7 @@ export default function Clientes() {
               <Typography sx={{ color: ERROR, fontWeight: 800, fontSize: 18 }}>{fmtMoney(totalDeuda)}</Typography>
             </Box>
           )}
-          {puedeCrear && (
+          {puedeImportar && (
             <Tooltip title="Importar Excel o CSV">
               <Button variant="outlined" startIcon={<FileUploadIcon sx={{ fontSize: 15 }} />}
                 onClick={() => csvRef.current?.click()}
@@ -1315,13 +1317,15 @@ export default function Clientes() {
               </Button>
             </Tooltip>
           )}
-          <Tooltip title="Exportar Excel">
-            <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
-              onClick={() => exportarCSVClientes(filtered)}
-              sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
-            </Button>
-          </Tooltip>
+          {puedeExportar && (
+            <Tooltip title="Exportar Excel">
+              <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
+                onClick={() => exportarCSVClientes(filtered)}
+                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
+              </Button>
+            </Tooltip>
+          )}
           {puedeCrear && (
             <Tooltip title="Nuevo Cliente">
               <Button data-tour="cli-nueva" variant="contained" startIcon={<AddIcon />} onClick={() => setOpenModal(true)}

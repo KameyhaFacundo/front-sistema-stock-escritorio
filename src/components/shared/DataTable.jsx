@@ -49,7 +49,7 @@ const DataTable = memo(function DataTable({
 
   const colParts = [
     ...(hasSelect  ? ['44px'] : []),
-    ...columns.map(c => c.flex ? (typeof c.flex === 'number' ? `minmax(0, ${c.flex}fr)` : 'minmax(0, 1fr)') : c.width ? `${c.width}px` : 'auto'),
+    ...columns.map(c => c.flex ? (typeof c.flex === 'number' ? `minmax(${c.minWidth ?? 110}px, ${c.flex}fr)` : `minmax(${c.minWidth ?? 110}px, 1fr)`) : c.width ? `${c.width}px` : 'auto'),
     ...(hasActions ? [`${actionW}px`] : []),
   ];
   const gridCols = colParts.join(' ');
@@ -59,6 +59,7 @@ const DataTable = memo(function DataTable({
     display: 'flex',
     alignItems: 'center',
     minWidth: 0,
+    overflow: 'hidden',
   };
   const hdrSx = {
     ...baseSx,

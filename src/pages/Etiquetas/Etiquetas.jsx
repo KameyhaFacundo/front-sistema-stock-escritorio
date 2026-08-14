@@ -220,18 +220,31 @@ export default function Etiquetas() {
     setCola(p => p.map(t => t.id === id ? { ...t, copias: n } : t));
   };
 
+  const prevTitleRef = useRef('');
+
   const handlePrint = () => {
-    const prevTitle = document.title;
+    prevTitleRef.current = document.title;
     document.title = '';
     setPrintReady(true);
+  };
+
+  // window.print() no puede llamarse en el mismo tick que setPrintReady(true)
+  // — React todavía no montó el portal de las etiquetas (createPortal más
+  // abajo), así que el diálogo de impresión se abría con la página en blanco
+  // (PDF vacío al "Guardar como PDF"). Se espera al efecto (ya corre después
+  // del commit) y encima a un frame pintado, para asegurar que el navegador
+  // ya renderizó el contenido antes de abrir el diálogo.
+  useEffect(() => {
+    if (!printReady) return;
     const afterPrint = () => {
-      document.title = prevTitle;
+      document.title = prevTitleRef.current;
       setPrintReady(false);
       window.removeEventListener('afterprint', afterPrint);
     };
     window.addEventListener('afterprint', afterPrint);
-    window.print();
-  };
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+    return () => cancelAnimationFrame(id);
+  }, [printReady]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: BG }}>

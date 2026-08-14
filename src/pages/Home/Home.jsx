@@ -9,14 +9,14 @@ import {
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import { useIsMobile } from '../../utils/responsive';
+import useContainerWidth from '../../hooks/useContainerWidth';
 import { abrevUnidad, esFraccionable as esUnidadFraccionable } from '../../utils/unidadMedida';
 import { guardarIntentoActivo, leerIntentoActivo, limpiarIntentoActivo } from '../../utils/posIntentoActivo';
 import { guardarCarritoDraft, leerCarritoDraft } from '../../utils/carritoDraft';
 import SearchIcon            from '@mui/icons-material/Search';
-import AttachMoneyIcon       from '@mui/icons-material/AttachMoney';
-import AddIcon               from '@mui/icons-material/Add';
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import PersonOutlineIcon     from '@mui/icons-material/PersonOutline';
+import LockOutlinedIcon      from '@mui/icons-material/LockOutlined';
 import DeleteOutlineIcon     from '@mui/icons-material/DeleteOutline';
 import AddCircleOutlineIcon  from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
@@ -43,6 +43,7 @@ import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import AyudaButton from '../../components/shared/AyudaButton';
 import CampoPrecio from '../../components/shared/CampoPrecio';
 import { imprimirTicket } from '../../utils/imprimirTicket';
+import { ventasService } from '../../services/ventasService';
 import { BG, CARD, BORDER, INK, INK2, MUTED, P as PRIMARY, P_HOVER, INPUT, HOVER, MODAL, modalPaperSx,
          SUCCESS, SUCCESS_BG, SUCCESS_BORDER, ERROR, ERROR_BG, ERROR_BORDER, MONEY, PURPLE, ORANGE, GOLD } from '../../theme/tokens';
 import { APP_NAME, POINT_HABILITADO } from '../../config/brand';
@@ -72,14 +73,14 @@ import HandshakeIcon  from '@mui/icons-material/Handshake';
 // de INK/INK2/MUTED/BORDER/HOVER/CARD para legibilidad sobre ese fondo. Los
 // hex de acento (bg/texto) son los mismos que el hero de Reportes en
 // Dashboard.jsx (accent-800/accent-100 del sistema "Organic").
-const CHECKOUT_INK      = '#fff2eb';
-const CHECKOUT_INK2     = 'rgba(255,242,235,0.72)';
-const CHECKOUT_MUTED    = 'rgba(255,242,235,0.55)';
-const CHECKOUT_BORDER   = 'rgba(255,242,235,0.16)';
-const CHECKOUT_HOVER    = 'rgba(255,242,235,0.12)';
-const CHECKOUT_FIELD_BG = 'rgba(255,242,235,0.08)';
-const CHECKOUT_ACCENT   = '#ffc6a5';       // acento-300 — píldora seleccionada / CTA
-const CHECKOUT_ACCENT_INK = '#4a2412';     // texto oscuro sobre CHECKOUT_ACCENT
+const CHECKOUT_INK      = '#1a1817';
+const CHECKOUT_INK2     = 'rgba(26,24,23,0.72)';
+const CHECKOUT_MUTED    = 'rgba(26,24,23,0.55)';
+const CHECKOUT_BORDER   = 'rgba(26,24,23,0.16)';
+const CHECKOUT_HOVER    = 'rgba(26,24,23,0.08)';
+const CHECKOUT_FIELD_BG = 'rgba(26,24,23,0.05)';
+const CHECKOUT_ACCENT   = '#c67139';       // mismo acento naranja que el resto del sistema
+const CHECKOUT_ACCENT_INK = '#fff2eb';     // texto claro sobre CHECKOUT_ACCENT
 // Se combina con el `inputSx` normal (spread primero) para pisar sus colores
 // —radio/tipografía/números-sin-flechitas de inputSx se mantienen igual.
 const CHECKOUT_INPUT_SX = {
@@ -319,6 +320,14 @@ function Home() {
   const { tieneFacturacion } = usePlan();
   const puedeAplicarDescuento = checkPermisos('aplicarDescuento');
   const isMobile = useIsMobile();
+  // Mismo criterio que la tabla de Productos: la fila de 9 columnas del
+  // carrito necesita lugar real — con la sidebar expandida o una ventana
+  // angosta de escritorio (no solo en celular) el nombre del producto se
+  // aprieta hasta truncarse en "AC...". Por debajo del umbral se usa el
+  // mismo layout de tarjeta que ya existía para mobile.
+  const MIN_CARRITO_ANCHO = 1000;
+  const [carritoRef, carritoWidth] = useContainerWidth();
+  const carritoComoCelular = isMobile || (carritoWidth > 0 && carritoWidth < MIN_CARRITO_ANCHO);
   const [mobileTab, setMobileTab] = useState(0);
 
   // ── Clientes desde API ─────────────────────────────────────────────
@@ -470,6 +479,19 @@ function Home() {
   // de lista, aunque el cajero tenga permiso para hacerlo.
   const [motivoDescuento, setMotivoDescuento] = useState('');
 
+  // Autorización de descuento ("override de gerente") — para un cajero SIN
+  // aplicarDescuento, que igual pueda descontar si alguien con el permiso
+  // pone su PIN acá mismo (configurado aparte de la contraseña de login,
+  // ver Configuración → Mi perfil), sin loguearse como esa persona (ver
+  // ventasService.autorizarDescuento / VentasController::autorizarDescuento).
+  // { token, autorizadoPor } mientras dure esta venta, null si no se pidió
+  // o si ya se usó/se vació el carrito.
+  const [descuentoAutorizado, setDescuentoAutorizado] = useState(null);
+  const [openAutorizarModal, setOpenAutorizarModal] = useState(false);
+  const [pinAutorizar, setPinAutorizar] = useState('');
+  const [autorizando, setAutorizando] = useState(false);
+  const [errorAutorizar, setErrorAutorizar] = useState('');
+
   // ── Puntos del cliente seleccionado ────────────────────────────────
   const puntosActivo = Boolean(user?.empresa?.puntos_activo);
   const valorPunto = Number(user?.empresa?.puntos_valor_pesos) || 0;
@@ -490,17 +512,8 @@ function Home() {
 
   // ── Dialog states ──────────────────────────────────────────────────
   const [openScanner,  setOpenScanner]  = useState(false);
-  const [openPrecio,   setOpenPrecio]   = useState(false);
-  const [openMonto,    setOpenMonto]    = useState(false);
   const [openVentaOk,  setOpenVentaOk]  = useState(false);
   const [openVaciarCarrito, setOpenVaciarCarrito] = useState(false);
-
-  // ── Modal: Agregar Monto ───────────────────────────────────────────
-  const [montoNombre, setMontoNombre] = useState('Varios');
-  const [montoValor,  setMontoValor]  = useState('');
-
-  // ── Modal: Consultar Precio ────────────────────────────────────────
-  const [precioSearch, setPrecioSearch] = useState('');
 
   // ── Modal: Pago ────────────────────────────────────────────────────
   const [metodoPago,     setMetodoPago]     = useState('efectivo');
@@ -662,7 +675,7 @@ function Home() {
         else toast('Agregá algún producto antes de elegir cliente', 'error');
       }
       if (e.key === 'Escape') {
-        setOpenMonto(false); setOpenPrecio(false); setOpenScanner(false); setOpenConfirmarModal(false);
+        setOpenScanner(false); setOpenConfirmarModal(false);
       }
     };
     window.addEventListener('keydown', handler);
@@ -685,13 +698,6 @@ function Home() {
 
   const removeQty = (id) => setCart(c => c.map(i => i.id === id ? { ...i, cantidad: round2(i.cantidad - stepPara(i)) } : i).filter(i => i.cantidad > 0));
   const removeItem  = (id) => setCart(c => c.filter(i => i.id !== id));
-  const updatePrecio = (id, precio) => {
-    const n = parseFloat(String(precio).replace(',', '.'));
-    // Editar el precio a mano pisa cualquier descuento por línea que hubiera
-    // — si no, quedaba "colgado" un % aplicado sobre un precio de lista viejo
-    // y el precio final no coincidía con lo que el cajero acababa de tipear.
-    if (!isNaN(n) && n >= 0) setCart(c => c.map(i => i.id === id ? { ...i, precio: n, precioOriginal: n, descuento: 0 } : i));
-  };
   const updateDescuento = (id, valor) => {
     const n = Math.max(0, Math.min(100, parseFloat(String(valor).replace(',', '.')) || 0));
     // precioOriginal es el precio de lista sin descontar — se fija la primera
@@ -834,9 +840,6 @@ function Home() {
   const { resultados: resultadosSearch } = useBusquedaProductos(search, { perPage: 20 });
   const filteredProducts = useMemo(() => resultadosSearch.map(aProductoPos), [resultadosSearch]);
 
-  const { resultados: resultadosPrecio } = useBusquedaProductos(precioSearch, { perPage: 20 });
-  const precioResults = useMemo(() => resultadosPrecio.map(aProductoPos), [resultadosPrecio]);
-
   // Flecha arriba/abajo navega los resultados, Enter agrega el resaltado
   // (arranca en el primero) — si todavía no hay resultados (típico de un
   // lector de código de barras, que tipea más rápido que el debounce),
@@ -866,17 +869,6 @@ function Home() {
   };
 
   // ── Handlers ───────────────────────────────────────────────────────
-  const handleAgregarMonto = () => {
-    const monto = parseFloat(montoValor.replace(',', '.'));
-    if (!montoNombre.trim() || isNaN(monto) || monto <= 0) return;
-    setCart(c => [...c, {
-      id: `manual-${Date.now()}`, codigo: 'MANUAL',
-      nombre: montoNombre.trim(), categoria: 'Manual',
-      stock: Infinity, precio: monto, cantidad: 1,
-    }]);
-    setMontoNombre('Varios'); setMontoValor(''); setOpenMonto(false);
-  };
-
   // Control de auditoría — antes de vaciar, se manda una foto de qué había
   // cargado (para poder revisar después si hay un patrón de cargar productos
   // y vaciar el carrito en vez de cobrarlos, ver Configuración → Auditoría).
@@ -887,6 +879,8 @@ function Home() {
     }).catch(() => { /* no debe bloquear al cajero por un problema de red */ });
     setCart([]);
     setPresupuestoIdCargado(null);
+    clearAjuste();
+    setDescuentoAutorizado(null);
   };
 
   const handleConfirmarVenta = async () => {
@@ -926,6 +920,7 @@ function Home() {
         subtotal,
         ajuste: ajuste.activo ? { ...ajuste } : null,
         motivoDescuento: requiereMotivoDescuento ? motivoDescuento.trim() : null,
+        autorizacionDescuento: descuentoAutorizado?.token || null,
         puntosCanjeados: ventaPuntosCanjeados,
         pagos: variosPagos ? pagosAplicados : [{ metodo, monto: ventaTotal }],
       });
@@ -975,6 +970,7 @@ function Home() {
       setCart([]);
       setPresupuestoIdCargado(null);
       clearAjuste();
+      setDescuentoAutorizado(null);
       setPagosAplicados([]);
       setMontoActual('');
       setEfectivoRecibido('');
@@ -1085,8 +1081,36 @@ function Home() {
   // antes de que la venta se termine de registrar de verdad.
   const abrirConfirmacion = () => {
     if (cart.length === 0 || !caja.abierta || confirmarVentaDisabled) return;
+    // Sin permiso propio y sin haber autorizado ya esta venta: pide el PIN
+    // de alguien que sí pueda, en vez de dejar pasar el descuento (el
+    // backend lo iba a rechazar igual — esto evita que el cajero llegue
+    // hasta el final del cobro para recién ahí enterarse).
+    if (requiereMotivoDescuento && !puedeAplicarDescuento && !descuentoAutorizado) {
+      setErrorAutorizar('');
+      setPinAutorizar('');
+      setOpenAutorizarModal(true);
+      return;
+    }
     setMotivoDescuento('');
     setOpenConfirmarModal(true);
+  };
+
+  const handleAutorizarDescuento = async () => {
+    if (!pinAutorizar) return;
+    setAutorizando(true);
+    setErrorAutorizar('');
+    try {
+      const { token, autorizadoPor } = await ventasService.autorizarDescuento(pinAutorizar);
+      setDescuentoAutorizado({ token, autorizadoPor });
+      setOpenAutorizarModal(false);
+      setPinAutorizar('');
+      setMotivoDescuento('');
+      setOpenConfirmarModal(true);
+    } catch (e) {
+      setErrorAutorizar(e.response?.data?.message || 'Contraseña incorrecta');
+    } finally {
+      setAutorizando(false);
+    }
   };
   // Refs siempre actualizadas para que los atajos (registrados más arriba,
   // antes de que estas funciones existan) llamen siempre a la versión
@@ -1161,13 +1185,11 @@ function Home() {
 
   const avanzarDesdeMetodoPago = (key) => {
     if (!variosPagos && key === 'efectivo') { recibidoRef.current?.focus(); return; }
-    if (puedeAplicarDescuento) { descuentoRef.current?.focus(); return; }
-    abrirConfirmacion();
+    descuentoRef.current?.focus();
   };
 
   const avanzarDesdeRecibido = () => {
-    if (puedeAplicarDescuento) { descuentoRef.current?.focus(); return; }
-    abrirConfirmacion();
+    descuentoRef.current?.focus();
   };
 
   // ── Polling del cobro con Point o QR ─────────────────────────────────
@@ -1298,7 +1320,7 @@ function Home() {
         {isMobile && (
           <Box sx={{ flexShrink: 0, borderBottom: `1px solid ${BORDER}`, bgcolor: CARD }}>
             <Tabs value={mobileTab} onChange={(_, v) => setMobileTab(v)}
-              sx={{ minHeight: 44, '& .MuiTabs-indicator': { bgcolor: PRIMARY }, '& .MuiTab-root': { textTransform: 'none', color: MUTED, minHeight: 44, fontSize: 14, fontWeight: 500 }, '& .Mui-selected': { color: PRIMARY, fontWeight: 700 } }}>
+              sx={{ minHeight: 44, '& .MuiTabs-indicator': { bgcolor: PRIMARY }, '& .MuiTab-root': { textTransform: 'none', color: MUTED, minHeight: 44, fontSize: 14, fontWeight: 700 }, '& .Mui-selected': { color: PRIMARY, fontWeight: 800 } }}>
               <Tab data-tour="pos-tab-buscar" label={cart.length > 0 ? `Buscar (${cart.length})` : 'Buscar'} />
               <Tab data-tour="pos-tab-venta" label="Venta" />
             </Tabs>
@@ -1329,22 +1351,6 @@ function Home() {
                   <CameraAltIcon sx={{ fontSize: 22 }} />
                 </IconButton>
               </Tooltip>
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button variant="outlined" startIcon={<AttachMoneyIcon />} onClick={() => setOpenPrecio(true)}
-                sx={{ ...outlinedBtn, flex: 1, whiteSpace: 'nowrap', py: 0.6, borderRadius: '8px', fontSize: 13 }}>
-                Consultar Precio
-              </Button>
-              {/* Monto libre no descuenta stock de ningún producto — sin este gate,
-                  cualquiera podía entregar un producto real y cobrarlo como un
-                  monto suelto sin dejar ningún rastro de qué salió de verdad. */}
-              {puedeAplicarDescuento && (
-                <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setOpenMonto(true)}
-                  sx={{ ...outlinedBtn, flex: 1, whiteSpace: 'nowrap', py: 0.6, borderRadius: '8px', fontSize: 13 }}>
-                  Agregar Monto
-                </Button>
-              )}
             </Box>
 
             {scanFeedback && (
@@ -1408,9 +1414,11 @@ function Home() {
                               <Typography sx={{ color: INK, fontWeight: 600, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {product.nombre}
                               </Typography>
-                              <Typography sx={{ color: MUTED, fontSize: 11 }}>
-                                {product.categoria}{product.codigo ? ` · ${product.codigo}` : ''}
-                              </Typography>
+                              {product.codigo && (
+                                <Typography sx={{ color: ERROR, fontSize: 11, fontWeight: 700 }}>
+                                  Código: {product.codigo}
+                                </Typography>
+                              )}
                             </Box>
                           </Box>
                           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5, flexShrink: 0, ml: 1 }}>
@@ -1429,8 +1437,8 @@ function Home() {
                               </Typography>
                             </Box>
                             {product.ultimaModificacion && (
-                              <Typography sx={{ color: ERROR, fontSize: 10.5, fontWeight: 700 }}>
-                                {fmtDate(product.ultimaModificacion)}
+                              <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700 }}>
+                                Última modif: {fmtDate(product.ultimaModificacion)}
                               </Typography>
                             )}
                           </Box>
@@ -1444,7 +1452,7 @@ function Home() {
           </Box>
 
           {/* Carrito */}
-          <Box data-tour="pos-carrito" sx={{ flex: 1, bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Box data-tour="pos-carrito" ref={carritoRef} sx={{ flex: 1, bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <Box sx={{ px: 3, py: 2.5, borderBottom: cart.length > 0 ? `1px solid ${BORDER}` : 'none', flexShrink: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1493,15 +1501,16 @@ function Home() {
               <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
                 {/* Encabezado de columnas — no aplica en mobile, ahí cada ítem
                     es una tarjeta de 2 líneas, no una fila de columnas */}
-                {!isMobile && (
+                {!carritoComoCelular && (
                   <Box sx={{
-                    display: 'grid', gridTemplateColumns: '28px 90px 1fr 120px 80px 70px 84px 60px 32px', gap: 1, alignItems: 'center',
+                    display: 'grid', gridTemplateColumns: '28px 90px 1fr 120px 50px 108px 70px 100px 60px 32px', gap: 1, alignItems: 'center',
                     px: 2.5, py: 0.75, flexShrink: 0,
                   }}>
                     <Box />
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Código</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Producto</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Cantidad</Typography>
+                    <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Unidad</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Precio</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Desc.</Typography>
                     <Typography sx={{ color: MUTED, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Subtotal</Typography>
@@ -1520,7 +1529,7 @@ function Home() {
                       exit={{ opacity: 0, height: 0, marginBottom: 0 }}
                       transition={{ duration: 0.2 }}
                     >
-                      {isMobile ? (
+                      {carritoComoCelular ? (
                         /* Mobile: tarjeta de 2 líneas — el nombre necesita todo
                            el ancho para leerse, no entra al lado de precio/
                            cantidad/subtotal como en la fila de escritorio. */
@@ -1551,29 +1560,17 @@ function Home() {
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
                               <Typography sx={{ color: MUTED, fontSize: 12 }}>$</Typography>
-                              <Box component="input" type="number" value={item.precioOriginal ?? item.precio}
-                                disabled={!puedeAplicarDescuento}
-                                title={!puedeAplicarDescuento ? 'No tenés permiso para cambiar el precio' : undefined}
-                                onChange={e => updatePrecio(item.id, e.target.value)}
-                                onKeyDown={volverABuscarEnEnter}
-                                onWheel={e => e.target.blur()}
-                                style={{
-                                  width: 46, background: 'none', border: 'none', outline: 'none',
-                                  color: 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
-                                  borderBottom: '1px dashed var(--border)', padding: '0 2px', textAlign: 'left',
-                                  opacity: puedeAplicarDescuento ? 1 : 0.5, cursor: puedeAplicarDescuento ? 'text' : 'not-allowed',
-                                }} />
+                              <Typography sx={{ color: 'var(--ink2)', fontSize: 12.5 }}>
+                                {item.precioOriginal ?? item.precio}
+                              </Typography>
                               <Box component="input" type="number" min={0} max={100} value={item.descuento || ''} placeholder="0"
-                                disabled={!puedeAplicarDescuento}
-                                title={!puedeAplicarDescuento ? 'No tenés permiso para aplicar descuentos' : undefined}
                                 onChange={e => updateDescuento(item.id, e.target.value)}
                                 onKeyDown={volverABuscarEnEnter}
                                 onWheel={e => e.target.blur()}
                                 style={{
-                                  width: 26, background: 'none', border: 'none', outline: 'none',
+                                  width: 34, background: 'none', border: 'none', outline: 'none',
                                   color: item.descuento ? ORANGE : 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
                                   borderBottom: '1px dashed var(--border)', padding: '0 2px', textAlign: 'right',
-                                  opacity: puedeAplicarDescuento ? 1 : 0.5, cursor: puedeAplicarDescuento ? 'text' : 'not-allowed',
                                 }} />
                               <Typography sx={{ color: MUTED, fontSize: 11 }}>%</Typography>
                             </Box>
@@ -1613,7 +1610,7 @@ function Home() {
                       ) : (
                       <Box sx={{
                         display: 'grid',
-                        gridTemplateColumns: '28px 90px 1fr 120px 80px 70px 84px 60px 32px',
+                        gridTemplateColumns: '28px 90px 1fr 120px 50px 108px 70px 100px 60px 32px',
                         gap: 1, alignItems: 'center',
                         bgcolor: idx % 2 === 0 ? HOVER : 'transparent',
                         borderRadius: '10px', p: 1,
@@ -1632,7 +1629,7 @@ function Home() {
                         </Box>
 
                         {/* Código */}
-                        <Typography sx={{ color: MUTED, fontSize: 12, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <Typography sx={{ color: ERROR, fontSize: 12, fontFamily: 'monospace', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {item.codigo || '—'}
                         </Typography>
 
@@ -1673,9 +1670,6 @@ function Home() {
                             <AddCircleOutlineIcon sx={{ fontSize: 18 }} />
                           </IconButton>
                           {esFraccionable(item) && (
-                            <Typography sx={{ color: MUTED, fontSize: 11, flexShrink: 0 }}>{abrevUnidad(item.unidadMedida)}</Typography>
-                          )}
-                          {esFraccionable(item) && (
                             <Tooltip title="Cargar por monto ($)">
                               <IconButton size="small" onClick={() => { setMontoCalcularId(item.id); setMontoCalcularValor(''); }}
                                 sx={{ color: MUTED, p: '4px', '&:hover': { color: PRIMARY, bgcolor: `${PRIMARY}16` }, borderRadius: '6px' }}>
@@ -1685,28 +1679,21 @@ function Home() {
                           )}
                         </Box>
 
+                        {/* Unidad de medida — u/kg/m/L, siempre visible (antes
+                            solo aparecía para fraccionables, apretujada junto
+                            a la cantidad) */}
+                        <Typography sx={{ color: MUTED, fontSize: 12, textAlign: 'center', textTransform: 'uppercase' }}>
+                          {abrevUnidad(item.unidadMedida)}
+                        </Typography>
+
                         {/* Precio unitario — se edita el precio de lista; si había un
                             descuento por línea cargado, se muestra ese precio base (sin
                             descontar), no el precio final ya rebajado. */}
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.25 }}>
                           <Typography sx={{ color: MUTED, fontSize: 12 }}>$</Typography>
-                          <Box
-                            component="input"
-                            type="number"
-                            value={item.precioOriginal ?? item.precio}
-                            disabled={!puedeAplicarDescuento}
-                            title={!puedeAplicarDescuento ? 'No tenés permiso para cambiar el precio' : undefined}
-                            onChange={e => updatePrecio(item.id, e.target.value)}
-                            onKeyDown={volverABuscarEnEnter}
-                            onWheel={e => e.target.blur()}
-                            style={{
-                              width: 50, background: 'none', border: 'none', outline: 'none',
-                              color: 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
-                              borderBottom: '1px dashed var(--border)',
-                              padding: '0 2px', textAlign: 'left',
-                              opacity: puedeAplicarDescuento ? 1 : 0.5, cursor: puedeAplicarDescuento ? 'text' : 'not-allowed',
-                            }}
-                          />
+                          <Typography sx={{ color: 'var(--ink2)', fontSize: 12.5 }}>
+                            {item.precioOriginal ?? item.precio}
+                          </Typography>
                         </Box>
 
                         {/* Descuento por línea, en % sobre el precio de lista de esta fila */}
@@ -1718,8 +1705,6 @@ function Home() {
                             max={100}
                             value={item.descuento || ''}
                             placeholder="0"
-                            disabled={!puedeAplicarDescuento}
-                            title={!puedeAplicarDescuento ? 'No tenés permiso para aplicar descuentos' : undefined}
                             onChange={e => updateDescuento(item.id, e.target.value)}
                             onKeyDown={volverABuscarEnEnter}
                             onWheel={e => e.target.blur()}
@@ -1728,7 +1713,6 @@ function Home() {
                               color: item.descuento ? ORANGE : 'var(--ink2)', fontSize: 12.5, fontFamily: 'inherit',
                               borderBottom: '1px dashed var(--border)',
                               padding: '0 2px', textAlign: 'right',
-                              opacity: puedeAplicarDescuento ? 1 : 0.5, cursor: puedeAplicarDescuento ? 'text' : 'not-allowed',
                             }}
                           />
                           <Typography sx={{ color: MUTED, fontSize: 12 }}>%</Typography>
@@ -1736,7 +1720,7 @@ function Home() {
 
                         {/* Subtotal — ya refleja el descuento de línea, item.precio es
                             siempre el precio final por unidad (ver updateDescuento) */}
-                        <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700, textAlign: 'right' }}>
+                        <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {fmtMoney(item.precio * item.cantidad)}
                         </Typography>
 
@@ -1795,9 +1779,9 @@ function Home() {
             del tema porque este panel no cambia con el modo). */}
         {(!isMobile || mobileTab === 1) && (
         <Box sx={{
-          flex: 1, minWidth: { xs: 0, md: 380 }, maxWidth: { md: 420 }, display: 'flex', flexDirection: 'column',
-          gap: { xs: 1.5, md: 1.25 }, overflowY: 'auto', p: { xs: 2.5, md: 2.5 }, pb: { md: 2.5 },
-          bgcolor: '#643312', color: '#fff2eb', borderRadius: '28px',
+          flex: 1, minWidth: { xs: 0, md: 340 }, maxWidth: { md: 380 }, display: 'flex', flexDirection: 'column',
+          gap: { xs: 2.5, md: 1.25 }, overflowY: 'auto', p: { xs: 3, md: 2.5 }, pb: { md: 2.5 },
+          bgcolor: '#fdf9f0', color: CHECKOUT_INK, borderRadius: { xs: '12px', md: '28px' },
         }}
           onKeyDown={(e) => {
             // Catch-all: los campos con un paso siguiente definido (Cliente,
@@ -1810,7 +1794,7 @@ function Home() {
           }}>
 
           {/* Cliente */}
-          <Box data-tour="pos-cliente" sx={{ pb: 1.75, borderBottom: `1px solid ${CHECKOUT_BORDER}`, flexShrink: 0 }}>
+          <Box data-tour="pos-cliente" sx={{ pb: { xs: 2.5, md: 1.75 }, borderBottom: `1px solid ${CHECKOUT_BORDER}`, flexShrink: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
               <Box sx={{ width: 28, height: 28, borderRadius: '999px', bgcolor: CHECKOUT_FIELD_BG, border: `1px solid ${CHECKOUT_BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <PersonOutlineIcon sx={{ color: CHECKOUT_INK, fontSize: 15 }} />
@@ -1877,7 +1861,7 @@ function Home() {
                     }} />
                 )}
                 slotProps={{
-                  paper: { sx: { bgcolor: '#4a2412', border: `1px solid ${CHECKOUT_BORDER}`, borderRadius: '16px', '& .MuiAutocomplete-option': { color: CHECKOUT_INK, '&:hover, &[aria-selected="true"]': { bgcolor: CHECKOUT_HOVER } } } },
+                  paper: { sx: { bgcolor: '#ffffff', border: `1px solid ${CHECKOUT_BORDER}`, borderRadius: '16px', '& .MuiAutocomplete-option': { color: CHECKOUT_INK, '&:hover, &[aria-selected="true"]': { bgcolor: CHECKOUT_HOVER } } } },
                 }}
                 noOptionsText={<Typography sx={{ color: CHECKOUT_MUTED, fontSize: 13 }}>Sin resultados</Typography>}
               />
@@ -1908,7 +1892,7 @@ function Home() {
           </Box>
 
           {/* Métodos de Pago */}
-          <Box data-tour="pos-pago" sx={{ pb: 1.75, borderBottom: `1px solid ${CHECKOUT_BORDER}`, display: 'flex', flexDirection: 'column', gap: 1.25, flexShrink: 0 }}>
+          <Box data-tour="pos-pago" sx={{ pb: { xs: 2.5, md: 1.75 }, borderBottom: `1px solid ${CHECKOUT_BORDER}`, display: 'flex', flexDirection: 'column', gap: 1.25, flexShrink: 0 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box>
                 <Typography sx={{ color: CHECKOUT_INK, fontWeight: 700, fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cómo paga</Typography>
@@ -1996,7 +1980,7 @@ function Home() {
                         handleAgregarPagoSplit();
                       }}
                       InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: CHECKOUT_MUTED }}>$</InputAdornment> }}
-                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#4a2412', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } }, '& .MuiInputBase-input::placeholder': { color: CHECKOUT_MUTED, opacity: 1 } }}
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#ffffff', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } }, '& .MuiInputBase-input::placeholder': { color: CHECKOUT_MUTED, opacity: 1 } }}
                     />
                     <Button variant="contained" onClick={handleAgregarPagoSplit}
                       sx={{ bgcolor: CHECKOUT_ACCENT, color: CHECKOUT_ACCENT_INK, textTransform: 'none', fontWeight: 700, whiteSpace: 'nowrap', px: 2, '&:hover': { bgcolor: CHECKOUT_ACCENT, filter: 'brightness(0.94)' } }}>
@@ -2018,13 +2002,13 @@ function Home() {
                         if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); avanzarDesdeRecibido(); }
                       }}
                       InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: CHECKOUT_MUTED }}>$</InputAdornment> }}
-                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#4a2412', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } }, '& .MuiInputBase-input::placeholder': { color: CHECKOUT_MUTED, opacity: 1 } }}
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#ffffff', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } }, '& .MuiInputBase-input::placeholder': { color: CHECKOUT_MUTED, opacity: 1 } }}
                     />
                   </Box>
                   <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: efectivoNum > 0 ? 1.25 : 0.25 }}>
                     <Chip label={`Exacto (${fmtMoney(total)})`} size="small" clickable
                       onClick={() => setEfectivoRecibido(String(total))}
-                      sx={{ bgcolor: `${SUCCESS}22`, color: '#c7f0d8', fontWeight: 600, fontSize: 11.5, border: `1px solid ${SUCCESS}55`, '&:hover': { bgcolor: `${SUCCESS}35` } }} />
+                      sx={{ bgcolor: `${SUCCESS}22`, color: SUCCESS, fontWeight: 600, fontSize: 11.5, border: `1px solid ${SUCCESS}55`, '&:hover': { bgcolor: `${SUCCESS}35` } }} />
                     {sugerirMontosRapidos(total).map(monto => (
                       <Chip key={monto} label={fmtMoney(monto)} size="small" clickable
                         onClick={() => setEfectivoRecibido(String(monto))}
@@ -2033,10 +2017,10 @@ function Home() {
                   </Box>
                   {efectivoNum > 0 && (
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1.5, py: 1, borderRadius: '10px', bgcolor: vuelto >= 0 ? `${SUCCESS}22` : `${ERROR}22`, border: `1px solid ${vuelto >= 0 ? SUCCESS : ERROR}55` }}>
-                      <Typography sx={{ color: vuelto >= 0 ? '#c7f0d8' : '#ffd0cb', fontSize: 13, fontWeight: 600 }}>
+                      <Typography sx={{ color: vuelto >= 0 ? SUCCESS : ERROR, fontSize: 13, fontWeight: 600 }}>
                         {vuelto >= 0 ? 'Vuelto:' : 'Falta:'}
                       </Typography>
-                      <Typography sx={{ color: vuelto >= 0 ? '#c7f0d8' : '#ffd0cb', fontSize: 17, fontWeight: 800 }}>
+                      <Typography sx={{ color: vuelto >= 0 ? SUCCESS : ERROR, fontSize: 17, fontWeight: 800 }}>
                         {fmtMoney(Math.abs(vuelto))}
                       </Typography>
                     </Box>
@@ -2045,19 +2029,32 @@ function Home() {
               ) : (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography sx={{ color: CHECKOUT_MUTED, fontSize: 12.5 }}>Total a cobrar: {fmtMoney(total)}</Typography>
-                  <Chip label="Listo" size="small" sx={{ bgcolor: `${SUCCESS}22`, color: '#c7f0d8', fontWeight: 600 }} />
+                  <Chip label="Listo" size="small" sx={{ bgcolor: `${SUCCESS}22`, color: SUCCESS, fontWeight: 600 }} />
                 </Box>
               )}
             </Box>
           </Box>
 
-          {/* Descuento */}
-          {puedeAplicarDescuento && (() => {
+          {/* Descuento — visible/editable para todos; si el usuario no tiene
+              aplicarDescuento, se le pide autorización recién al confirmar
+              la venta (ver abrirConfirmacion) en vez de esconderle el campo
+              directo. */}
+          {(() => {
             const hayDescuento = Number(ajuste.valor) > 0;
             return (
-              <Box data-tour="pos-descuento" sx={{ pb: 1.5, borderBottom: `1px solid ${CHECKOUT_BORDER}`, flexShrink: 0 }}>
+              <Box data-tour="pos-descuento" sx={{ pb: { xs: 2, md: 1.5 }, borderBottom: `1px solid ${CHECKOUT_BORDER}`, flexShrink: 0 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography sx={{ color: hayDescuento ? '#c7f0d8' : CHECKOUT_INK2, fontSize: 13, fontWeight: 700 }}>Descuento</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Typography sx={{ color: hayDescuento ? CHECKOUT_INK : CHECKOUT_INK2, fontSize: 13, fontWeight: 700 }}>Descuento</Typography>
+                    {descuentoAutorizado && (
+                      <Tooltip title={`Autorizado por ${descuentoAutorizado.autorizadoPor}`}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4, bgcolor: `${SUCCESS}22`, border: `1px solid ${SUCCESS}55`, borderRadius: '999px', px: 0.9, py: 0.15 }}>
+                          <LockOutlinedIcon sx={{ fontSize: 11, color: SUCCESS }} />
+                          <Typography sx={{ color: SUCCESS, fontSize: 10, fontWeight: 700 }}>{descuentoAutorizado.autorizadoPor}</Typography>
+                        </Box>
+                      </Tooltip>
+                    )}
+                  </Box>
                   {hayDescuento && (
                     <IconButton size="small" onClick={clearAjuste} sx={{ color: CHECKOUT_MUTED, p: 0.25, '&:hover': { color: CHECKOUT_INK } }}>
                       <CloseIcon sx={{ fontSize: 14 }} />
@@ -2077,7 +2074,7 @@ function Home() {
                     }}
                     onWheel={e => e.target.blur()}
                     InputProps={{ endAdornment: <InputAdornment position="end" sx={{ color: CHECKOUT_MUTED }}>{ajuste.calculo === 'porcentaje' ? '%' : '$'}</InputAdornment> }}
-                    sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#4a2412', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } } }}
+                    sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#ffffff', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } } }}
                   />
                   <Box sx={{ display: 'flex', border: `1px solid ${CHECKOUT_BORDER}`, borderRadius: '999px', overflow: 'hidden', flexShrink: 0 }}>
                     {[['porcentaje', '%'], ['monto', '$']].map(([key, label]) => (
@@ -2099,7 +2096,7 @@ function Home() {
 
           {/* Canje de puntos */}
           {puntosActivo && clienteId && puntosCliente > 0 && (
-            <Box sx={{ pb: 1.5, borderBottom: `1px solid ${CHECKOUT_BORDER}`, flexShrink: 0 }}>
+            <Box sx={{ pb: { xs: 2, md: 1.5 }, borderBottom: `1px solid ${CHECKOUT_BORDER}`, flexShrink: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                 <Typography sx={{ color: puntosCanjearNum > 0 ? CHECKOUT_ACCENT : CHECKOUT_INK2, fontSize: 13, fontWeight: 700 }}>
                   {clienteNombre} tiene {puntosCliente} puntos ({fmtMoney(puntosCliente * valorPunto)})
@@ -2116,7 +2113,7 @@ function Home() {
                   onChange={e => setPuntosCanjear(e.target.value)}
                   onWheel={e => e.target.blur()}
                   inputProps={{ min: 0, max: puntosCliente }}
-                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#4a2412', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } } }}
+                  sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#ffffff', color: CHECKOUT_INK, '& fieldset': { borderColor: CHECKOUT_BORDER }, '&.Mui-focused fieldset': { borderColor: CHECKOUT_ACCENT } } }}
                 />
                 <Button onClick={() => setPuntosCanjear(String(puntosCliente))}
                   sx={{ color: CHECKOUT_ACCENT_INK, bgcolor: CHECKOUT_ACCENT, textTransform: 'none', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', px: 1.5, '&:hover': { bgcolor: CHECKOUT_ACCENT, filter: 'brightness(0.94)' } }}>
@@ -2144,10 +2141,10 @@ function Home() {
 
             {ajuste.activo && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography sx={{ color: ajuste.tipo === 'descuento' ? '#c7f0d8' : '#ffd0cb', fontSize: 13.5 }}>
+                <Typography sx={{ color: ajuste.tipo === 'descuento' ? CHECKOUT_INK : ERROR, fontSize: 13.5 }}>
                   {ajuste.tipo === 'descuento' ? 'Descuento' : 'Recargo'}
                 </Typography>
-                <Typography sx={{ color: ajuste.tipo === 'descuento' ? '#c7f0d8' : '#ffd0cb', fontSize: 13.5, fontWeight: 700 }}>
+                <Typography sx={{ color: ajuste.tipo === 'descuento' ? CHECKOUT_INK : ERROR, fontSize: 13.5, fontWeight: 700 }}>
                   {ajuste.tipo === 'descuento' ? '-' : '+'}{fmtMoney(montoAjuste)}
                 </Typography>
               </Box>
@@ -2201,85 +2198,6 @@ function Home() {
         </Box>
         )}
       </Box>
-
-      {/* ── Modal: Consultar Precio ── */}
-      <Dialog open={openPrecio} onClose={() => setOpenPrecio(false)}
-        PaperProps={{ sx: { ...modalPaperSx, minWidth: { xs: 'auto', sm: 460 } } }}>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 1.5, sm: 3 }, py: { xs: 1.5, sm: 2 }, color: INK, fontWeight: 700, fontSize: 18 }}>
-          Consultar Precio
-          <IconButton onClick={() => setOpenPrecio(false)} sx={{ color: MUTED, p: 0.5 }}><CloseIcon /></IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ px: { xs: 1.5, sm: 3 }, pb: { xs: 1.75, sm: 3 }, pt: 0 }}>
-          <Typography sx={{ color: MUTED, fontSize: 13.5, mb: 2.5 }}>
-            Buscá un producto para ver su precio y stock disponible
-          </Typography>
-          <TextField fullWidth variant="outlined" placeholder="Nombre o código de barras..."
-            value={precioSearch} onChange={e => setPrecioSearch(e.target.value)} autoFocus
-            sx={{ ...inputSx, mb: 2 }}
-            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: MUTED }} /></InputAdornment> }} />
-          <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
-            {precioResults.length === 0 && precioSearch.trim() !== '' && (
-              <Typography sx={{ color: MUTED, fontSize: 13, textAlign: 'center', py: 3 }}>Sin resultados</Typography>
-            )}
-            {precioResults.length === 0 && precioSearch.trim() === '' && (
-              <Typography sx={{ color: MUTED, fontSize: 13, textAlign: 'center', py: 3 }}>Escribí para buscar</Typography>
-            )}
-            {precioResults.map(p => (
-              <Box key={p.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderRadius: '10px', mb: 1, bgcolor: HOVER }}>
-                <Box>
-                  <Typography sx={{ color: INK, fontWeight: 600, fontSize: 14 }}>{p.nombre}</Typography>
-                  <Typography sx={{ color: INK2, fontSize: 12 }}>{p.codigo} · {p.categoria}</Typography>
-                </Box>
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>{fmtMoney(p.precio)}</Typography>
-                  <Typography sx={{ color: p.stock === 0 ? ERROR : SUCCESS, fontSize: 12 }}>
-                    {p.stock === 0 ? 'Sin stock' : `${p.stock} en stock`}
-                  </Typography>
-                </Box>
-              </Box>
-            ))}
-          </Box>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Modal: Agregar Monto ── */}
-      <Dialog open={openMonto} onClose={() => setOpenMonto(false)}
-        PaperProps={{ sx: { ...modalPaperSx, minWidth: { xs: 'auto', sm: 420 } } }}>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 1.5, sm: 3 }, py: { xs: 1.5, sm: 2 }, color: INK, fontWeight: 700, fontSize: 18 }}>
-          Agregar monto al carrito
-          <IconButton onClick={() => setOpenMonto(false)} sx={{ color: MUTED, p: 0.5 }}><CloseIcon /></IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ px: { xs: 1.5, sm: 3 }, pb: { xs: 1.75, sm: 3 }, pt: 0 }}>
-          <Typography sx={{ color: MUTED, fontSize: 13.5, mb: 3 }}>
-            Cargá rápidamente un ítem con monto variable.
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
-            <Box>
-              <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Descripción</Typography>
-              <TextField fullWidth placeholder="Ej: Servicio, flete, etc." value={montoNombre}
-                onChange={e => setMontoNombre(e.target.value)} sx={inputSx} autoFocus />
-            </Box>
-            <Box>
-              <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500, mb: 0.75 }}>Monto</Typography>
-              <TextField fullWidth placeholder="0.00" value={montoValor}
-                onChange={e => setMontoValor(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAgregarMonto()}
-                sx={inputSx}
-                InputProps={{ startAdornment: <InputAdornment position="start" sx={{ color: MUTED }}>$</InputAdornment> }} />
-            </Box>
-          </Box>
-          <DialogActions sx={{ px: 0, pb: 0, justifyContent: 'flex-end', gap: 1.5 }}>
-            <Button onClick={() => setOpenMonto(false)} sx={{ ...outlinedBtn, border: `1px solid ${BORDER}`, px: 2.5, py: 1.25, borderRadius: '8px' }}>
-              Cancelar
-            </Button>
-            <Button onClick={handleAgregarMonto} variant="contained"
-              disabled={!montoNombre.trim() || !montoValor || Number(montoValor) <= 0}
-              sx={{ bgcolor: PRIMARY, textTransform: 'none', px: 3, py: 1.25, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { bgcolor: PRIMARY, opacity: 0.4, color: '#fff' } }}>
-              Agregar al carrito
-            </Button>
-          </DialogActions>
-        </DialogContent>
-      </Dialog>
 
       {/* ── Modal: Cargar cantidad por monto (ej. "$500 de nafta") ── */}
       <Dialog open={!!montoCalcularId} onClose={() => setMontoCalcularId(null)}
@@ -2369,6 +2287,42 @@ function Home() {
 
       {/* ── Modal: Confirmar Venta — último paso del flujo por teclado (y del
           botón principal), antes de que la venta se registre de verdad. ── */}
+      {/* Autorización de descuento — "override de gerente": el cajero no
+          tiene permiso propio para descontar, pero puede pedirle a alguien
+          que sí lo tenga que ponga su contraseña acá mismo, sin cerrar
+          sesión ni loguearse como esa persona (ver ventasService.
+          autorizarDescuento). */}
+      <Dialog open={openAutorizarModal} onClose={() => !autorizando && setOpenAutorizarModal(false)} maxWidth="xs" fullWidth
+        PaperProps={{ sx: { ...modalPaperSx, borderRadius: '16px' } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 3, pt: 2.5, pb: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <LockOutlinedIcon sx={{ color: PRIMARY, fontSize: 20 }} />
+            <Typography sx={{ color: INK, fontWeight: 700, fontSize: 17 }}>Autorizar descuento</Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setOpenAutorizarModal(false)} disabled={autorizando}
+            sx={{ color: MUTED, '&:hover': { color: INK } }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        <DialogContent sx={{ px: 3, pb: 3, pt: 0 }}>
+          <Typography sx={{ color: MUTED, fontSize: 13.5, mb: 2 }}>
+            No tenés permiso para aplicar descuentos. Pedile a alguien que sí lo tenga que ponga su PIN de autorización para esta venta (se configura en Configuración → Mi perfil).
+          </Typography>
+          <TextField fullWidth type="password" inputMode="numeric" autoFocus placeholder="PIN"
+            value={pinAutorizar}
+            onChange={e => { setPinAutorizar(e.target.value.replace(/\D/g, '').slice(0, 6)); setErrorAutorizar(''); }}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAutorizarDescuento(); } }}
+            error={Boolean(errorAutorizar)}
+            helperText={errorAutorizar || ' '}
+            sx={{ ...inputSx, '& input': { textAlign: 'center', letterSpacing: '0.3em', fontSize: 20 } }} />
+          <Button fullWidth variant="contained" onClick={handleAutorizarDescuento}
+            disabled={autorizando || !pinAutorizar}
+            sx={{ bgcolor: PRIMARY, textTransform: 'none', fontWeight: 700, fontSize: 14.5, borderRadius: '8px', py: 1.25, mt: 0.5, '&:hover': { bgcolor: P_HOVER }, '&.Mui-disabled': { opacity: 0.5 } }}>
+            {autorizando ? 'Verificando...' : 'Autorizar'}
+          </Button>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={openConfirmarModal} onClose={() => setOpenConfirmarModal(false)} maxWidth="xs" fullWidth
         PaperProps={{ sx: { ...modalPaperSx, borderRadius: '16px' } }}
         onKeyDown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }}>

@@ -999,8 +999,8 @@ export default function Caja() {
           sx={{
             minHeight: 44,
             '& .MuiTabs-indicator': { display: 'none' },
-            '& .MuiTab-root': { textTransform: 'none', color: MUTED, minHeight: 44, fontSize: 13.5, fontWeight: 500, borderRadius: '8px', transition: 'all 0.15s' },
-            '& .Mui-selected': { color: INK, fontWeight: 600, bgcolor: HOVER },
+            '& .MuiTab-root': { textTransform: 'none', color: MUTED, minHeight: 44, fontSize: 13.5, fontWeight: 700, borderRadius: '8px', transition: 'all 0.15s' },
+            '& .Mui-selected': { color: INK, fontWeight: 800, bgcolor: HOVER },
           }}>
           <Tab label="Caja" />
           <Tab data-tour="caja-tab-movimientos" label="Movimientos" />

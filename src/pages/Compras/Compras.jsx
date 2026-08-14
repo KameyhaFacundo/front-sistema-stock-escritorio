@@ -55,7 +55,7 @@ import { categoriasService } from '../../services/categoriasService';
 import iaService             from '../../services/iaService';
 import usePlan                from '../../hooks/usePlan';
 import EscanearModal from './EscanearModal';
-import ImportarExcelModal from './ImportarExcelModal';
+import ImportarExcelModal, { descargarPlantillaCompra } from './ImportarExcelModal';
 import { ModalNuevoProveedor } from '../Proveedores/Proveedores';
 import { NuevoProducto } from '../Productos/Productos';
 
@@ -1438,7 +1438,10 @@ function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevol
             {paginadas.map((l, i) => (
               <Box key={i} sx={{ bgcolor: HOVER, border: `1px solid ${BORDER}`, borderRadius: '10px', p: 1.5 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.75 }}>
-                  <Typography sx={{ color: INK, fontSize: 13.5, fontWeight: 600, flex: 1, minWidth: 0 }}>{l.nombre}</Typography>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ color: INK, fontSize: 13.5, fontWeight: 600 }}>{l.nombre}</Typography>
+                    {l.codigo && <Typography sx={{ color: INK2, fontSize: 11.5, fontFamily: 'monospace', fontWeight: 700 }}>{l.codigo}</Typography>}
+                  </Box>
                   <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700, flexShrink: 0, ml: 1 }}>{fmtMoney(l.subtotal)}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 0.5 }}>
@@ -1455,13 +1458,14 @@ function ModalDetalleCompra({ open, onClose, compra, puedeDevolver, onAbrirDevol
           </Box>
         ) : (
           <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '10px', overflow: 'hidden' }}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', px: 2, py: 1, bgcolor: TABLE_HEADER, borderBottom: `1px solid ${BORDER}` }}>
-              {[['Producto', 'left'], ['Cant.', 'center'], ['Costo', 'right'], ['Precio venta', 'right'], ['Subtotal', 'right']].map(([h, align]) => (
+            <Box sx={{ display: 'grid', gridTemplateColumns: '100px repeat(5, minmax(0, 1fr))', px: 2, py: 1, bgcolor: TABLE_HEADER, borderBottom: `1px solid ${BORDER}` }}>
+              {[['Código', 'left'], ['Producto', 'left'], ['Cant.', 'center'], ['Costo', 'right'], ['Precio venta', 'right'], ['Subtotal', 'right']].map(([h, align]) => (
                 <Typography key={h} sx={{ color: MUTED, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: align }}>{h}</Typography>
               ))}
             </Box>
             {paginadas.map((l, i) => (
-              <Box key={i} sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', px: 2, py: 1.25, borderBottom: `1px solid ${BORDER}`, '&:last-child': { borderBottom: 'none' }, '&:hover': { bgcolor: HOVER } }}>
+              <Box key={i} sx={{ display: 'grid', gridTemplateColumns: '100px repeat(5, minmax(0, 1fr))', px: 2, py: 1.25, borderBottom: `1px solid ${BORDER}`, '&:last-child': { borderBottom: 'none' }, '&:hover': { bgcolor: HOVER } }}>
+                <Typography sx={{ color: INK2, fontSize: 12.5, fontFamily: 'monospace', fontWeight: 700 }} noWrap>{l.codigo || '—'}</Typography>
                 <Typography sx={{ color: INK, fontSize: 13 }} noWrap>{l.nombre}</Typography>
                 <Typography sx={{ color: INK2, fontSize: 13, textAlign: 'center' }}>{l.cantidad}{esFraccionable(l.unidadMedida) ? ` ${abrevUnidad(l.unidadMedida)}` : ''}</Typography>
                 <Typography sx={{ color: INK2, fontSize: 13, textAlign: 'right' }}>{fmtMoney(l.precio_compra)}</Typography>
@@ -1950,6 +1954,14 @@ export default function Compras() {
               <Button data-tour="compras-escanear" startIcon={<AutoAwesomeIcon sx={{ fontSize: 15 }} />} onClick={() => setOpenScan(true)}
                 sx={{ color: P, borderColor: `${P}50`, border: '1px solid', textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: `${P}10`, borderColor: P } }}>
                 <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Escanear factura</Box>
+              </Button>
+            </Tooltip>
+          )}
+          {puedeCrear && (
+            <Tooltip title="Descargar plantilla vacía para completar e importar">
+              <Button startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />} onClick={descargarPlantillaCompra}
+                sx={{ color: INK2, borderColor: BORDER, border: '1px solid', textTransform: 'none', fontSize: 13, fontWeight: 600, px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, borderRadius: '8px', '&:hover': { bgcolor: HOVER, borderColor: 'var(--border-hover)' } }}>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar plantilla</Box>
               </Button>
             </Tooltip>
           )}

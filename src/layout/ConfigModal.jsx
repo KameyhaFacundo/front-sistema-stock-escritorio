@@ -22,7 +22,7 @@ import StorefrontIcon       from '@mui/icons-material/Storefront';
 // import DeleteIcon           from '@mui/icons-material/Delete';
 // import SaveIcon             from '@mui/icons-material/Save';
 import CameraAltIcon        from '@mui/icons-material/CameraAlt';
-import UploadFileIcon       from '@mui/icons-material/UploadFile';
+// import UploadFileIcon       from '@mui/icons-material/UploadFile'; // solo usado en TabFacturacion, comentada
 import CreditCardIcon       from '@mui/icons-material/CreditCard';
 import SwapHorizIcon        from '@mui/icons-material/SwapHoriz';
 import QrCode2Icon          from '@mui/icons-material/QrCode2';
@@ -33,7 +33,7 @@ import CloudUploadIcon      from '@mui/icons-material/CloudUpload';
 // import WifiIcon             from '@mui/icons-material/Wifi'; // Solo usado por "Conectar otra caja", comentado más abajo.
 import {
   CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, HOVER, INPUT, TABLE_HEADER, DROPDOWN,
-  ERROR, ERROR_BG, ERROR_BORDER, SUCCESS, SUCCESS_BG, WARNING, ORANGE, modalPaperSx,
+  ERROR, ERROR_BG, SUCCESS, SUCCESS_BG, WARNING, ORANGE, modalPaperSx,
 } from '../theme/tokens';
 import QRCode from 'qrcode';
 import { COMPANY_NAME, POINT_HABILITADO, CATALOGO_HABILITADO } from '../config/brand';
@@ -41,7 +41,7 @@ import { mercadopagoService } from '../services/mercadopagoService';
 import { empresaService } from '../services/empresaService';
 // import { sistemaService } from '../services/sistemaService'; // Solo usado por "Conectar otra caja", comentado más abajo.
 import { usuariosService } from '../services/usuariosService';
-import { getEstadoArca } from '../services/arcaService';
+// import { getEstadoArca } from '../services/arcaService'; // Solo usado por TabFacturacion, comentada más abajo.
 import { twoFactorService } from '../services/twoFactorService';
 // Solo usados por TabSucursales, comentada más abajo.
 // import { useSucursales, useCrearSucursal, useActualizarSucursal, useEliminarSucursal } from '../hooks/queries/useSucursalesQueries';
@@ -165,6 +165,70 @@ function ModalCambiarPassword({ open, onClose }) {
   );
 }
 
+function ModalCambiarPin({ open, onClose }) {
+  const toast = useToast();
+  const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [pinConfirmar, setPinConfirmar] = useState('');
+  const [cambiando, setCambiando] = useState(false);
+
+  useEffect(() => {
+    if (!open) { setPassword(''); setPin(''); setPinConfirmar(''); }
+  }, [open]);
+
+  const soloDigitos = (v) => v.replace(/\D/g, '').slice(0, 6);
+
+  const cambiarPin = async () => {
+    if (!password) { toast('Completá tu contraseña actual', 'error'); return; }
+    if (pin.length < 4) { toast('El PIN debe tener entre 4 y 6 dígitos', 'error'); return; }
+    if (pin !== pinConfirmar) { toast('Los PIN no coinciden', 'error'); return; }
+    setCambiando(true);
+    try {
+      await usuariosService.cambiarPin(password, pin);
+      toast('PIN configurado', 'success');
+      onClose();
+    } catch (e) {
+      toast(e.response?.data?.message || 'No se pudo configurar el PIN', 'error');
+    } finally {
+      setCambiando(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { ...modalPaperSx, borderRadius: '14px' } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 3, py: 2.5, borderBottom: `1px solid ${BORDER}` }}>
+        <Typography sx={{ fontWeight: 700, fontSize: 16, color: INK }}>PIN de autorización</Typography>
+        <IconButton size="small" onClick={onClose} sx={{ color: MUTED, '&:hover': { color: INK } }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <DialogContent sx={{ pt: 3 }}>
+        <Typography sx={{ color: MUTED, fontSize: 12.5, mb: 2.5 }}>
+          Se usa para autorizar descuentos desde el POS cuando el cajero no tiene permiso propio — un PIN corto en vez de tu contraseña completa.
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <FieldLabel>Tu contraseña actual</FieldLabel>
+          <TextField fullWidth type="password" value={password} onChange={e => setPassword(e.target.value)} sx={fieldSx} />
+        </Box>
+        <Box sx={{ mb: 2 }}>
+          <FieldLabel>PIN nuevo (4 a 6 dígitos)</FieldLabel>
+          <TextField fullWidth type="password" inputMode="numeric" value={pin} onChange={e => setPin(soloDigitos(e.target.value))}
+            sx={{ ...fieldSx, '& input': { textAlign: 'center', letterSpacing: '0.3em' } }} />
+        </Box>
+        <Box sx={{ mb: 3 }}>
+          <FieldLabel>Confirmar PIN</FieldLabel>
+          <TextField fullWidth type="password" inputMode="numeric" value={pinConfirmar} onChange={e => setPinConfirmar(soloDigitos(e.target.value))}
+            sx={{ ...fieldSx, '& input': { textAlign: 'center', letterSpacing: '0.3em' } }} />
+        </Box>
+        <Button fullWidth variant="contained" onClick={cambiarPin} disabled={cambiando}
+          sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', py: 1.1, '&:hover': { bgcolor: P_HOVER } }}>
+          {cambiando ? 'Guardando...' : 'Guardar PIN'}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function TabPerfil() {
   const toast = useToast();
   const { user, recargarPermisos } = useContext(AuthContext);
@@ -176,6 +240,7 @@ function TabPerfil() {
   const [email, setEmail] = useState(user?.email || '');
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [modalPassword, setModalPassword] = useState(false);
+  const [modalPin, setModalPin] = useState(false);
 
   const guardarPerfil = async () => {
     if (!nombre.trim() || !email.trim()) {
@@ -238,7 +303,7 @@ function TabPerfil() {
         </Button>
       </Box>
 
-      <Box sx={{ ...card, p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+      <Box sx={{ ...card, p: 2.5, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>Contraseña</Typography>
           <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 0.25 }}>Cambiá la contraseña con la que iniciás sesión.</Typography>
@@ -249,7 +314,19 @@ function TabPerfil() {
         </Button>
       </Box>
 
+      <Box sx={{ ...card, p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+        <Box>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>PIN de autorización</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 0.25 }}>Para autorizar descuentos en el POS sin usar tu contraseña completa.</Typography>
+        </Box>
+        <Button variant="outlined" onClick={() => setModalPin(true)}
+          sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: 2.5, '&:hover': { bgcolor: HOVER } }}>
+          Configurar PIN
+        </Button>
+      </Box>
+
       <ModalCambiarPassword open={modalPassword} onClose={() => setModalPassword(false)} />
+      <ModalCambiarPin open={modalPin} onClose={() => setModalPin(false)} />
     </Box>
   );
 }
@@ -313,6 +390,10 @@ function TabNegocio() {
   const [driveCargando, setDriveCargando] = useState(true);
   const [driveConectando, setDriveConectando] = useState(false);
   const [restaurando, setRestaurando] = useState(false);
+  // Fecha real del último backup (automático o manual, es el mismo archivo
+  // — ver ultimo-backup-info en electron/main.js). null mientras no haya
+  // Electron disponible (pnpm dev/demo) o todavía no se consultó.
+  const [ultimoBackupReal, setUltimoBackupReal] = useState(null);
   // Estado de "Conectar otra caja" — comentado junto con el botón/modal más
   // abajo, descomentar los tres si se reactiva.
   // const [lanModal, setLanModal] = useState(false);
@@ -333,6 +414,11 @@ function TabNegocio() {
       if (ok) window.electronAPI.driveEmail?.().then(setDriveEmail);
     }).finally(() => setDriveCargando(false));
   }, []);
+
+  const consultarUltimoBackupReal = () => {
+    window.electronAPI?.ultimoBackupInfo?.().then(setUltimoBackupReal);
+  };
+  useEffect(consultarUltimoBackupReal, []);
 
   const conectarDrive = async () => {
     setDriveConectando(true);
@@ -362,6 +448,7 @@ function TabNegocio() {
     try {
       await empresaService.descargarBackup();
       localStorage.setItem('ultimo_backup', new Date().toISOString());
+      consultarUltimoBackupReal();
     } catch {
       toast('No se pudo generar el backup', 'error');
     } finally {
@@ -403,9 +490,12 @@ function TabNegocio() {
     }
   };
 
-  const ultimoBackup = localStorage.getItem('ultimo_backup');
+  // Preferí siempre el dato real (automático o manual, misma carpeta) —
+  // localStorage queda como último recurso para pnpm dev/demo, donde no hay
+  // Electron para consultar la carpeta de backups de verdad.
+  const ultimoBackup = ultimoBackupReal?.fecha || localStorage.getItem('ultimo_backup');
   const backupTooltip = ultimoBackup
-    ? `Ultimo backup: ${new Date(ultimoBackup).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+    ? `Último backup: ${new Date(ultimoBackup).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}${ultimoBackupReal?.enDrive ? ' · subido a Drive' : ''}`
     : 'Nunca se hizo un backup';
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -631,7 +721,10 @@ function TabNegocio() {
         </Box>
       </Box>
 
-      {/* Programa de puntos */}
+      {/* Programa de puntos — comentado a pedido: no se va a ofrecer por
+          ahora. Si un cliente lo quiere activo, tiene que contactar
+          directamente (no es autogestionable desde acá). Comentado, no
+          borrado, mismo criterio que Sucursales más abajo.
       <Box sx={{ ...card, p: 2.5, mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: form.puntosActivo ? 2 : 0 }}>
           <Box>
@@ -661,6 +754,7 @@ function TabNegocio() {
           </Box>
         )}
       </Box>
+      */}
 
       {/* Arqueo de caja */}
       <Box sx={{ ...card, p: 2.5, mb: 3 }}>
@@ -720,7 +814,7 @@ function TabNegocio() {
             Un .zip con productos, clientes, proveedores, ventas, compras y movimientos en CSV.
           </Typography>
         </Box>
-        <Tooltip title={backupTooltip}>
+        <Tooltip title="Este export manual es aparte del backup automático de la base — ver más abajo">
           <Button
             variant="outlined"
             onClick={descargarBackup}
@@ -733,10 +827,31 @@ function TabNegocio() {
         </Tooltip>
       </Box>
 
-      {/* Backup automático en Google Drive — 100% opcional, oculto fuera de
-          la app de escritorio empaquetada (no existe window.electronAPI en
-          pnpm dev/demo/acceso por navegador). Si nunca se conecta, no cambia
-          nada de lo que ya hay: el backup local automático sigue solo. */}
+      {/* Backup automático de la base (.gz) — corre solo todos los días
+          (ver startBackupScheduler en electron/backend.js), sin que el
+          usuario toque nada. Antes esto no se veía en ningún lado del
+          front; esta tarjeta muestra la fecha real leída de la carpeta de
+          backups, no del botón manual de arriba (que es un export CSV
+          aparte). Mismo criterio que Drive/Restaurar: solo existe en la
+          app empaquetada. */}
+      {driveDisponible && (
+        <Box sx={{ ...card, p: 2.5, mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{
+            width: 36, height: 36, borderRadius: '10px', flexShrink: 0,
+            bgcolor: ultimoBackup ? SUCCESS_BG : HOVER,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <ReceiptLongIcon sx={{ color: ultimoBackup ? SUCCESS : MUTED, fontSize: 18 }} />
+          </Box>
+          <Box>
+            <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>Backup automático</Typography>
+            <Typography sx={{ color: ultimoBackup ? SUCCESS : MUTED, fontSize: 12.5, mt: 0.25, fontWeight: 600 }}>
+              {backupTooltip}
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
       {driveDisponible && (
         <Box sx={{ ...card, p: 2.5, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -878,7 +993,11 @@ function TabNegocio() {
       </Dialog>
       */}
 
-      {/* Zona peligrosa */}
+      {/* Zona peligrosa: "Restablecer negocio" — comentado a pedido, no se
+          va a ofrecer por ahora (igual que Programa de puntos más arriba).
+          Ya estaba deshabilitado ("Próximamente") pero seguía visible;
+          directamente se saca de la vista. Si un cliente lo necesita, tiene
+          que contactar directamente.
       <Box sx={{ border: `1px solid ${ERROR_BORDER}`, borderRadius: '12px', p: 2.5, bgcolor: ERROR_BG }}>
         <Box sx={{ display: 'flex', gap: 1.5 }}>
           <Box sx={{ width: 40, height: 40, borderRadius: '10px', bgcolor: ERROR_BG, border: `1px solid ${ERROR_BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -911,6 +1030,7 @@ function TabNegocio() {
           </Box>
         </Box>
       </Box>
+      */}
     </Box>
   );
 }
@@ -1016,6 +1136,42 @@ function TabCatalogo() {
           </Box>
         </Box>
       )}
+    </Box>
+  );
+}
+
+/* ─────────────────── TAB CATÁLOGO (módulo no habilitado) ───────────────────
+   Cuando CATALOGO_HABILITADO es false para este build, antes la pestaña
+   directamente no aparecía — el cliente no tenía forma de enterarse de que
+   existe el módulo. Se muestra este aviso en su lugar, con contacto directo
+   por WhatsApp (mismo número que el resto de los "contactá a soporte" del
+   sistema, ver SoporteWidget.jsx), igual que se hace en la pestaña de
+   Facturación para el plan que no la incluye. */
+function TabCatalogoUpsell() {
+  const mensaje = encodeURIComponent('Hola, quiero activar el catálogo online para mi negocio.');
+  return (
+    <Box>
+      <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 18, sm: 22 }, mb: 0.5 }}>Catálogo online</Typography>
+      <Typography sx={{ color: MUTED, fontSize: 13.5, mb: 2.5 }}>
+        Una página pública, sin login, con tus productos activos — compartila con tus clientes.
+      </Typography>
+
+      <Box sx={{ ...card, p: 2.5, bgcolor: `${P}0c`, border: `1px solid ${P}40` }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+          <Box sx={{ width: 40, height: 40, borderRadius: '10px', bgcolor: `${P}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <StorefrontIcon sx={{ color: P, fontSize: 20 }} />
+          </Box>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 14 }}>¿Querés un catálogo online?</Typography>
+        </Box>
+        <Typography sx={{ color: MUTED, fontSize: 12.5, mb: 2 }}>
+          Este negocio todavía no tiene el módulo de catálogo activado. Escribime y te cuento cómo sumarlo.
+        </Typography>
+        <Button component="a" href={`https://wa.me/${WA_NUMBER}?text=${mensaje}`}
+          target="_blank" rel="noopener noreferrer" startIcon={<WhatsAppIcon sx={{ fontSize: 18 }} />}
+          sx={{ bgcolor: '#25D366', color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: 13, borderRadius: '8px', '&:hover': { bgcolor: '#1fb955' } }}>
+          Contactar por WhatsApp
+        </Button>
+      </Box>
     </Box>
   );
 }
@@ -1406,6 +1562,8 @@ function TabCobros() {
 }
 
 /* ─────────────────────────── TAB FACTURACIÓN (ARCA) ─────────────────────────── */
+// Comentada junto con su entrada en `tabs` más arriba — ver esa nota.
+/*
 function TabFacturacion() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -1633,6 +1791,7 @@ function TabFacturacion() {
     </Box>
   );
 }
+*/
 
 /* ─────────────────────────── TAB SEGURIDAD ─────────────────────────── */
 function TabSeguridad() {
@@ -1797,7 +1956,10 @@ export function ConfigModal({ open, onClose }) {
     { label: 'Mi perfil', render: () => <TabPerfil /> },
     { label: 'Negocio', render: () => <TabNegocio /> },
     // Módulo opcional por cliente — ver CATALOGO_HABILITADO en config/brand.js.
-    ...(CATALOGO_HABILITADO ? [{ label: 'Catálogo', render: () => <TabCatalogo /> }] : []),
+    // La pestaña queda siempre visible aunque el módulo no esté habilitado
+    // (antes desaparecía sin más) — si no está prendido, muestra un aviso
+    // con contacto por WhatsApp en vez de esconder que el módulo existe.
+    { label: 'Catálogo', render: () => CATALOGO_HABILITADO ? <TabCatalogo /> : <TabCatalogoUpsell /> },
     // Gestión de sucursales desactivada por ahora a pedido — comentado, no
     // borrado. El negocio sigue operando con la única sucursal ("Casa
     // Central") creada al instalar; el resto del sistema (stock, turnos,
@@ -1807,7 +1969,10 @@ export function ConfigModal({ open, onClose }) {
     // Cobros es enteramente sobre conectar Mercado Pago para Point — con Point
     // deshabilitado (VITE_POINT_HABILITADO=false) no tiene sentido mostrarla.
     ...(POINT_HABILITADO ? [{ label: 'Cobros', render: () => <TabCobros /> }] : []),
-    { label: 'Facturación', render: () => <TabFacturacion /> },
+    // Facturación (ARCA) comentada a pedido, para más adelante — mismo
+    // criterio que Sucursales más arriba. Descomentar esta línea y la
+    // función TabFacturacion más abajo alcanza para reactivarla.
+    // { label: 'Facturación', render: () => <TabFacturacion /> },
     { label: 'Seguridad', render: () => <TabSeguridad /> },
   ], [puedeConfigurar]);
 
@@ -1845,10 +2010,10 @@ export function ConfigModal({ open, onClose }) {
             '& .MuiTabs-indicator': { bgcolor: P, height: 2 },
             '& .MuiTab-root': {
               textTransform: 'none', color: MUTED,
-              minHeight: 44, fontSize: 14, fontWeight: 500,
+              minHeight: 44, fontSize: 14, fontWeight: 700,
               px: 0, mr: 3, transition: 'color 0.15s',
             },
-            '& .Mui-selected': { color: INK, fontWeight: 600 },
+            '& .Mui-selected': { color: INK, fontWeight: 800 },
           }}
         >
           {tabs.map(t => <Tab key={t.label} label={t.label} />)}

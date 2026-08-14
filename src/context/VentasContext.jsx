@@ -52,6 +52,7 @@ export function VentasProvider({ children, onError, onRecargarFiados }) {
       // completo, ignorando el descuento que el cajero aplicó en pantalla).
       ajuste: ventaLocal.ajuste ?? null,
       motivo_descuento: ventaLocal.motivoDescuento || undefined,
+      autorizacion_descuento: ventaLocal.autorizacionDescuento || undefined,
       puntos_canjeados: ventaLocal.puntosCanjeados || undefined,
     };
 

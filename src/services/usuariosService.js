@@ -53,6 +53,13 @@ export const usuariosService = {
     await api.post('users/cambiar-password', { password_actual: passwordActual, password_nuevo: passwordNuevo });
   },
 
+  // PIN corto para autorizar descuentos en el POS sin tipear la contraseña
+  // completa (ver ventasService.autorizarDescuento) — se confirma con la
+  // contraseña de login para cambiarlo, mismo criterio que cambiarPassword.
+  async cambiarPin(password, pin) {
+    await api.post('users/cambiar-pin', { password, pin });
+  },
+
   // Segundo paso del cambio de email — sin JWT (el token es la prueba de
   // identidad), se llama desde la página pública /confirmar-email.
   async confirmarCambioEmail(id, token) {

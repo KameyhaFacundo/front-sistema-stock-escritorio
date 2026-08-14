@@ -34,12 +34,18 @@ function detectarColumnas(filaEncabezado) {
   const iNombre   = buscar(ALIAS_NOMBRE);
   const iCantidad = buscar(ALIAS_CANTIDAD);
   const iPrecio   = buscar(ALIAS_PRECIO);
+  // Código es opcional (no cuenta para decidir si hay encabezado reconocible
+  // más abajo) pero, si está, matchea contra el catálogo de forma exacta —
+  // mucho más confiable que el nombre, que necesita coincidir letra por
+  // letra para matchear (ver matchProducto en comprasMatching.js).
+  const iCodigo   = buscar(ALIAS_CODIGO);
 
   if (iNombre === -1 && iCantidad === -1 && iPrecio === -1) return null;
   return {
     nombre:   iNombre   !== -1 ? iNombre   : 0,
     cantidad: iCantidad !== -1 ? iCantidad : 1,
     precio:   iPrecio   !== -1 ? iPrecio   : 2,
+    codigo:   iCodigo,
   };
 }
 
@@ -118,7 +124,7 @@ export async function leerFilasArchivo(file) {
 
 /**
  * @param {File} file
- * @returns {Promise<Array<{nombre: string, cantidad: number, precio: number|null}>>}
+ * @returns {Promise<Array<{nombre: string, codigo: string|null, cantidad: number, precio: number|null}>>}
  */
 export async function leerExcelCompra(file) {
   const todasLasFilas = await leerFilasXlsx(file);
@@ -128,15 +134,17 @@ export async function leerExcelCompra(file) {
 
   const cols = detectarColumnas(filas[0]);
   const desdeFila = cols ? 1 : 0; // si hay encabezado reconocible, lo saltea
-  const { nombre: iNombre, cantidad: iCantidad, precio: iPrecio } = cols || { nombre: 0, cantidad: 1, precio: 2 };
+  const { nombre: iNombre, cantidad: iCantidad, precio: iPrecio, codigo: iCodigo } = cols || { nombre: 0, cantidad: 1, precio: 2, codigo: -1 };
 
   const lineas = [];
   for (let i = desdeFila; i < filas.length; i++) {
     const fila = filas[i];
     const nombre = String(fila[iNombre] ?? '').trim();
-    if (!nombre) continue;
+    const codigo = iCodigo != null && iCodigo !== -1 ? String(fila[iCodigo] ?? '').trim() : '';
+    if (!nombre && !codigo) continue;
     lineas.push({
-      nombre,
+      nombre: nombre || codigo,
+      codigo: codigo || null,
       cantidad: parseNumero(fila[iCantidad]) || 1,
       precio: parseNumero(fila[iPrecio]),
     });

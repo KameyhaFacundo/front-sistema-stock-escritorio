@@ -183,7 +183,7 @@ function fmtFechaCorta(fecha) {
 function getDetalleColumns(mostrarSucursales) {
   return [
     {
-      key: 'hora', header: 'Fecha y hora', flex: true,
+      key: 'hora', header: 'Fecha y hora', flex: 0.65,
       render: (m) => (
         <Box>
           <Typography sx={{ color: INK2, fontSize: 13, fontWeight: 500 }}>{fmtFechaCorta(m.fecha)}</Typography>
@@ -192,11 +192,11 @@ function getDetalleColumns(mostrarSucursales) {
       ),
     },
     {
-      key: 'producto', header: 'Producto', flex: true,
+      key: 'producto', header: 'Producto', flex: 1.8,
       render: (m) => (
         <Box sx={{ minWidth: 0, width: '100%' }}>
-          <Typography sx={{ color: INK, fontSize: 14, fontWeight: 500 }} noWrap>{m.producto}</Typography>
-          <Typography sx={{ color: MUTED, fontSize: 12 }} noWrap>{m.codigo}</Typography>
+          <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700 }} noWrap>{m.producto}</Typography>
+          <Typography sx={{ color: INK2, fontSize: 12, fontWeight: 700 }} noWrap>{m.codigo}</Typography>
         </Box>
       ),
     },
@@ -243,8 +243,8 @@ const RESUMEN_COLUMNS = [
     key: 'producto', header: 'Producto', flex: true,
     render: (r) => (
       <Box>
-        <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600 }}>{r.producto}</Typography>
-        <Typography sx={{ color: MUTED, fontSize: 12 }}>{r.codigo}</Typography>
+        <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700 }}>{r.producto}</Typography>
+        <Typography sx={{ color: INK2, fontSize: 12, fontWeight: 700 }}>{r.codigo}</Typography>
       </Box>
     ),
   },

@@ -11,7 +11,24 @@ html, body, #root {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Piso más grueso para todo texto que no fija su propio fontWeight por
+     sx (queda en 400 por default del navegador) — 600 porque es uno de los
+     únicos dos pesos de Figtree que se cargan arriba (400/600/700), así se
+     ve nítido y no un "bold falso" sintetizado por el navegador. No pisa
+     los fontWeight puestos a mano en cada componente (esos ganan siempre,
+     por regla de cascada: una propiedad explícita nunca hereda). */
+  font-weight: 600;
 }
+
+/* ── Escala general de la interfaz ────────────────────────────────────────
+   Antes esto era `zoom: 1.5` acá — se sacó porque esa propiedad no estándar
+   rompe el cálculo de posición de todo lo que Chromium posiciona con
+   `position: fixed` medido por JS (Popover/Menu/Select de MUI arman su Paper
+   así): el menú terminaba renderizando lejos de donde se lo abría. La misma
+   escala 1.5x ahora la aplica Electron con zoom NATIVO de Chromium
+   (webContents.zoomLevel en electron/main.js — mismo mecanismo que Ctrl+/
+   Ctrl- en cualquier navegador), que sí mantiene consistentes
+   getBoundingClientRect/eventos de mouse/position:fixed bajo escala. ── */
 
 a { color: inherit; text-decoration: none; }
 

@@ -80,6 +80,17 @@ export const ventasService = {
     return mapVenta(res.data.data);
   },
 
+  // "Override de gerente" para descuentos — confirma el PIN corto de otro
+  // usuario de la empresa con permiso para descontar (configurado aparte de
+  // su contraseña de login, ver usuariosService.cambiarPin), sin loguearse
+  // como esa persona. Devuelve un token de un solo uso (vence en 10 min) que
+  // se manda como autorizacion_descuento al crear la venta (ver create() de
+  // arriba y VentasController::autorizarDescuento en el backend).
+  async autorizarDescuento(pin) {
+    const res = await api.post('ventas/autorizar-descuento', { pin });
+    return { token: res.data.token, autorizadoPor: res.data.autorizado_por };
+  },
+
   async anular(id) {
     const res = await api.post(`ventas/${id}/anular`);
     return { venta: mapVenta(res.data.data), message: res.data.message };

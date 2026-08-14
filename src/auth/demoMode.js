@@ -18,10 +18,10 @@ const DEMO_PERMISOS_CODIGOS = [
   'list-carritos-vaciados',
   'ver-filtros-fechas',
   // Fila-por-fila: crear/editar/eliminar de cada entidad (ver useHasPermiso.jsx)
-  'create-productos', 'delete-productos',
+  'create-productos', 'delete-productos', 'export-productos',
   'create-categorias', 'update-categorias', 'delete-categorias',
   'create-proveedores', 'update-proveedores', 'delete-proveedores',
-  'create-clientes', 'update-clientes', 'delete-clientes',
+  'create-clientes', 'update-clientes', 'delete-clientes', 'import-clientes', 'export-clientes',
   'create-usuarios', 'delete-usuarios', 'assign-permisos',
 ];
 

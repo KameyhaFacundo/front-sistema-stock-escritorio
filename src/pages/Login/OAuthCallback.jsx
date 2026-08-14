@@ -65,7 +65,7 @@ export default function OAuthCallback() {
         alignItems: "center",
         justifyContent: "center",
         gap: 2,
-        fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+        fontFamily: "'Figtree', ui-sans-serif, system-ui, sans-serif",
       }}
     >
       <CircularProgress size={32} sx={{ color: PRIMARY_COLOR }} />

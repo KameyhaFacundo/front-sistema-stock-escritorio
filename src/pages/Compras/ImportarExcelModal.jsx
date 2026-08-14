@@ -8,8 +8,32 @@ import CloseIcon        from '@mui/icons-material/Close';
 import TableChartIcon   from '@mui/icons-material/TableChart';
 import CheckCircleIcon  from '@mui/icons-material/CheckCircle';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { BORDER, INK, INK2, MUTED, P, HOVER, TABLE_HEADER, modalPaperSx } from '../../theme/tokens';
 import { leerExcelCompra } from '../../utils/excelImport';
+import { exportarExcel } from '../../utils/excelExport';
+
+// Plantilla lista para completar y volver a subir — mismas columnas, mismo
+// orden, que espera leerExcelCompra() de abajo (nombre, código, cantidad,
+// precio), vacía (sin filas de ejemplo) para completar directo. El código es
+// opcional pero, si se completa, matchea contra el catálogo de forma exacta
+// y trae el nombre real del producto solo — no hace falta tipear también el
+// nombre a mano (ver matchProducto en comprasMatching.js).
+export function descargarPlantillaCompra() {
+  exportarExcel({
+    filename: 'plantilla_importar_compra.xlsx',
+    sheetName: 'Compra',
+    title: 'Plantilla de importación de compra',
+    subtitle: 'Completá una fila por producto y volvé a subir este mismo archivo. Si completás el código no hace falta escribir el nombre: se busca solo en el catálogo por código, que es más confiable que el nombre.',
+    columns: [
+      { header: 'Código',   width: 18 },
+      { header: 'Nombre',   width: 32 },
+      { header: 'Cantidad', width: 14, align: 'right' },
+      { header: 'Precio',   width: 16, numFmt: '"$" #,##0.00', align: 'right' },
+    ],
+    rows: [],
+  });
+}
 import { matchProducto, precioVentaSugerido } from './comprasMatching';
 import { productosService } from '../../services/productosService';
 import { toLocalDateStr } from '../../utils/format';
@@ -71,7 +95,8 @@ export default function ImportarExcelModal({ open, onClose, onConfirm, proveedor
       setPagina(1);
       setLineas(filas.map(f => ({
         nombre_original: f.nombre,
-        producto_match:  matchProducto(f.nombre, candidatosPorNombre.get(f.nombre) || []),
+        codigo_original: f.codigo,
+        producto_match:  matchProducto(f.nombre, candidatosPorNombre.get(f.nombre) || [], f.codigo),
         cantidad:        f.cantidad,
         precio_compra:   f.precio ?? '',
       })));
@@ -108,6 +133,7 @@ export default function ImportarExcelModal({ open, onClose, onConfirm, proveedor
       archivos grandes al renderizar todas las filas de una). ── */
   if (lineas) {
     const importCols = [
+      { key: 'codigo',   header: 'Código',          width: '140px' },
       { key: 'nombre',   header: 'Producto',       width: '1.6fr' },
       { key: 'cantidad', header: 'Cant.',           width: '110px' },
       { key: 'precio',   header: 'Precio compra',   width: '140px' },
@@ -152,6 +178,11 @@ export default function ImportarExcelModal({ open, onClose, onConfirm, proveedor
                 const rowBg = l.producto_match ? 'transparent' : '#f59e0b12';
                 return (
                   <Box key={l._idx} role="row" sx={{ display: 'contents' }}>
+                    <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75, display: 'flex', alignItems: 'center' }}>
+                      <Typography sx={{ color: l.producto_match?.codigo || l.codigo_original ? INK2 : MUTED, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {l.producto_match?.codigo || l.codigo_original || '—'}
+                      </Typography>
+                    </Box>
                     <Box sx={{ bgcolor: rowBg, borderBottom: `1px solid ${BORDER}`, px: 1, py: 0.75, display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
                       {l.producto_match
                         ? <CheckCircleIcon sx={{ color: '#10b981', fontSize: 14, flexShrink: 0 }} />
@@ -249,10 +280,16 @@ export default function ImportarExcelModal({ open, onClose, onConfirm, proveedor
           </Select>
         </FormControl>
 
-        <Typography sx={{ color: MUTED, fontSize: 14, lineHeight: 1.65, mb: 2 }}>
+        <Typography sx={{ color: MUTED, fontSize: 14, lineHeight: 1.65, mb: 1.5 }}>
           El archivo debe tener columnas de <strong>nombre</strong>, <strong>cantidad</strong> y <strong>precio</strong>
           {' '}(con o sin encabezado — si no hay encabezado, toma las 3 primeras columnas en ese orden).
+          {' '}Si agregás una columna de <strong>código</strong>, con eso alcanza — no hace falta escribir también el nombre, se busca solo en el catálogo por código y es más confiable, porque no depende de que el texto coincida exactamente.
         </Typography>
+
+        <Button size="small" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />} onClick={descargarPlantillaCompra}
+          sx={{ mb: 2, color: P, textTransform: 'none', fontWeight: 600, fontSize: 12.5, px: 0, '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}>
+          Descargar plantilla vacía
+        </Button>
 
         {error && (
           <Box sx={{ mb: 2, p: 1.5, bgcolor: '#ef444415', border: '1px solid #ef444435', borderRadius: '8px' }}>

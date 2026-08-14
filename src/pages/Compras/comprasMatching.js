@@ -3,7 +3,16 @@
 // importación de compras desde Excel, para no pedirle al usuario que
 // seleccione todo a mano cuando el nombre ya coincide razonablemente.
 
-export function matchProducto(nombre, productos) {
+// codigo es opcional (tercer parámetro) — si viene, matchea PRIMERO por
+// código exacto (mucho más confiable: no depende de que el texto del nombre
+// coincida letra por letra, ver ImportarExcelModal.jsx) y solo si no
+// encuentra nada cae al matching aproximado por nombre de siempre.
+export function matchProducto(nombre, productos, codigo) {
+  const c = (codigo || '').toLowerCase().trim();
+  if (c) {
+    const porCodigo = productos.find(p => (p.codigo || '').toLowerCase().trim() === c);
+    if (porCodigo) return porCodigo;
+  }
   const n = (nombre || '').toLowerCase().trim();
   if (!n) return null;
   return (

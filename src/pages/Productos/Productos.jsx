@@ -11,6 +11,7 @@ import ShuffleIcon      from '@mui/icons-material/Shuffle';
 import AddIcon          from '@mui/icons-material/Add';
 import CloseIcon        from '@mui/icons-material/Close';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import FileUploadIcon   from '@mui/icons-material/FileUpload';
 import EditIcon         from '@mui/icons-material/Edit';
 import DeleteIcon       from '@mui/icons-material/Delete';
@@ -63,6 +64,7 @@ import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import AyudaButton from '../../components/shared/AyudaButton';
 import { registerTour } from '../../utils/tour';
 import { useIsMobile } from '../../utils/responsive';
+import useContainerWidth from '../../hooks/useContainerWidth';
 import iaService from '../../services/iaService';
 import { useAuth } from '../../auth/AuthContextBase';
 import { abrevUnidad, UNIDAD_LABEL, parseUnidad } from '../../utils/unidadMedida';
@@ -129,6 +131,74 @@ async function generarPdfInventario(rows, empresa) {
   });
 
   doc.save(`inventario-${hoy.replace(/\//g, '-')}.pdf`);
+}
+
+// PDF PRIMARY/INK/MUTED/BORDER en RGB — mismo criterio "ink-light" (sin
+// bandas de color sólidas, imprime limpio en blanco y negro) que
+// exportarPDFProveedores en Proveedores.jsx, para que el listado de
+// Productos se vea consistente con el de Proveedores.
+const PDF_LISTADO_INK    = [30, 32, 40];
+const PDF_LISTADO_MUTED  = [110, 116, 130];
+const PDF_LISTADO_BORDER = [222, 217, 209];
+
+// A diferencia de generarPdfInventario (hoja de trabajo para contar stock a
+// mano), esto es un listado para llevarse/archivar — respeta los mismos
+// filtros activos en pantalla (se le pasan las filas ya filtradas, ver
+// handleExportarPdfListado más abajo).
+async function generarPdfListadoProductos(rows, empresaNombre) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'), import('jspdf-autotable'),
+  ]);
+  const doc     = new jsPDF({ orientation: 'landscape' });
+  const pageW   = doc.internal.pageSize.getWidth();
+  const marginX = 14;
+  const hoy     = new Date().toLocaleDateString('es-AR');
+
+  let y = 16;
+  doc.setFontSize(15);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(...PDF_LISTADO_INK);
+  doc.text(empresaNombre || COMPANY_NAME, marginX, y);
+
+  doc.setFontSize(8.5);
+  doc.setFont(undefined, 'normal');
+  doc.setTextColor(...PDF_LISTADO_MUTED);
+  doc.text(`Emitido ${hoy}`, pageW - marginX, y, { align: 'right' });
+
+  y += 5;
+  doc.setFontSize(9.5);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(...PDF_INV_PRIMARY);
+  doc.text('LISTADO DE PRODUCTOS', marginX, y);
+  doc.setFontSize(8.5);
+  doc.setFont(undefined, 'normal');
+  doc.setTextColor(...PDF_LISTADO_MUTED);
+  doc.text(`${rows.length} producto${rows.length !== 1 ? 's' : ''}`, pageW - marginX, y, { align: 'right' });
+
+  y += 4;
+  doc.setDrawColor(...PDF_LISTADO_BORDER);
+  doc.setLineWidth(0.3);
+  doc.line(marginX, y, pageW - marginX, y);
+
+  y += 6;
+  autoTable(doc, {
+    startY: y,
+    head: [[
+      { content: 'Código' }, { content: 'Producto' }, { content: 'Categoría' },
+      { content: 'Proveedor' }, { content: 'Stock' }, { content: 'Precio' },
+    ]],
+    body: rows.map(p => [
+      p.codigo || '-', p.nombre, p.categoria || '-',
+      p.proveedor || '-', String(p.stock ?? 0), fmtMoney(p.precioFinal ?? 0),
+    ]),
+    theme: 'plain',
+    styles:       { fontSize: 9, textColor: PDF_LISTADO_INK, lineColor: PDF_LISTADO_BORDER, lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0 }, cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 } },
+    headStyles:   { textColor: PDF_LISTADO_INK, fontSize: 8.5, fontStyle: 'bold', lineColor: PDF_LISTADO_INK, lineWidth: { top: 0, right: 0, bottom: 0.5, left: 0 } },
+    columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' } },
+    margin: { left: marginX, right: marginX },
+  });
+
+  doc.save(`productos-${hoy.replaceAll('/', '-')}.pdf`);
 }
 
 function Label({ children, required }) {
@@ -2902,6 +2972,16 @@ function ModalActualizarPrecios({ open, onClose, categorias, proveedores, recarg
 ────────────────────────────────────────────── */
 export default function Productos() {
   const isMobile = useIsMobile();
+  // La tabla ancha (10 columnas) necesita bastante lugar real — con el
+  // sidebar expandido, poco zoom de más, o una ventana angosta de escritorio
+  // (no necesariamente un celular) las columnas se aprietan hasta romperse
+  // (ver reporte de usuario). En vez de perseguir anchos de columna, por
+  // debajo de este umbral se muestra el mismo layout de tarjetas que ya
+  // existía para mobile — se mide el contenedor real, no el viewport, para
+  // que reaccione a la sidebar colapsada/expandida y al zoom de la página.
+  const MIN_TABLA_ANCHA = 1500;
+  const [tablaRef, tablaWidth] = useContainerWidth();
+  const mostrarComoCelular = isMobile || (tablaWidth > 0 && tablaWidth < MIN_TABLA_ANCHA);
   const { crearProducto, actualizarProducto, eliminarProducto, subirImagenProducto, eliminarImagenProducto, generarImagenIaProducto, generarImagenComboIaProducto, recargarProductos } = useProductos();
   const toast = useToast();
   const { user } = useAuth();
@@ -2912,6 +2992,7 @@ export default function Productos() {
   const puedeCrearProducto = checkPermisos('crearProducto');
   const puedeEditarProducto = checkPermisos('gestionarProductos');
   const puedeEliminarProducto = checkPermisos('eliminarProducto');
+  const puedeExportarProductos = checkPermisos('exportarProductos');
   const { data: sucursales = [] } = useSucursales({ enabled: checkPermisos('list-sucursales') });
   const mostrarStockTotal = sucursales.length > 1;
   // Un producto con variantes no tiene stock propio (vive en cada talle) — para
@@ -3392,8 +3473,27 @@ export default function Productos() {
   const handleExportarPdfInventario = async () => {
     setExportando(true);
     try {
-      generarPdfInventario(await obtenerTodosFiltrados(), user?.empresa);
-    } catch {
+      const rows = await obtenerTodosFiltrados();
+      await generarPdfInventario(rows, user?.empresa);
+    } catch (e) {
+      console.error(e);
+      toast('No se pudo generar el PDF', 'error');
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  // Listado en PDF respetando los filtros activos — mismo criterio que
+  // "Exportar PDF" en Proveedores.jsx, distinto de "Inventario" de arriba
+  // (esa es una hoja de trabajo para contar stock físico a mano, no un
+  // listado para archivar/entregar).
+  const handleExportarPdfListado = async () => {
+    setExportando(true);
+    try {
+      const rows = await obtenerTodosFiltrados();
+      await generarPdfListadoProductos(rows, user?.empresa?.nombre);
+    } catch (e) {
+      console.error(e);
       toast('No se pudo generar el PDF', 'error');
     } finally {
       setExportando(false);
@@ -3430,7 +3530,7 @@ export default function Productos() {
   };
 
   return (
-    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
+    <Box ref={tablaRef} sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
 
       {/* Modal Actualizar Precios */}
       {esIndumentaria && (
@@ -3626,13 +3726,15 @@ export default function Productos() {
                 </Button>
               </Tooltip>
             )}
-            <Tooltip title="Exportar Excel">
-              <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
-                onClick={handleExportarCSV} disabled={exportando}
-                sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
-                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
-              </Button>
-            </Tooltip>
+            {puedeExportarProductos && (
+              <Tooltip title="Exportar Excel">
+                <Button variant="outlined" startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
+                  onClick={handleExportarCSV} disabled={exportando}
+                  sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Exportar</Box>
+                </Button>
+              </Tooltip>
+            )}
             {puedeEliminarProducto && (
               <Tooltip title="Eliminar seleccionados">
                 <Button variant="outlined" startIcon={<DeleteIcon sx={{ fontSize: 15 }} />}
@@ -3655,6 +3757,18 @@ export default function Productos() {
                 <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Inventario</Box>
               </Button>
             </Tooltip>
+            {puedeExportarProductos && (
+              <Tooltip title="Descargar listado en PDF (respeta los filtros activos)">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleExportarPdfListado} disabled={exportando}
+                  startIcon={<PictureAsPdfIcon sx={{ fontSize: 15 }} />}
+                  sx={{ color: INK2, borderColor: BORDER, textTransform: 'none', fontSize: 13, borderRadius: '8px', px: { xs: 1.25, sm: 2 }, minWidth: 0, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, '&:hover': { borderColor: 'var(--border-hover)', bgcolor: HOVER } }}>
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>PDF</Box>
+                </Button>
+              </Tooltip>
+            )}
           </Box>
         </Box>
 
@@ -3722,7 +3836,7 @@ export default function Productos() {
                       sx={{ flexShrink: 0, mt: -0.5, mr: -0.5, '& .MuiSwitch-switchBase.Mui-checked': { color: P }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: P }, '& .MuiSwitch-track': { bgcolor: BORDER } }} />
                   </Box>
                   <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700, lineHeight: 1.3, mt: 0.25 }} noWrap>{p.nombre}</Typography>
-                  <Typography sx={{ color: MUTED, fontSize: 11.5 }}>{p.codigo}</Typography>
+                  <Typography sx={{ color: INK2, fontSize: 11.5, fontWeight: 700 }}>{p.codigo}</Typography>
 
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mt: 'auto', pt: 0.75 }}>
                     <Box>
@@ -3755,7 +3869,7 @@ export default function Productos() {
         )}
 
         {/* Tabla */}
-        {displayMode === 'tabla' && (isMobile ? (
+        {displayMode === 'tabla' && (mostrarComoCelular ? (
           <Box sx={{ display: 'flex', flexDirection: 'column' }}>
             {paged.length === 0 ? (
               <Box sx={{ py: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
@@ -3780,7 +3894,7 @@ export default function Productos() {
               <Box key={p.id}
                 onClick={() => setSeleccionados(s => s.includes(p.id) ? s.filter(id => id !== p.id) : [...s, p.id])}
                 sx={{
-                  display: 'flex', gap: 1.25, alignItems: 'flex-start', px: 2, py: 1.5,
+                  display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', px: 2, py: 1.25,
                   borderBottom: `1px solid ${BORDER}`, '&:last-child': { borderBottom: 'none' },
                   bgcolor: seleccionados.includes(p.id) ? 'rgba(92,110,248,0.06)' : 'transparent',
                   cursor: 'pointer',
@@ -3788,66 +3902,66 @@ export default function Productos() {
                 <Checkbox size="small" checked={seleccionados.includes(p.id)}
                   onChange={(e) => { e.stopPropagation(); setSeleccionados(s => s.includes(p.id) ? s.filter(id => id !== p.id) : [...s, p.id]); }}
                   onClick={e => e.stopPropagation()}
-                  sx={{ color: BORDER, '&.Mui-checked': { color: P }, p: 0, mt: 0.25, flexShrink: 0 }} />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-                        <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600 }} noWrap>{p.nombre}</Typography>
-                        {p.esCombo && (
-                          <Chip label="Combo" size="small" sx={{ height: 21, bgcolor: `${P}22`, color: P, fontWeight: 700, fontSize: 10.5, borderRadius: '5px', border: `1px solid ${P}44`, '& .MuiChip-label': { px: 1 } }} />
-                        )}
-                        {p.tieneVariantes && (
-                          <Chip label={`${p.variantes.length} talles`} size="small" sx={{ height: 21, bgcolor: `${P}22`, color: P, fontWeight: 700, fontSize: 10.5, borderRadius: '5px', border: `1px solid ${P}44`, '& .MuiChip-label': { px: 1 } }} />
-                        )}
-                        {!p.tieneVariantes && p.talle && (
-                          <Chip label={`Talle ${p.talle}`} size="small" sx={{ height: 21, bgcolor: `${P}22`, color: P, fontWeight: 700, fontSize: 10.5, borderRadius: '5px', border: `1px solid ${P}44`, '& .MuiChip-label': { px: 1 } }} />
-                        )}
+                  sx={{ color: BORDER, '&.Mui-checked': { color: P }, p: 0, flexShrink: 0 }} />
+
+                {/* Nombre + código — la única columna que de verdad necesita
+                    ancho variable, el resto son bloques cortos de tamaño fijo
+                    que se acomodan al lado en la misma fila. */}
+                <Box sx={{ flex: '1 1 260px', minWidth: 180 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                    <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600 }} noWrap>{p.nombre}</Typography>
+                    {p.esCombo && (
+                      <Chip label="Combo" size="small" sx={{ height: 21, bgcolor: `${P}22`, color: P, fontWeight: 700, fontSize: 10.5, borderRadius: '5px', border: `1px solid ${P}44`, '& .MuiChip-label': { px: 1 } }} />
+                    )}
+                    {p.tieneVariantes && (
+                      <Chip label={`${p.variantes.length} talles`} size="small" sx={{ height: 21, bgcolor: `${P}22`, color: P, fontWeight: 700, fontSize: 10.5, borderRadius: '5px', border: `1px solid ${P}44`, '& .MuiChip-label': { px: 1 } }} />
+                    )}
+                    {!p.tieneVariantes && p.talle && (
+                      <Chip label={`Talle ${p.talle}`} size="small" sx={{ height: 21, bgcolor: `${P}22`, color: P, fontWeight: 700, fontSize: 10.5, borderRadius: '5px', border: `1px solid ${P}44`, '& .MuiChip-label': { px: 1 } }} />
+                    )}
+                  </Box>
+                  <Typography sx={{ color: INK2, fontSize: 12, fontWeight: 700 }}>{p.codigo}</Typography>
+                </Box>
+
+                <Box sx={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 110 }}>
+                  <Chip label={p.categoria} size="small" sx={{ bgcolor: p.cColor + '22', color: p.cColor, fontWeight: 600, fontSize: 11, borderRadius: '6px', border: `1px solid ${p.cColor}44` }} />
+                  {(() => {
+                    const [label, color] = getVencimientoBadge(p.fechaVencimiento);
+                    if (!label) return null;
+                    return (
+                      <Box component="span" sx={{ fontSize: 10, fontWeight: 700, px: 0.75, py: 0.2, borderRadius: '4px', bgcolor: color + '22', color, border: `1px solid ${color}55` }}>
+                        {label}
                       </Box>
-                      <Typography sx={{ color: MUTED, fontSize: 12 }}>{p.codigo}</Typography>
-                    </Box>
-                    <Switch checked={p.activo} size="small" disabled={!puedeEditarProducto} onClick={e => e.stopPropagation()}
-                      onChange={() => actualizarProducto(p.id, { activo: !p.activo })} sx={{ ...swSx, flexShrink: 0 }} />
-                  </Box>
+                    );
+                  })()}
+                </Box>
 
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mt: 0.5 }}>
-                    <Chip label={p.categoria} size="small" sx={{ bgcolor: p.cColor + '22', color: p.cColor, fontWeight: 600, fontSize: 11, borderRadius: '6px', border: `1px solid ${p.cColor}44` }} />
-                    {(() => {
-                      const [label, color] = getVencimientoBadge(p.fechaVencimiento);
-                      if (!label) return null;
-                      return (
-                        <Box component="span" sx={{ fontSize: 10, fontWeight: 700, px: 0.75, py: 0.2, borderRadius: '4px', bgcolor: color + '22', color, border: `1px solid ${color}55` }}>
-                          {label}
-                        </Box>
-                      );
-                    })()}
-                  </Box>
+                <Box sx={{ flexShrink: 0, minWidth: 110 }}>
+                  <Typography sx={{ color: INK, fontSize: 15, fontWeight: 700 }}>{fmtMoney(p.precioFinal)}</Typography>
+                  <Typography sx={{ color: stockDeFila(p) <= p.alerta ? '#f59e0b' : MUTED, fontSize: 12 }}>
+                    {stockDeFila(p)} {abrevUnidad(p.unidadMedida)}{mostrarStockTotal && p.stockTotal !== p.stock ? ` · ${p.stockTotal} total` : ''}
+                  </Typography>
+                </Box>
 
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mt: 1 }}>
-                    <Box>
-                      <Typography sx={{ color: INK, fontSize: 15, fontWeight: 700 }}>{fmtMoney(p.precioFinal)}</Typography>
-                      <Typography sx={{ color: stockDeFila(p) <= p.alerta ? '#f59e0b' : MUTED, fontSize: 12 }}>
-                        {stockDeFila(p)} {abrevUnidad(p.unidadMedida)}{mostrarStockTotal && p.stockTotal !== p.stock ? ` · ${p.stockTotal} total` : ''}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 0.25 }} onClick={e => e.stopPropagation()}>
-                      <Tooltip title="Ver detalle">
-                        <IconButton size="small" onClick={() => setProductoDetalle(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: `${P}14` }, borderRadius: '6px' }}>
-                          <VisibilityIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                      {puedeEditarProducto && (
-                        <IconButton size="small" onClick={() => p.esCombo ? setComboEditar(p) : setProductoEditar(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: HOVER }, borderRadius: '6px' }}>
-                          <EditIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      )}
-                      {puedeEliminarProducto && (
-                        <IconButton size="small" onClick={() => setProductoElim(p)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
-                          <DeleteIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      )}
-                    </Box>
-                  </Box>
+                <Switch checked={p.activo} size="small" disabled={!puedeEditarProducto} onClick={e => e.stopPropagation()}
+                  onChange={() => actualizarProducto(p.id, { activo: !p.activo })} sx={{ ...swSx, flexShrink: 0 }} />
+
+                <Box sx={{ display: 'flex', gap: 0.25, flexShrink: 0, ml: 'auto' }} onClick={e => e.stopPropagation()}>
+                  <Tooltip title="Ver detalle">
+                    <IconButton size="small" onClick={() => setProductoDetalle(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: `${P}14` }, borderRadius: '6px' }}>
+                      <VisibilityIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Tooltip>
+                  {puedeEditarProducto && (
+                    <IconButton size="small" onClick={() => p.esCombo ? setComboEditar(p) : setProductoEditar(p)} sx={{ color: MUTED, '&:hover': { color: P, bgcolor: HOVER }, borderRadius: '6px' }}>
+                      <EditIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  )}
+                  {puedeEliminarProducto && (
+                    <IconButton size="small" onClick={() => setProductoElim(p)} sx={{ color: MUTED, '&:hover': { color: ERROR, bgcolor: ERROR_BG }, borderRadius: '6px' }}>
+                      <DeleteIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  )}
                 </Box>
               </Box>
             ))}
@@ -3907,7 +4021,7 @@ export default function Productos() {
               }}
               onClick={e => e.stopPropagation()}
               sx={{ color: BORDER, '&.Mui-checked': { color: P }, p: 0 }} />
-            <Typography sx={{ color: MUTED, fontSize: 12.5, fontFamily: 'monospace' }}>
+            <Typography sx={{ color: INK2, fontSize: 12.5, fontFamily: 'monospace', fontWeight: 700 }}>
               {p.codigo || '—'}
             </Typography>
             <Box sx={{ minWidth: 0 }}>

@@ -10,6 +10,17 @@ import Loading from './components/shared/AppLoading'
 function App() {
   useTokenExpirationCheck()
 
+  // La barrita indicadora de MUI Tabs (Dashboard, Caja, Configuración, POS
+  // mobile) mide el ancho/posición de cada pestaña UNA vez al montar — si en
+  // ese momento la tipografía bold de Figtree todavía no terminó de cargar
+  // (@font-face, ver index.css), mide contra la fuente de reemplazo más
+  // angosta y nunca vuelve a recalcular sola, quedando desalineada para
+  // siempre en esa sesión. document.fonts.ready + un resize sintético fuerza
+  // a MUI a remedirla ya con la fuente real puesta.
+  useEffect(() => {
+    document.fonts?.ready?.then(() => window.dispatchEvent(new Event('resize')));
+  }, []);
+
   useEffect(() => {
     const handler = (e) => {
       if (e.ctrlKey && e.key === 'Enter') {

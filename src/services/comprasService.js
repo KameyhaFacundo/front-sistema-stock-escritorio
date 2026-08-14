@@ -28,6 +28,7 @@ export function mapCompra(c) {
         id:            l.id_linea,
         id_producto:   l.id_producto,
         nombre:        l.producto?.producto || 'Producto',
+        codigo:        l.producto?.codigo || null,
         unidadMedida:  l.producto?.unidad_medida || 'unidad',
         // El backend castea 'cantidad' como decimal:2, que Laravel serializa
         // como STRING ("1.00") — sin este parseFloat, sumar cantidades con "+"
