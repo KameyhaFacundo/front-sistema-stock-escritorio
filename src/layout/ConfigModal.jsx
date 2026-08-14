@@ -394,6 +394,7 @@ function TabNegocio() {
   // — ver ultimo-backup-info en electron/main.js). null mientras no haya
   // Electron disponible (pnpm dev/demo) o todavía no se consultó.
   const [ultimoBackupReal, setUltimoBackupReal] = useState(null);
+  const [ejecutandoBackup, setEjecutandoBackup] = useState(false);
   // Estado de "Conectar otra caja" — comentado junto con el botón/modal más
   // abajo, descomentar los tres si se reactiva.
   // const [lanModal, setLanModal] = useState(false);
@@ -453,6 +454,26 @@ function TabNegocio() {
       toast('No se pudo generar el backup', 'error');
     } finally {
       setDescargando(false);
+    }
+  };
+
+  // Alternativa manual al backup automático diario (mismo comando exacto,
+  // ver ejecutarBackup en electron/backend.js) — el automático programado
+  // sigue corriendo solo en su horario de siempre, esto no lo reemplaza,
+  // es solo para cuando el dueño del negocio quiere asegurarse de tener uno
+  // fresco ahora mismo sin esperar (antes de actualizar, cambiar de PC, etc.).
+  const ejecutarBackupAhora = async () => {
+    setEjecutandoBackup(true);
+    try {
+      const res = await window.electronAPI.ejecutarBackupAhora();
+      if (res.ok) {
+        toast('Backup generado correctamente', 'success');
+        consultarUltimoBackupReal();
+      } else {
+        toast('No se pudo generar el backup', 'error');
+      }
+    } finally {
+      setEjecutandoBackup(false);
     }
   };
 
@@ -835,20 +856,29 @@ function TabNegocio() {
           aparte). Mismo criterio que Drive/Restaurar: solo existe en la
           app empaquetada. */}
       {driveDisponible && (
-        <Box sx={{ ...card, p: 2.5, mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Box sx={{
-            width: 36, height: 36, borderRadius: '10px', flexShrink: 0,
-            bgcolor: ultimoBackup ? SUCCESS_BG : HOVER,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <ReceiptLongIcon sx={{ color: ultimoBackup ? SUCCESS : MUTED, fontSize: 18 }} />
+        <Box sx={{ ...card, p: 2.5, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{
+              width: 36, height: 36, borderRadius: '10px', flexShrink: 0,
+              bgcolor: ultimoBackup ? SUCCESS_BG : HOVER,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <ReceiptLongIcon sx={{ color: ultimoBackup ? SUCCESS : MUTED, fontSize: 18 }} />
+            </Box>
+            <Box>
+              <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>Backup automático</Typography>
+              <Typography sx={{ color: ultimoBackup ? SUCCESS : MUTED, fontSize: 12.5, mt: 0.25, fontWeight: 600 }}>
+                {backupTooltip}
+              </Typography>
+            </Box>
           </Box>
-          <Box>
-            <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15 }}>Backup automático</Typography>
-            <Typography sx={{ color: ultimoBackup ? SUCCESS : MUTED, fontSize: 12.5, mt: 0.25, fontWeight: 600 }}>
-              {backupTooltip}
-            </Typography>
-          </Box>
+          <Tooltip title="Corre el mismo backup automático ahora, sin esperar a su horario — el automático programado sigue corriendo solo igual">
+            <Button onClick={ejecutarBackupAhora} disabled={ejecutandoBackup}
+              startIcon={ejecutandoBackup ? <CircularProgress size={14} /> : <ReceiptLongIcon sx={{ fontSize: 16 }} />}
+              sx={{ color: INK2, border: `1px solid ${BORDER}`, textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '8px', px: 2, flexShrink: 0, '&:hover': { bgcolor: HOVER } }}>
+              {ejecutandoBackup ? 'Generando...' : 'Hacer backup ahora'}
+            </Button>
+          </Tooltip>
         </Box>
       )}
 
