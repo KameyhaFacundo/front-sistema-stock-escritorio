@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Typography, TextField, Button, InputAdornment, IconButton,
   Dialog, DialogContent, Autocomplete, Select, MenuItem, FormControl, Chip, Collapse, Tooltip,
-  Table, TableHead, TableBody, TableRow, TableCell,
+  Table, TableHead, TableBody, TableRow, TableCell, Radio,
 } from '@mui/material';
 import SearchIcon       from '@mui/icons-material/Search';
 import FilterListIcon   from '@mui/icons-material/FilterList';
@@ -98,6 +98,93 @@ function ComparativaProveedoresChip({ comparativa }) {
         <CompareArrowsIcon sx={{ fontSize: 14 }} />
       </IconButton>
     </Tooltip>
+  );
+}
+
+// Selector de proveedor al agregar un producto a una compra — cuando el
+// producto tiene más de un proveedor configurado (principal + alternativos)
+// se abre automáticamente para comparar precios y elegir con cuál comprar.
+function ModalElegirProveedorProducto({ open, onClose, producto, idProveedorCompra, onConfirmar, onSacar }) {
+  const proveedores = useMemo(() => {
+    const lista = [];
+    if (producto?.id_proveedor && producto?.proveedor) {
+      lista.push({ id: producto.id_proveedor, nombre: `${producto.proveedor} (principal)`, costo: producto.costo, codigoProveedor: null });
+    }
+    for (const pa of producto?.proveedoresAlternativos || []) {
+      lista.push({ id: pa.id, nombre: pa.nombre, costo: pa.costo, codigoProveedor: pa.codigoProveedor });
+    }
+    return lista;
+  }, [producto]);
+
+  const [seleccionado, setSeleccionado] = useState('');
+
+  useEffect(() => {
+    if (!open) { setSeleccionado(''); return; }
+    const coincide = proveedores.find(p => p.id === Number(idProveedorCompra));
+    if (coincide) {
+      setSeleccionado(String(coincide.id));
+    } else {
+      const conCosto = proveedores.filter(p => p.costo != null);
+      const masBarato = conCosto.length > 0 ? conCosto.sort((a, b) => a.costo - b.costo)[0] : proveedores[0];
+      setSeleccionado(masBarato ? String(masBarato.id) : '');
+    }
+  }, [open, proveedores, idProveedorCompra]);
+
+  const handleConfirmar = () => {
+    const p = proveedores.find(p => String(p.id) === seleccionado);
+    onConfirmar(p);
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: modalPaperSx }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 2, sm: 2.5 }, py: 2, borderBottom: `1px solid ${BORDER}` }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }} noWrap>Elegir proveedor</Typography>
+          <Typography sx={{ color: MUTED, fontSize: 12.5, mt: 0.25 }} noWrap>{producto?.nombre}</Typography>
+        </Box>
+        <IconButton size="small" onClick={onClose} sx={{ color: MUTED, flexShrink: 0, '&:hover': { color: INK } }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <DialogContent sx={{ px: { xs: 2, sm: 2.5 }, py: 2 }}>
+        <Typography sx={{ color: INK2, fontSize: 13, mb: 1.5 }}>
+          Este producto tiene más de un proveedor. Elegí con cuál comprarlo:
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2.5 }}>
+          {proveedores.map(p => (
+            <Box key={p.id} onClick={() => setSeleccionado(String(p.id))}
+              sx={{
+                display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5,
+                border: `1px solid ${seleccionado === String(p.id) ? P : BORDER}`,
+                borderRadius: '10px', cursor: 'pointer',
+                bgcolor: seleccionado === String(p.id) ? `${P}0c` : 'transparent',
+                transition: 'all 0.15s',
+              }}>
+              <Radio checked={seleccionado === String(p.id)} sx={{ p: 0, color: BORDER, '&.Mui-checked': { color: P } }} />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography sx={{ color: INK, fontSize: 14, fontWeight: 600 }} noWrap>{p.nombre}</Typography>
+                {p.codigoProveedor && (
+                  <Typography sx={{ color: MUTED, fontSize: 12 }}>Código: {p.codigoProveedor}</Typography>
+                )}
+              </Box>
+              <Typography sx={{ color: INK, fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
+                {p.costo != null ? fmtMoney(p.costo) : 'Sin costo'}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1.5 }}>
+          <Button fullWidth variant="outlined" onClick={onSacar}
+            sx={{ color: ERROR, borderColor: ERROR_BORDER, textTransform: 'none', fontWeight: 600, borderRadius: '8px', '&:hover': { bgcolor: ERROR_BG, borderColor: ERROR } }}>
+            Sacar
+          </Button>
+          <Button fullWidth variant="contained" onClick={handleConfirmar} autoFocus
+            sx={{ bgcolor: P, textTransform: 'none', fontWeight: 600, borderRadius: '8px', '&:hover': { bgcolor: P_HOVER } }}>
+            Confirmar
+          </Button>
+        </Box>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -243,6 +330,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
   // idx -> [{ idProveedor, proveedorNombre, precioCompra }] ordenado de
   // más barato a más caro, ver sugerirCostoDeHistorial().
   const [comparativas, setComparativas] = useState({});
+  const [modalProvProd, setModalProvProd] = useState({ open: false, idx: null, producto: null });
   const cantRefs = useRef({});
   const autoRefs = useRef({});
   const proveedorRef = useRef(null);
@@ -339,6 +427,61 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
         setComparativas(prev => ({ ...prev, [idx]: otros }));
       }
     } catch { /* sin historial o sin conexión — se queda con los proveedores configurados */ }
+  };
+
+  const tieneMultiplesProveedores = (producto) => {
+    if (!producto) return false;
+    const principal = producto.id_proveedor && producto.proveedor ? 1 : 0;
+    const alternativos = producto.proveedoresAlternativos?.length || 0;
+    return principal + alternativos > 1;
+  };
+
+  const abrirSelectorProveedorProducto = (idx, producto) => {
+    setModalProvProd({ open: true, idx, producto });
+  };
+
+  const aplicarSeleccionProducto = (idx, producto) => {
+    setForm(f => {
+      const ls = [...f.lineas];
+      ls[idx] = {
+        ...ls[idx],
+        id_producto: producto.id,
+        productoData: producto,
+        precio_compra: producto.costo > 0 ? String(producto.costo) : ls[idx].precio_compra,
+        precio_venta: String(producto.precioFinal ?? producto.precio ?? ''),
+      };
+      return { ...f, lineas: ls };
+    });
+    setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
+    if (tieneMultiplesProveedores(producto)) {
+      abrirSelectorProveedorProducto(idx, producto);
+    } else {
+      sugerirCostoDeHistorial(idx, producto, form.id_proveedor);
+    }
+  };
+
+  const handleConfirmarProveedorProducto = (proveedorElegido) => {
+    const { idx, producto } = modalProvProd;
+    setModalProvProd({ open: false, idx: null, producto: null });
+    setForm(f => {
+      const ls = [...f.lineas];
+      if (ls[idx]?.id_producto !== producto.id) return f;
+      const margen = Number(ls[idx].margen) || 0;
+      const costo = proveedorElegido?.costo;
+      ls[idx] = {
+        ...ls[idx],
+        precio_compra: costo != null ? String(costo) : ls[idx].precio_compra,
+        precio_venta: costo != null ? String(Math.round(costo * (1 + margen / 100) * 100) / 100) : ls[idx].precio_venta,
+      };
+      return { ...f, lineas: ls };
+    });
+    sugerirCostoDeHistorial(idx, producto, proveedorElegido?.id || form.id_proveedor);
+  };
+
+  const handleSacarProveedorProducto = () => {
+    const { idx } = modalProvProd;
+    setModalProvProd({ open: false, idx: null, producto: null });
+    removeLinea(idx);
   };
 
   const setPrecioCompraLinea = (idx, valor) => {
@@ -842,9 +985,8 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                     idProveedor={form.id_proveedor}
                     onSeleccionar={(val) => {
                       if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); setComparativas(prev => { const n = { ...prev }; delete n[idx]; return n; }); return; }
-                      setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
-                      setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
-                      sugerirCostoDeHistorial(idx, val, form.id_proveedor);
+                      if (val._crear) { setNuevoProd({ active: true, idx, nombre: val.nombre }); return; }
+                      aplicarSeleccionProducto(idx, val);
                     }}
                     onCrear={(nombre) => setNuevoProd({ active: true, idx, nombre })}
                   />
@@ -973,9 +1115,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                         idProveedor={form.id_proveedor}
                         onSeleccionar={(val) => {
                           if (!val) { setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: '', productoData: null, precio_compra: '', precio_venta: '', margen: 10 }; return { ...f, lineas: ls }; }); setComparativas(prev => { const n = { ...prev }; delete n[idx]; return n; }); return; }
-                          setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: val.id, productoData: val, precio_compra: val.costo > 0 ? String(val.costo) : ls[idx].precio_compra, precio_venta: String(val.precioFinal ?? val.precio ?? '') }; return { ...f, lineas: ls }; });
-                          setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
-                          sugerirCostoDeHistorial(idx, val, form.id_proveedor);
+                          aplicarSeleccionProducto(idx, val);
                         }}
                         onCrear={(nombre) => setNuevoProd({ active: true, idx, nombre })}
                         onEnterKeyDown={async (e, query) => {
@@ -994,9 +1134,7 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
                             const exacto = candidatos.find(p => p.nombre.toLowerCase() === val.toLowerCase());
                             if (exacto) {
                               e.preventDefault();
-                              setForm(f => { const ls = [...f.lineas]; ls[idx] = { ...ls[idx], id_producto: exacto.id, productoData: exacto, precio_compra: exacto.costo > 0 ? String(exacto.costo) : ls[idx].precio_compra, precio_venta: String(exacto.precioFinal ?? exacto.precio ?? '') }; return { ...f, lineas: ls }; });
-                              setErrors(prev => { const n = { ...prev }; delete n[`linea_${idx}_prod`]; return n; });
-                              sugerirCostoDeHistorial(idx, exacto, form.id_proveedor);
+                              aplicarSeleccionProducto(idx, exacto);
                               irACantidad();
                             }
                           } catch { /* sin match — deja que el usuario elija del desplegable */ }
@@ -1102,6 +1240,15 @@ function ModalNuevaCompra({ open, onClose, onCreate, onUpdate, proveedores, init
           />
         )}
       </Dialog>
+
+      <ModalElegirProveedorProducto
+        open={modalProvProd.open}
+        onClose={() => setModalProvProd({ open: false, idx: null, producto: null })}
+        producto={modalProvProd.producto}
+        idProveedorCompra={form.id_proveedor}
+        onConfirmar={handleConfirmarProveedorProducto}
+        onSacar={handleSacarProveedorProducto}
+      />
 
       {/* ── Footer (fijo) ── */}
       <Box sx={{

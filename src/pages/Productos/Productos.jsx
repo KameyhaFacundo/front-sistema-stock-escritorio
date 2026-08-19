@@ -2181,6 +2181,32 @@ function ModalDetalleProducto({ open, onClose, producto: productoInicial, onVerH
           <DetalleItem label="Vencimiento" value={producto.fechaVencimiento ? fmtDate(producto.fechaVencimiento) : 'Sin vencimiento'} />
         </Box>
 
+        {producto.proveedoresAlternativos?.length > 0 && (
+          <Box sx={{ mb: 2.5 }}>
+            <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 1 }}>
+              Otros proveedores
+            </Typography>
+            <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '10px', overflow: 'hidden' }}>
+              {producto.proveedoresAlternativos.map((pa, i) => (
+                <Box key={pa.id} sx={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1,
+                  borderBottom: i < producto.proveedoresAlternativos.length - 1 ? `1px solid ${BORDER}` : 'none',
+                }}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600 }} noWrap>{pa.nombre}</Typography>
+                    {pa.codigoProveedor && (
+                      <Typography sx={{ color: MUTED, fontSize: 11.5 }}>Código: {pa.codigoProveedor}</Typography>
+                    )}
+                  </Box>
+                  <Typography sx={{ color: INK, fontSize: 13, fontWeight: 600, flexShrink: 0, ml: 1 }}>
+                    {pa.costo != null ? fmtMoney(pa.costo) : 'Sin costo'}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
+
         {producto.tieneVariantes && producto.variantes.length > 0 && (
           <Box sx={{ mb: 2.5 }}>
             <Typography sx={{ color: MUTED, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 1 }}>

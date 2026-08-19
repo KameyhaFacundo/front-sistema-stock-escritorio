@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Box, Typography, TextField, Button, IconButton, Paper,
-  CircularProgress, InputBase,
+  CircularProgress, InputBase, useTheme, useMediaQuery,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PrintIcon from '@mui/icons-material/Print';
@@ -21,7 +21,7 @@ import { BG, CARD, BORDER, INK, INK2, MUTED, P, P_HOVER, HOVER } from '../../the
 import { useToast } from '../../context/ToastContext';
 import { registerTour } from '../../utils/tour';
 import AyudaButton from '../../components/shared/AyudaButton';
-import { useIsMobile } from '../../utils/responsive';
+
 import './Etiquetas.css';
 
 const CM      = 37.8;
@@ -117,7 +117,8 @@ export default function Etiquetas() {
   const previewRef   = useRef(null);
   const toast        = useToast();
   const [openScanner, setOpenScanner] = useState(false);
-  const isMobile     = useIsMobile();
+  const theme        = useTheme();
+  const isNarrow     = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileStep, setMobileStep] = useState(1);
   const [printReady, setPrintReady] = useState(false);
 
@@ -148,19 +149,19 @@ export default function Etiquetas() {
         // En mobile "Plantilla" y "Vista previa" viven detrás de un stepper que
         // oculta los paneles con display:none — sin esto el tour resalta un
         // elemento invisible (0x0) en vez del panel real.
-        ...(isMobile ? { beforeNext: '[data-tour="etq-step-2"]' } : {}),
+        ...(isNarrow ? { beforeNext: '[data-tour="etq-step-2"]' } : {}),
       },
       {
         element: '[data-tour="etq-plantilla"]', title: 'Configurar plantilla',     description: 'Personalizá el diseño: tamaño en cm, colores, bordes y la posición de cada campo arrastrándolo en el editor visual.',
-        ...(isMobile ? { beforePrev: '[data-tour="etq-step-1"]', beforeNext: '[data-tour="etq-step-3"]' } : {}),
+        ...(isNarrow ? { beforePrev: '[data-tour="etq-step-1"]', beforeNext: '[data-tour="etq-step-3"]' } : {}),
       },
       {
         element: '[data-tour="etq-preview"]',   title: 'Vista previa de impresión', description: 'Así se verán las etiquetas en la hoja A4. Las páginas se calculan automáticamente según el tamaño de etiqueta.',
-        ...(isMobile ? { beforePrev: '[data-tour="etq-step-2"]' } : {}),
+        ...(isNarrow ? { beforePrev: '[data-tour="etq-step-2"]' } : {}),
       },
       { element: '[data-tour="etq-imprimir"]',  title: 'Imprimir',                 description: 'Cuando esté todo listo, hacé click acá para imprimir todas las etiquetas.' },
     ]);
-  }, [isMobile]);
+  }, [isNarrow]);
 
   useEffect(() => {
     const items = [];
@@ -314,7 +315,7 @@ export default function Etiquetas() {
         </Button>
       </Box>
 
-      {isMobile && (
+      {isNarrow && (
         <Box sx={{
           flexShrink: 0, display: 'flex', gap: 0.7, px: 1.2, py: 0.9,
           borderBottom: `1px solid ${BORDER}`, bgcolor: CARD,
@@ -339,13 +340,13 @@ export default function Etiquetas() {
         </Box>
       )}
 
-      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: isMobile ? 'column' : 'row', overflow: 'hidden', p: { xs: 1, sm: 1.5 }, gap: 1.5 }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: isNarrow ? 'column' : 'row', overflow: 'hidden', p: { xs: 1, sm: 1.5 }, gap: 1.5 }}>
 
         {/* PASO 1: Buscar productos */}
         <Paper elevation={0} sx={{
-          width: isMobile ? '100%' : 420,
-          flex: isMobile ? 1 : '0 0 auto',
-          display: isMobile ? (mobileStep === 1 ? 'flex' : 'none') : 'flex',
+          width: isNarrow ? '100%' : 420,
+          flex: isNarrow ? 1 : '0 0 auto',
+          display: isNarrow ? (mobileStep === 1 ? 'flex' : 'none') : 'flex',
           flexDirection: 'column',
           borderRadius: 2.5, overflow: 'hidden', border: `1px solid ${BORDER}`,
           boxShadow: `0 2px 16px ${P}12`, bgcolor: CARD,
@@ -489,10 +490,10 @@ export default function Etiquetas() {
 
         {/* PASO 2: Plantilla */}
         <Paper data-tour="etq-plantilla" elevation={0} sx={{
-          width: isMobile ? '100%' : 420,
-          flex: isMobile ? 1 : '0 0 auto',
+          width: isNarrow ? '100%' : 420,
+          flex: isNarrow ? 1 : '0 0 auto',
           minHeight: 0,
-          display: isMobile ? (mobileStep === 2 ? 'flex' : 'none') : 'flex',
+          display: isNarrow ? (mobileStep === 2 ? 'flex' : 'none') : 'flex',
           flexDirection: 'column',
           borderRadius: 2.5, overflow: 'hidden', border: `1px solid ${BORDER}`,
           boxShadow: `0 2px 16px ${P}12`, bgcolor: CARD,
@@ -505,7 +506,7 @@ export default function Etiquetas() {
                 posicionan según esa medida. Sin forzar un remount fresco al
                 entrar a la pestaña, algunos bloques quedan con la medida
                 vieja (0 o incorrecta) de cuando el panel todavía no se veía. */}
-            <EditorPlantilla key={isMobile ? mobileStep : 'desktop'}
+            <EditorPlantilla key={isNarrow ? mobileStep : 'desktop'}
               plantillaActiva={plantillaActiva} onPlantillaChange={setPlantillaActiva} />
           </Box>
         </Paper>
@@ -513,7 +514,7 @@ export default function Etiquetas() {
         {/* PASO 3: Vista previa */}
         <Paper data-tour="etq-preview" elevation={0} sx={{
           flex: 1,
-          display: isMobile ? (mobileStep === 3 ? 'flex' : 'none') : 'flex',
+          display: isNarrow ? (mobileStep === 3 ? 'flex' : 'none') : 'flex',
           flexDirection: 'column',
           borderRadius: 2.5, overflow: 'hidden', border: `1px solid ${BORDER}`,
           boxShadow: `0 2px 16px ${P}12`, bgcolor: CARD,

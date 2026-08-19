@@ -28,6 +28,8 @@ dist-ssr
 .env.local
 .env.*.local
 
+graphify-out/cache
+
 # Builds por cliente (ver clients/README.md) — el .env y los logos de cada
 # cliente real no se suben, solo la plantilla y el README quedan en git.
 # !clients/_template/** va al final del archivo (no acá) porque tiene que

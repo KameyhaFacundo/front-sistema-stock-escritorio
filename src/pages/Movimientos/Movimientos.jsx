@@ -1370,16 +1370,6 @@ export default function Movimientos() {
                 onToggle: (m) => toggleUno(m.id),
                 onToggleAll: toggleTodos,
               }}
-              actions={{
-                extra: (m) => m.tipo === 'ajuste' ? (
-                  <Tooltip title="Descargar Excel">
-                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); exportarMovimientoExcel(m); }}
-                      sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: HOVER }, borderRadius: '6px', p: '4px' }}>
-                      <FileDownloadIcon sx={{ fontSize: 15 }} />
-                    </IconButton>
-                  </Tooltip>
-                ) : null,
-              }}
               onRowClick={(m) => toggleUno(m.id)}
               emptyMessage="No se encontraron movimientos."
               mobileCard={(m) => (

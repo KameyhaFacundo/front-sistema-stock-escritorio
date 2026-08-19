@@ -70,3 +70,13 @@ CSS-variable-based dark/light theme — see `src/theme/ThemeContext.jsx` (`useAp
 
 ### Error reporting
 `src/sentry.js` initializes Sentry only if `VITE_SENTRY_DSN` is set (no-op otherwise, safe for local dev). `ErrorBoundary` (`src/components/shared/ErrorBoundary.jsx`) wraps the whole app in `App.jsx`. User-facing alerts/confirmations go through the SweetAlert2 wrapper in `src/functions/alerts.js` (`Alerta()` builder), not raw `window.alert`/`window.confirm`.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
