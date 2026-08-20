@@ -1,8 +1,10 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { loginApi, forgotPasswordApi, resetPasswordApi, verificar2faApi } from "../../auth/authServiceApi";
 import { AuthContext } from "../../auth/AuthContextBase";
+import { usuariosService } from "../../services/usuariosService";
+import ConfiguracionInicialModal from "../../layout/ConfiguracionInicialModal";
 import {
   Box, Typography, TextField, Button, InputAdornment,
   IconButton, Alert, CircularProgress, Stack, Tooltip,
@@ -482,11 +484,27 @@ export default function Login() {
 
   const [view, setView] = useState(initialView);
   const [pendingToken, setPendingToken] = useState(pending2faToken || null);
+  // Primer ingreso: antes de mostrar el login, se pregunta si la instalación
+  // todavía no se configuró (ver estadoConfiguracionInicial). null = todavía
+  // consultando; true/false = el resultado real.
+  const [setupPendiente, setSetupPendiente] = useState(null);
+
+  useEffect(() => {
+    // Si ya hay sesión no hace falta preguntar — el modal de configuración lo
+    // maneja DefaultLayout para el caso en que el admin inicial no lo completó.
+    if (token) return;
+    let activo = true;
+    usuariosService.estadoConfiguracionInicial()
+      .then((necesita) => { if (activo) setSetupPendiente(necesita); })
+      .catch(() => { if (activo) setSetupPendiente(false); });
+    return () => { activo = false; };
+  }, [token]);
 
   if (token) return <Navigate to={primeraRutaDisponible(checkPermisos)} />;
 
   return (
     <>
+      <ConfiguracionInicialModal open={setupPendiente === true} />
       <style>{getAutofillFix(mode)}</style>
       <Box sx={{
         position: 'fixed', inset: 0,

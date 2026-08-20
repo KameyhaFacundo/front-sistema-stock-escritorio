@@ -11,7 +11,7 @@ import { usuariosService } from '../services/usuariosService';
 import { empresaService } from '../services/empresaService';
 import { useToast } from '../context/ToastContext';
 import {
-  BORDER, CARD, ERROR, INK, INK2, INPUT, MUTED, P, P_HOVER, fieldSx,
+  BORDER, CARD, INK, INK2, INPUT, MUTED, P, P_HOVER, fieldSx,
 } from '../theme/tokens';
 
 export default function ConfiguracionInicialModal({ open }) {
@@ -149,9 +149,6 @@ export default function ConfiguracionInicialModal({ open }) {
           sx={{ mt: 3, bgcolor: P, color: '#fff', textTransform: 'none', fontWeight: 700, borderRadius: '8px', py: 1.25, '&:hover': { bgcolor: P_HOVER } }}>
           {saving ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Guardar y entrar con mi cuenta'}
         </Button>
-        <Typography sx={{ color: MUTED, fontSize: 11.5, textAlign: 'center', mt: 1.5 }}>
-          La cuenta inicial admin@gmail.com seguirá disponible como respaldo.
-        </Typography>
       </DialogContent>
     </Dialog>
   );

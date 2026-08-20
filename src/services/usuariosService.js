@@ -54,8 +54,13 @@ export const usuariosService = {
   },
 
   async configurarUsuarioInicial(data) {
-    const res = await api.post('users/configuracion-inicial', data);
+    const res = await api.post('setup/configuracion-inicial', data);
     return res.data;
+  },
+
+  async estadoConfiguracionInicial() {
+    const res = await api.get('setup/estado');
+    return res.data.necesita_configuracion;
   },
 
   // PIN corto para autorizar descuentos en el POS sin tipear la contraseña
