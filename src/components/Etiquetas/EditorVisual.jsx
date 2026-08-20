@@ -54,9 +54,15 @@ export default function EditorVisual({ campos, anchoCm, altoCm, fondo, borde, on
         Arrastrá los bloques · Redimensioná desde las esquinas · Clic para editar
       </Typography>
 
+      {/* maxWidth fija un tamaño de edición razonable siempre — sin esto, en
+          el layout mobile/stepper (donde este panel pasa a width:'100%')
+          una ventana de escritorio angosta pero no chica igual le da un
+          ancho enorme al panel, y como el canvas escala en base a ese ancho
+          (canvasH = canvasW * ratio), la etiqueta se veía gigante y
+          desproporcionada en vez del tamaño compacto de siempre. */}
       <Box ref={canvasRef} onClick={() => setSelected(null)}
         sx={{
-          position: 'relative', width: '100%', height: canvasH,
+          position: 'relative', width: '100%', maxWidth: 400, mx: 'auto', height: canvasH,
           bgcolor: fondo || '#ffffff',
           border: '1.5px solid', borderColor: borde ? '#bdbdbd' : '#e0e0e0',
           borderRadius: 1, overflow: 'hidden', userSelect: 'none',

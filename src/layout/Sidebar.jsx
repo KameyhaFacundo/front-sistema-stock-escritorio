@@ -1,4 +1,4 @@
-import { useContext, useState, useMemo } from 'react';
+import { useContext, useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Box, Typography, Avatar, Chip, Divider, IconButton, Tooltip, Menu, MenuItem, Badge,
@@ -13,6 +13,8 @@ import BusinessIcon              from '@mui/icons-material/Business';
 import BadgeIcon                 from '@mui/icons-material/Badge';
 import SettingsIcon              from '@mui/icons-material/Settings';
 import LogoutIcon                from '@mui/icons-material/Logout';
+import CloseIcon                 from '@mui/icons-material/Close';
+import MenuIcon                  from '@mui/icons-material/Menu';
 import LockOpenIcon              from '@mui/icons-material/LockOpen';
 import WbSunnyOutlinedIcon       from '@mui/icons-material/WbSunnyOutlined';
 import DarkModeOutlinedIcon      from '@mui/icons-material/DarkModeOutlined';
@@ -23,8 +25,6 @@ import DescriptionIcon           from '@mui/icons-material/Description';
 import LocalPrintshopIcon       from '@mui/icons-material/LocalPrintshop';
 import ExpandMoreIcon            from '@mui/icons-material/ExpandMore';
 import CheckIcon                 from '@mui/icons-material/Check';
-import KeyboardDoubleArrowLeftIcon  from '@mui/icons-material/KeyboardDoubleArrowLeft';
-import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArrowRight';
 import { AuthContext } from '../auth/AuthContextBase';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/useAppTheme';
@@ -38,6 +38,7 @@ import {
 } from '../theme/tokens';
 import { APP_NAME, APP_VERSION } from '../config/brand';
 import useLogo from '../hooks/useLogo';
+import { ALERT_SOUND_EVENT } from '../utils/alertSound';
 import { useSucursales } from '../hooks/queries/useSucursalesQueries';
 import { SIDEBAR_WIDTH, SIDEBAR_WIDTH_COLLAPSED } from './sidebarConstants';
 
@@ -162,7 +163,7 @@ function SidebarNavItem({ item, isActive, onClick, onMouseEnter, caja, collapsed
     : content;
 }
 
-export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onToggleCollapsed, onOpenConfig, onOpenAlertas, onConfirmLogout, stockBajoCount }) {
+export default function Sidebar({ collapsed, onToggleCollapsed, onOpenConfig, onOpenAlertas, onConfirmLogout, stockBajoCount }) {
   const { user, switchSucursal } = useContext(AuthContext);
   const toast = useToast();
   const { mode, toggle } = useAppTheme();
@@ -173,6 +174,28 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
   const [sucursalAnchor, setSucursalAnchor] = useState(null);
   const [cambiandoSucursal, setCambiandoSucursal] = useState(false);
   const [alertasVistas, setAlertasVistas] = useState(() => parseInt(localStorage.getItem('alertas_vistas') || '0', 10));
+
+  // "Push" de la campanita cada vez que suena una alerta (mismo evento que
+  // dispara el beep en useNotificaciones.js) — puramente visual, se apaga
+  // solo cuando termina la animación.
+  const [campanitaPush, setCampanitaPush] = useState(false);
+  const pushTimeoutRef = useRef(null);
+  useEffect(() => {
+    const onAlertSound = () => {
+      setCampanitaPush(false);
+      // Reinicia la animación aunque ya estuviera corriendo (dos alertas
+      // seguidas) — sin el frame en blanco entre medio, React no vuelve a
+      // aplicar la misma animación si el estado no llega a pasar por false.
+      requestAnimationFrame(() => setCampanitaPush(true));
+      clearTimeout(pushTimeoutRef.current);
+      pushTimeoutRef.current = setTimeout(() => setCampanitaPush(false), 600);
+    };
+    window.addEventListener(ALERT_SOUND_EVENT, onAlertSound);
+    return () => {
+      window.removeEventListener(ALERT_SOUND_EVENT, onAlertSound);
+      clearTimeout(pushTimeoutRef.current);
+    };
+  }, []);
 
   const { checkPermisos } = useHasPermiso();
   const { tieneFacturacion, tieneIA, tieneCobros, tieneCatalogo, tieneEtiquetas } = usePlan();
@@ -226,62 +249,48 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
     localStorage.setItem('alertas_vistas', String(alertas?.total || 0));
   };
 
-  const handleSidebarClose = () => onToggleSidebar(false);
-
   const userName     = user?.des_usu || user?.email?.split('@')[0] || 'Admin';
   const businessName = user?.empresa?.nombre || localStorage.getItem('empresa_nombre') || APP_NAME;
 
   return (
     <Box
       sx={{
-        width: { xs: W, md: collapsed ? W_COLLAPSED : W },
-        minWidth: { xs: W, md: collapsed ? W_COLLAPSED : W },
+        width: collapsed ? W_COLLAPSED : W,
+        minWidth: collapsed ? W_COLLAPSED : W,
         position: 'fixed', top: 0, left: 0, bottom: 0,
         bgcolor: CARD,
         borderRight: `1px solid ${BORDER}`,
         display: 'flex', flexDirection: 'column',
         overflowX: 'hidden', overflowY: 'auto',
         zIndex: 100,
-        transform: {
-          xs: sidebarOpen ? 'translateX(0)' : `translateX(-${W}px)`,
-          md: 'translateX(0)',
-        },
-        transition: 'transform 0.25s ease, width 0.2s ease, min-width 0.2s ease',
+        transition: 'width 0.2s ease, min-width 0.2s ease',
       }}
     >
-      {/* Riel de colapsar/expandir — solo escritorio. Ficha embebida en el
-          borde del panel (estilo IDE/editor), no un FAB flotante suelto. */}
-      <Tooltip title={collapsed ? 'Expandir menú' : 'Colapsar menú'} placement="right">
-        <IconButton
-          onClick={() => onToggleCollapsed?.(v => !v)}
-          sx={{
-            display: { xs: 'none', md: 'flex' },
-            position: 'absolute', top: 28, right: -13, zIndex: 101,
-            width: 26, height: 26, p: 0, borderRadius: '7px',
-            bgcolor: CARD, color: MUTED,
-            border: `1.5px solid ${BORDER}`,
-            boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
-            '&:hover': { color: P, borderColor: P, bgcolor: `${P}12` },
-            transition: 'color 0.15s, border-color 0.15s, background-color 0.15s',
-          }}
-        >
-          {collapsed
-            ? <KeyboardDoubleArrowRightIcon sx={{ fontSize: 16 }} />
-            : <KeyboardDoubleArrowLeftIcon sx={{ fontSize: 16 }} />}
-        </IconButton>
-      </Tooltip>
-
-      {/* Logo / workspace */}
+      {/* Logo / workspace — colapsado, el botón para reabrir el menú ocupa
+          el lugar del logo (en vez de una franja aparte arriba) para que el
+          riel cerrado quede en una sola fila, no dos apiladas. */}
       <Box sx={{ px: collapsed ? 1 : 2, py: 1.75, borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
-          <Box component={Link} to="/dashboard"
-            sx={{ display: 'block', flexShrink: 0, lineHeight: 0, '&:hover': { opacity: 0.85 } }}>
-            <Box component="img"
-              src={user?.empresa?.logo_url || logoSrc}
-              alt={APP_NAME}
-              onError={(e) => { e.target.src = logoSrc; }}
-              sx={{ height: collapsed ? 42 : 46, width: collapsed ? 42 : 46, borderRadius: '9px', objectFit: 'contain', display: 'block', transition: 'height 0.15s, width 0.15s' }} />
-          </Box>
+          {collapsed ? (
+            <Tooltip title="Expandir menú" placement="right">
+              <IconButton onClick={() => onToggleCollapsed?.(v => !v)}
+                sx={{
+                  width: 42, height: 42, borderRadius: '9px',
+                  color: MUTED, '&:hover': { color: INK, bgcolor: HOVER },
+                }}>
+                <MenuIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            </Tooltip>
+          ) : (
+            <Box component={Link} to="/dashboard"
+              sx={{ display: 'block', flexShrink: 0, lineHeight: 0, '&:hover': { opacity: 0.85 } }}>
+              <Box component="img"
+                src={user?.empresa?.logo_url || logoSrc}
+                alt={APP_NAME}
+                onError={(e) => { e.target.src = logoSrc; }}
+                sx={{ height: 46, width: 46, borderRadius: '9px', objectFit: 'contain', display: 'block' }} />
+            </Box>
+          )}
           {!collapsed && (
             <Box sx={{ minWidth: 0 }}>
               <Typography sx={{ color: INK, fontWeight: 700, fontSize: 15, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{businessName}</Typography>
@@ -301,12 +310,34 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
               </IconButton>
             </Tooltip>
             <Tooltip title="Alertas">
+              {/* Antes vivía también en la "Top bar mobile" de DefaultLayout
+                  — al sacar esa barra (el sidebar ahora es el mismo a
+                  cualquier ancho) este botón quedó como el único acceso a
+                  las alertas, así que ya no puede esconderse en xs. */}
               <IconButton size="small" onClick={handleAlertasClick}
-                sx={{ color: hayAlertasNuevas ? WARNING : MUTED, '&:hover': { color: INK, bgcolor: HOVER }, borderRadius: '6px', p: '4px', display: { xs: 'none', md: 'inline-flex' } }}>
+                sx={{ color: hayAlertasNuevas ? WARNING : MUTED, '&:hover': { color: INK, bgcolor: HOVER }, borderRadius: '6px', p: '4px' }}>
                 <Badge badgeContent={hayAlertasNuevas ? alertas.total : null} color="error"
                   sx={{ '& .MuiBadge-badge': { fontSize: 9, minWidth: 14, height: 14, p: '0 3px' } }}>
-                  <NotificationsIcon sx={{ fontSize: 17 }} />
+                  <NotificationsIcon sx={{
+                    fontSize: 17,
+                    transformOrigin: '50% 0%',
+                    animation: campanitaPush ? 'campanitaPush 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97)' : 'none',
+                    '@keyframes campanitaPush': {
+                      '0%':   { transform: 'rotate(0deg) scale(1)' },
+                      '20%':  { transform: 'rotate(-14deg) scale(1.25)' },
+                      '40%':  { transform: 'rotate(11deg) scale(1.1)' },
+                      '60%':  { transform: 'rotate(-7deg) scale(1.05)' },
+                      '80%':  { transform: 'rotate(3deg) scale(1)' },
+                      '100%': { transform: 'rotate(0deg) scale(1)' },
+                    },
+                  }} />
                 </Badge>
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Cerrar menú">
+              <IconButton size="small" onClick={() => onToggleCollapsed?.(v => !v)}
+                sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: HOVER }, borderRadius: '6px', p: '4px' }}>
+                <CloseIcon sx={{ fontSize: 17 }} />
               </IconButton>
             </Tooltip>
           </Box>
@@ -370,7 +401,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
               if (item.path === '/productos' && stockBajoCount > 0) {
                 const Icon = item.icon;
                 const content = (
-                  <Box component={Link} to="/productos" onClick={handleSidebarClose}
+                  <Box component={Link} to="/productos"
                     onMouseEnter={() => preloadPage('/productos')}
                     sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mx: 1, px: 1.25, py: 0.9, justifyContent: collapsed ? 'center' : 'flex-start', borderRadius: '999px', textDecoration: 'none', bgcolor: isActive ? ACTIVE_BG : 'transparent', color: isActive ? ACCENT_INK : INK, transition: 'all 0.15s', '&:hover': { bgcolor: isActive ? ACTIVE_BG : HOVER, color: isActive ? ACCENT_INK : INK }, }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: collapsed ? 'auto' : '100%' }}>
@@ -400,7 +431,7 @@ export default function Sidebar({ sidebarOpen, onToggleSidebar, collapsed, onTog
               }
 
               return (
-                <SidebarNavItem key={item.name} item={item} isActive={isActive} onClick={handleSidebarClose} onMouseEnter={() => preloadPage(item.path)} caja={caja} collapsed={collapsed} />
+                <SidebarNavItem key={item.name} item={item} isActive={isActive} onMouseEnter={() => preloadPage(item.path)} caja={caja} collapsed={collapsed} />
               );
             })}
           </Box>

@@ -1,7 +1,7 @@
 import { useContext, useState, useEffect, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Chip, IconButton, Badge, Popover,
+  Box, Typography, Chip, IconButton, Popover,
   Dialog, DialogContent, Button, InputAdornment,
 } from '@mui/material';
 import CloseIcon                 from '@mui/icons-material/Close';
@@ -10,7 +10,6 @@ import WarningAmberIcon          from '@mui/icons-material/WarningAmber';
 import CheckCircleOutlineIcon    from '@mui/icons-material/CheckCircleOutline';
 import HandshakeIcon             from '@mui/icons-material/Handshake';
 import BusinessIcon              from '@mui/icons-material/Business';
-import MenuIcon                  from '@mui/icons-material/Menu';
 import LockOpenIcon              from '@mui/icons-material/LockOpen';
 import CloudOffIcon              from '@mui/icons-material/CloudOff';
 import { AuthContext } from '../auth/AuthContextBase';
@@ -31,8 +30,6 @@ import {
   SUCCESS, ERROR, WARNING,
 } from '../theme/tokens';
 import { fmtMoney } from '../utils/format';
-import { APP_NAME } from '../config/brand';
-import useLogo from '../hooks/useLogo';
 import Sidebar from './Sidebar';
 import { SIDEBAR_WIDTH, SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_COLLAPSED_STORAGE_KEY } from './sidebarConstants';
 
@@ -42,7 +39,6 @@ const W_COLLAPSED = SIDEBAR_WIDTH_COLLAPSED;
 export default function DefaultLayout() {
   const { user, logout, recargarPermisos } = useContext(AuthContext);
   const toast = useToast();
-  const logoSrc = useLogo();
   const { alertas } = useApp();
   const { caja, isLoading: cajaCargando, abrirCaja } = useCaja();
   const { checkPermisos } = useHasPermiso();
@@ -50,7 +46,6 @@ export default function DefaultLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [openConfig,      setOpenConfig]      = useState(false);
-  const [sidebarOpen,     setSidebarOpen]     = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true');
   const [openPalette,     setOpenPalette]     = useState(false);
   const [alertasAnchor,   setAlertasAnchor]   = useState(null);
@@ -104,26 +99,14 @@ export default function DefaultLayout() {
     return () => window.removeEventListener('keydown', handler);
   }, [navigate]);
 
-  const hayAlertasNuevas = (alertas?.total || 0) > (parseInt(localStorage.getItem('alertas_vistas') || '0', 10));
-
   const handleOpenAlertas = (e) => setAlertasAnchor(e.currentTarget);
   const handleCloseAlertas = () => setAlertasAnchor(null);
 
   return (
     <Box sx={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', overflow: 'hidden', bgcolor: BG }}>
 
-      {/* ── OVERLAY MOBILE ── */}
-      {sidebarOpen && (
-        <Box
-          onClick={() => setSidebarOpen(false)}
-          sx={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, bgcolor: 'rgba(0,0,0,0.5)', zIndex: 99, display: { md: 'none' } }}
-        />
-      )}
-
       {/* ── SIDEBAR ── */}
       <Sidebar
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={setSidebarOpen}
         collapsed={sidebarCollapsed}
         onToggleCollapsed={setSidebarCollapsed}
         onOpenConfig={() => setOpenConfig(true)}
@@ -134,28 +117,11 @@ export default function DefaultLayout() {
 
       {/* ── CONTENIDO ── */}
       <Box sx={{
-        ml: { xs: 0, md: `${sidebarCollapsed ? W_COLLAPSED : W}px` },
-        width: { xs: '100%', md: `calc(100% - ${sidebarCollapsed ? W_COLLAPSED : W}px)` },
+        ml: `${sidebarCollapsed ? W_COLLAPSED : W}px`,
+        width: `calc(100% - ${sidebarCollapsed ? W_COLLAPSED : W}px)`,
         height: '100%', overflow: 'hidden', bgcolor: BG, display: 'flex', flexDirection: 'column',
         transition: 'margin-left 0.2s ease, width 0.2s ease',
       }}>
-        {/* Top bar mobile */}
-        <Box sx={{ height: 52, minHeight: 52, px: 2, display: { xs: 'flex', md: 'none' }, alignItems: 'center', justifyContent: 'space-between', bgcolor: CARD, borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
-          <Box component="img" src={logoSrc} alt={APP_NAME}
-            sx={{ height: 30, width: 'auto', display: 'block' }} />
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <IconButton size="small" onClick={handleOpenAlertas}
-              sx={{ color: hayAlertasNuevas ? WARNING : MUTED, '&:hover': { color: INK, bgcolor: HOVER } }}>
-              <Badge badgeContent={hayAlertasNuevas ? alertas.total : null} color="error"
-                sx={{ '& .MuiBadge-badge': { fontSize: 9, minWidth: 14, height: 14, p: '0 3px' } }}>
-                <NotificationsIcon sx={{ fontSize: 20 }} />
-              </Badge>
-            </IconButton>
-            <IconButton size="small" onClick={() => setSidebarOpen(o => !o)} sx={{ color: MUTED, '&:hover': { color: INK, bgcolor: HOVER } }}>
-              {sidebarOpen ? <CloseIcon sx={{ fontSize: 20 }} /> : <MenuIcon sx={{ fontSize: 20 }} />}
-            </IconButton>
-          </Box>
-        </Box>
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           <Suspense fallback={<AppLoading fullScreen={false} />}>
             <Outlet />

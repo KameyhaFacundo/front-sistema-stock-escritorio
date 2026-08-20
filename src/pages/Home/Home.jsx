@@ -1278,7 +1278,7 @@ function Home() {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', bgcolor: BG }}>
 
       {/* Header */}
-      <Box sx={{ px: 3, py: 1.25, borderBottom: `1px solid ${BORDER}`, flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+      <Box sx={{ px: 3, py: 1.25, flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
         {/* Gradiente de acento */}
         <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY}80 65%, transparent 100%)` }} />
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>

@@ -1837,7 +1837,7 @@ export default function Dashboard() {
     <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', bgcolor: BG, display: 'flex', flexDirection: 'column' }}>
 
       {/* Header — fijo arriba, no scrollea con el resto */}
-      <Box sx={{ flexShrink: 0, position: 'relative', zIndex: 2, bgcolor: BG, borderBottom: `1px solid ${BORDER}`, px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 2 }}>
+      <Box sx={{ flexShrink: 0, position: 'relative', zIndex: 2, bgcolor: BG, px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 2 }}>
         {/* Gradiente de acento */}
         <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${P} 0%, ${P}80 65%, transparent 100%)` }} />
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1.5, pt: 0.5 }}>

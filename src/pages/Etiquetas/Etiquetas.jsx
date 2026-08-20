@@ -118,7 +118,14 @@ export default function Etiquetas() {
   const toast        = useToast();
   const [openScanner, setOpenScanner] = useState(false);
   const theme        = useTheme();
-  const isNarrow     = useMediaQuery(theme.breakpoints.down('md'));
+  // 'md' (900px) es el corte que usa el resto de la app, pero acá no alcanza:
+  // los paneles 1 y 2 son de ancho fijo (420px cada uno, ver Paper más abajo)
+  // y no achican — con sidebar (268px) + ambos paneles + gaps, hace falta
+  // más de 1500px de ancho real para que al panel 3 (Vista previa, flex:1,
+  // sin ancho fijo) le quede lugar razonable. Por debajo de eso se achicaba
+  // a una tira angosta con el texto partido letra por letra (se veía roto),
+  // en vez de caer al layout con stepper de abajo que ya existía para mobile.
+  const isNarrow     = useMediaQuery(theme.breakpoints.down(1500));
   const [mobileStep, setMobileStep] = useState(1);
   const [printReady, setPrintReady] = useState(false);
 
@@ -250,24 +257,25 @@ export default function Etiquetas() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: BG }}>
       <Box sx={{
-        background: `linear-gradient(135deg, ${P} 0%, ${P}90 45%, ${P_HOVER} 100%)`,
-        px: { xs: 1.5, sm: 3 }, py: { xs: 1, sm: 1.4 }, flexShrink: 0,
-        display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 },
-        boxShadow: `0 2px 20px ${P}66`,
+        position: 'relative', flexShrink: 0, bgcolor: BG,
+        px: { xs: 1.5, sm: 3 }, pt: { xs: 1.5, sm: 2 }, pb: { xs: 1, sm: 1.4 },
+        display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 },
       }}>
+        {/* Gradiente de acento — mismo detalle que el header del resto de las páginas */}
+        <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${P} 0%, ${P}80 65%, transparent 100%)` }} />
         <Box sx={{
           width: { xs: 34, sm: 40 }, height: { xs: 34, sm: 40 }, borderRadius: 2.5,
-          bgcolor: 'rgba(255,255,255,0.12)',
-          border: '1.5px solid rgba(255,255,255,0.2)',
+          bgcolor: `${P}16`,
+          border: `1px solid ${P}25`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
-          <LocalPrintshopIcon sx={{ color: '#fff', fontSize: { xs: 18, sm: 22 } }} />
+          <LocalPrintshopIcon sx={{ color: P, fontSize: { xs: 18, sm: 22 } }} />
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontWeight: 800, fontSize: { xs: '0.86rem', sm: '1rem' }, color: '#fff', lineHeight: 1.15, letterSpacing: 0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <Typography sx={{ fontWeight: 800, fontSize: { xs: '0.86rem', sm: '1.05rem' }, color: INK, lineHeight: 1.15, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Impresión de Etiquetas
           </Typography>
-          <Typography sx={{ display: { xs: 'none', sm: 'block' }, fontSize: '0.71rem', color: 'rgba(255,255,255,0.5)', mt: 0.25 }}>
+          <Typography sx={{ display: { xs: 'none', sm: 'block' }, fontSize: '0.75rem', color: MUTED, mt: 0.25 }}>
             Seleccioná productos · Configurá la plantilla · Imprimí
           </Typography>
         </Box>
@@ -281,12 +289,12 @@ export default function Etiquetas() {
             ].map(({ val, label }) => (
               <Box key={label} sx={{
                 textAlign: 'center',
-                bgcolor: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.18)',
+                bgcolor: HOVER,
+                border: `1px solid ${BORDER}`,
                 borderRadius: 1.5, px: 1.4, py: 0.5,
               }}>
-                <Typography sx={{ fontWeight: 800, fontSize: '1.1rem', color: '#fff', lineHeight: 1 }}>{val}</Typography>
-                <Typography sx={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.55)', letterSpacing: 0.2 }}>{label}</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: '1.1rem', color: INK, lineHeight: 1 }}>{val}</Typography>
+                <Typography sx={{ fontSize: '0.62rem', color: MUTED, letterSpacing: 0.2 }}>{label}</Typography>
               </Box>
             ))}
           </Box>
@@ -301,12 +309,10 @@ export default function Etiquetas() {
           variant="contained" startIcon={<PrintIcon />}
           onClick={handlePrint} disabled={total === 0}
           sx={{
-            bgcolor: total > 0 ? '#fff' : 'rgba(255,255,255,0.14)',
-            color: total > 0 ? P : 'rgba(255,255,255,0.35)',
-            '&:hover': { bgcolor: '#e8eaf6', boxShadow: '0 4px 20px rgba(255,255,255,0.25)' },
-            '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.3)' },
+            bgcolor: P, color: '#fff',
+            '&:hover': { bgcolor: P_HOVER },
             fontWeight: 700, borderRadius: 2, minWidth: 0, px: { xs: 1.4, sm: 2.5 },
-            boxShadow: total > 0 ? '0 2px 16px rgba(255,255,255,0.2)' : 'none',
+            boxShadow: total > 0 ? `0 2px 16px ${P}40` : 'none',
             transition: 'all 0.2s',
           }}
         >
