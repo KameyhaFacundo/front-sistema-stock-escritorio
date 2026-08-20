@@ -53,6 +53,11 @@ export const usuariosService = {
     await api.post('users/cambiar-password', { password_actual: passwordActual, password_nuevo: passwordNuevo });
   },
 
+  async configurarUsuarioInicial(data) {
+    const res = await api.post('users/configuracion-inicial', data);
+    return res.data;
+  },
+
   // PIN corto para autorizar descuentos en el POS sin tipear la contraseña
   // completa (ver ventasService.autorizarDescuento) — se confirma con la
   // contraseña de login para cambiarlo, mismo criterio que cambiarPassword.

@@ -15,6 +15,7 @@ import LockOpenIcon              from '@mui/icons-material/LockOpen';
 import CloudOffIcon              from '@mui/icons-material/CloudOff';
 import { AuthContext } from '../auth/AuthContextBase';
 import { ConfigModal } from './ConfigModal';
+import ConfiguracionInicialModal from './ConfiguracionInicialModal';
 import { useToast } from '../context/ToastContext';
 import { useApp } from '../context/AppContextBase';
 import { useCaja } from '../context/CajaContextBase';
@@ -164,6 +165,7 @@ export default function DefaultLayout() {
 
       {/* ── MODAL CONFIGURACIÓN ── */}
       <ConfigModal open={openConfig} onClose={() => setOpenConfig(false)} />
+      <ConfiguracionInicialModal open={user?.configuracion_inicial_completada === false} />
 
       {/* ── COMMAND PALETTE ── */}
       <CommandPalette open={openPalette} onClose={() => setOpenPalette(false)} />
