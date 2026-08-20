@@ -3556,7 +3556,7 @@ export default function Productos() {
   };
 
   return (
-    <Box ref={tablaRef} sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
+    <Box ref={tablaRef} sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG }}>
 
       {/* Modal Actualizar Precios */}
       {esIndumentaria && (
@@ -3586,8 +3586,10 @@ export default function Productos() {
           onTallesChange={(grupoId, talles) => setGrupos(prev => prev.map(g => g.id === grupoId ? { ...g, talles } : g))} />
       </Dialog>
 
-      {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+      {/* Header + buscador + filtros: se mantiene visible al scrollear */}
+      <Box sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: BG, px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 2.5 }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 3, flexWrap: 'wrap' }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.2 }}>Productos</Typography>
           <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{totalGeneral?.total ?? '...'} productos en inventario</Typography>
@@ -3650,7 +3652,7 @@ export default function Productos() {
 
       {/* Panel de filtros */}
       <Collapse in={showFilters}>
-        <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5, flexWrap: 'wrap', p: 2, bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', p: 2, bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
           <FormControl sx={{ minWidth: 190 }}>
             <Select
               value={sortCol === 'nombre' && sortDir === 'asc' ? 'alfabetico' : sortCol === 'reciente' && sortDir === 'asc' ? 'antiguos' : 'recientes'}
@@ -3724,9 +3726,12 @@ export default function Productos() {
           )}
         </Box>
       </Collapse>
+      </Box>
 
-      {/* Card tabla */}
-      <Box data-tour="prod-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
+      {/* Contenido scrolleable */}
+      <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 2, md: 3 } }}>
+        {/* Card tabla */}
+        <Box data-tour="prod-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
 
         {/* Cabecera del card */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, px: 3, py: 2.5, borderBottom: `1px solid ${BORDER}` }}>
@@ -4143,6 +4148,7 @@ export default function Productos() {
           pageSize={pageSize} totalItems={totalProductos} label="productos"
           onPageChange={setPagina} onPageSizeChange={(s) => { setPageSize(s); setPagina(1); }}
         />
+      </Box>
       </Box>
 
       {/* Modal editar producto — mismo componente que "Nuevo producto", en

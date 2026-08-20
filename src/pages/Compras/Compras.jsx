@@ -2089,9 +2089,11 @@ export default function Compras() {
   };
 
   return (
-    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
+    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG }}>
 
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
+      {/* Header + buscador + filtros */}
+      <Box sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: BG, px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 2.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.2 }}>Compras</Typography>
           <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{totalCompras} compras registradas</Typography>
@@ -2167,7 +2169,7 @@ export default function Compras() {
       </Box>
 
       <Collapse in={showFilters}>
-        <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5, flexWrap: 'wrap', p: 2, bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', p: 2, bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
           <FormControl sx={{ minWidth: 160 }}>
             <Select value={filtroEstado} onChange={e => { setFiltroEstado(e.target.value); setPagina(1); }} displayEmpty
               sx={{ bgcolor: INPUT, color: INK, fontSize: 13, borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: BORDER }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--border-hover)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: P, borderWidth: 1 }, '& .MuiSvgIcon-root': { color: MUTED }, '& .MuiSelect-select': { py: '9px', px: '12px' } }}
@@ -2198,8 +2200,11 @@ export default function Compras() {
           )}
         </Box>
       </Collapse>
+      </Box>
 
-      <Box data-tour="compras-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
+      {/* Contenido scrolleable */}
+      <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 2, md: 3 } }}>
+        <Box data-tour="compras-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
         <Box sx={{ px: 3, py: 2.5, borderBottom: `1px solid ${BORDER}` }}>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>Historial de Compras</Typography>
           <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>{totalCompras} compras registradas</Typography>
@@ -2304,6 +2309,7 @@ export default function Compras() {
             )}
           </>
         )}
+        </Box>
       </Box>
 
       <ModalNuevaCompra

@@ -237,8 +237,11 @@ export default function Facturas() {
   if (!tieneFacturacion) return <Navigate to="/dashboard" replace />;
 
   return (
-    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
+    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG }}>
+
+      {/* Header + buscador + filtros */}
+      <Box sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: BG, px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 2.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.2 }}>Facturas</Typography>
           <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{facturas.length} comprobantes emitidos</Typography>
@@ -263,7 +266,7 @@ export default function Facturas() {
       </Box>
 
       {mostrarFiltros && (
-        <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel id="fac-filtro-tipo-label" sx={{ bgcolor: CARD, px: 0.5 }}>Tipo</InputLabel>
             <Select labelId="fac-filtro-tipo-label" value={filtroTipo} onChange={e => { setFiltroTipo(e.target.value); setPagina(1); }}
@@ -302,8 +305,11 @@ export default function Facturas() {
           )}
         </Box>
       )}
+      </Box>
 
-      <Box data-tour="fac-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
+      {/* Contenido scrolleable */}
+      <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 2, md: 3 } }}>
+        <Box data-tour="fac-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
         <Box sx={{ px: 3, py: 2.5, borderBottom: `1px solid ${BORDER}` }}>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>Historial de comprobantes</Typography>
           <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>Facturas y notas de crédito emitidas con CAE de ARCA</Typography>
@@ -373,6 +379,7 @@ export default function Facturas() {
             <TablePagination pagina={pagina} totalPages={totalPages} pageSize={pageSize} totalItems={filtradas.length} label="comprobantes" onPageChange={setPagina} onPageSizeChange={(s) => { setPageSize(s); setPagina(1); }} />
           </>
         )}
+        </Box>
       </Box>
 
       <ModalDetalleFactura id={verId} onClose={() => setVerId(null)} />

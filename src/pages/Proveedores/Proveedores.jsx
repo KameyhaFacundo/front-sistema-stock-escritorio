@@ -725,9 +725,11 @@ export default function Proveedores() {
   };
 
   return (
-    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
+    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG }}>
 
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
+      {/* Header + buscador */}
+      <Box sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: BG, px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 2.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.2 }}>Proveedores</Typography>
           <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{proveedores.length} {proveedores.length === 1 ? 'proveedor registrado' : 'proveedores registrados'}</Typography>
@@ -786,8 +788,11 @@ export default function Proveedores() {
           '& .MuiInputBase-input::placeholder': { color: MUTED, opacity: 1 },
         }}
       />
+      </Box>
 
-      <Box data-tour="prov-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
+      {/* Contenido scrolleable */}
+      <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 2, md: 3 } }}>
+        <Box data-tour="prov-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
         <Box sx={{ px: 3, py: 2.5, borderBottom: `1px solid ${BORDER}` }}>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>Lista de Proveedores</Typography>
           <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>{proveedores.length} proveedores · hacé clic en una fila para ver las deudas</Typography>
@@ -868,6 +873,7 @@ export default function Proveedores() {
             <TablePagination pagina={pagina} totalPages={totalPages} pageSize={pageSize} totalItems={filtered.length} label="proveedores" onPageChange={setPagina} onPageSizeChange={(s) => { setPageSize(s); setPagina(1); }} />
           </>
         )}
+        </Box>
       </Box>
 
       <ModalNuevoProveedor open={openModal} onClose={() => setOpenModal(false)} onCrear={handleCrear} />

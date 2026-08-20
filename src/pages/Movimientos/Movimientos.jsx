@@ -1221,10 +1221,12 @@ export default function Movimientos() {
   };
 
   return (
-    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
+    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG }}>
 
-      {/* ── Header ── */}
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
+      {/* Header + buscador + filtros */}
+      <Box sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: BG, px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 2.5 }}>
+        {/* ── Header ── */}
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
             Movimientos de stock
@@ -1276,7 +1278,7 @@ export default function Movimientos() {
 
       {/* ── Panel de filtros ── */}
       <Collapse in={showFilters}>
-        <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5, flexWrap: 'wrap', p: 2, bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', p: 2, bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
           <FormControl sx={{ minWidth: 160 }}>
             <Select value={filtroTipo} onChange={e => { setFiltroTipo(e.target.value); setPagina(1); }} displayEmpty
               sx={{ bgcolor: MODAL, color: INK, fontSize: 13, borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: BORDER }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--border-hover)' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: P, borderWidth: 1 }, '& .MuiSvgIcon-root': { color: MUTED }, '& .MuiSelect-select': { py: '9px', px: '12px' } }}
@@ -1307,9 +1309,12 @@ export default function Movimientos() {
           )}
         </Box>
       </Collapse>
+      </Box>
 
-      {/* ── Card tabla ── */}
-      <Box data-tour="mov-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
+      {/* Contenido scrolleable */}
+      <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 2, md: 3 } }}>
+        {/* ── Card tabla ── */}
+        <Box data-tour="mov-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
 
         {/* Cabecera del card */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, px: 3, py: 2, borderBottom: `1px solid ${BORDER}` }}>
@@ -1408,6 +1413,7 @@ export default function Movimientos() {
             />
           </>
         )}
+        </Box>
       </Box>
 
       <ModalMovimiento open={openModal} onClose={() => setOpenModal(false)} sucursales={sucursales} />

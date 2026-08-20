@@ -455,8 +455,11 @@ export default function Presupuestos() {
   const paged      = filtrados.slice((pagina - 1) * pageSize, pagina * pageSize);
 
   return (
-    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
+    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG }}>
+
+      {/* Header + buscador + filtros */}
+      <Box sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: BG, px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 2.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
         <Box>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.2 }}>Presupuestos</Typography>
           <Typography sx={{ color: MUTED, fontSize: 14, mt: 0.25 }}>{presupuestos.length} presupuestos guardados</Typography>
@@ -489,7 +492,7 @@ export default function Presupuestos() {
       </Box>
 
       {mostrarFiltros && (
-        <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel id="pres-filtro-estado-label" sx={{ bgcolor: CARD, px: 0.5 }}>Estado</InputLabel>
             <Select labelId="pres-filtro-estado-label" value={filtroEstado} onChange={e => { setFiltroEstado(e.target.value); setPagina(1); }}
@@ -514,8 +517,11 @@ export default function Presupuestos() {
           )}
         </Box>
       )}
+      </Box>
 
-      <Box data-tour="pres-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
+      {/* Contenido scrolleable */}
+      <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 2, md: 3 } }}>
+        <Box data-tour="pres-tabla" sx={{ bgcolor: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
         <Box sx={{ px: 3, py: 2.5, borderBottom: `1px solid ${BORDER}` }}>
           <Typography sx={{ color: INK, fontWeight: 700, fontSize: 16 }}>Historial de presupuestos</Typography>
         </Box>
@@ -574,6 +580,7 @@ export default function Presupuestos() {
             <TablePagination pagina={pagina} totalPages={totalPages} pageSize={pageSize} totalItems={filtrados.length} label="presupuestos" onPageChange={setPagina} onPageSizeChange={(s) => { setPageSize(s); setPagina(1); }} />
           </>
         )}
+        </Box>
       </Box>
 
       <ModalNuevoPresupuesto open={openNuevo} onClose={() => setOpenNuevo(false)} />

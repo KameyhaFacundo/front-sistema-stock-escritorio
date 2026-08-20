@@ -974,45 +974,51 @@ export default function Caja() {
   };
 
   return (
-    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG, p: { xs: 2, md: 3 } }}>
+    <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', bgcolor: BG }}>
 
-      <Box sx={{ mb: 3, position: 'relative' }}>
-        <Box sx={{ position: 'absolute', top: -12, left: -12, right: -12, height: 3, background: `linear-gradient(90deg, ${P} 0%, ${P}80 65%, transparent 100%)`, borderRadius: '0 0 2px 2px' }} />
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, pt: 0.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Box sx={{ width: 42, height: 42, borderRadius: '12px', bgcolor: `${SUCCESS}16`, border: `1px solid ${SUCCESS}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <PointOfSaleIcon sx={{ color: SUCCESS, fontSize: 21 }} />
+      {/* Header + tabs: se mantienen visibles al scrollear */}
+      <Box sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: BG, px: { xs: 2, md: 3 }, pt: { xs: 2, md: 3 }, pb: 2.5 }}>
+        <Box sx={{ mb: 3, position: 'relative' }}>
+          <Box sx={{ position: 'absolute', top: -12, left: -12, right: -12, height: 3, background: `linear-gradient(90deg, ${P} 0%, ${P}80 65%, transparent 100%)`, borderRadius: '0 0 2px 2px' }} />
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, pt: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box sx={{ width: 42, height: 42, borderRadius: '12px', bgcolor: `${SUCCESS}16`, border: `1px solid ${SUCCESS}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <PointOfSaleIcon sx={{ color: SUCCESS, fontSize: 21 }} />
+              </Box>
+              <Box>
+                <Typography sx={{ color: INK, fontWeight: 800, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.15 }}>Caja</Typography>
+                <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>
+                  {caja.abierta ? `Turno activo desde ${caja.horaApertura}` : 'No hay un turno abierto'}
+                </Typography>
+              </Box>
             </Box>
-            <Box>
-              <Typography sx={{ color: INK, fontWeight: 800, fontSize: { xs: 22, md: 28 }, letterSpacing: '-0.02em', lineHeight: 1.15 }}>Caja</Typography>
-              <Typography sx={{ color: MUTED, fontSize: 13, mt: 0.25 }}>
-                {caja.abierta ? `Turno activo desde ${caja.horaApertura}` : 'No hay un turno abierto'}
-              </Typography>
-            </Box>
+            <AyudaButton />
           </Box>
-          <AyudaButton />
+        </Box>
+
+        <Box data-tour="caja-tabs" sx={{ ...card, p: 0.75 }}>
+          <Tabs value={tab} onChange={handleChangeTab} variant="scrollable" scrollButtons="auto"
+            sx={{
+              minHeight: 44,
+              '& .MuiTabs-indicator': { display: 'none' },
+              '& .MuiTab-root': { textTransform: 'none', color: MUTED, minHeight: 44, fontSize: 13.5, fontWeight: 700, borderRadius: '8px', transition: 'all 0.15s' },
+              '& .Mui-selected': { color: INK, fontWeight: 800, bgcolor: HOVER },
+            }}>
+            <Tab label="Caja" />
+            <Tab data-tour="caja-tab-movimientos" label="Movimientos" />
+            <Tab data-tour="caja-tab-resumen" label="Resumen" />
+            {puedeVerHistorial && <Tab data-tour="caja-tab-historial" label="Historial" />}
+          </Tabs>
         </Box>
       </Box>
 
-      <Box data-tour="caja-tabs" sx={{ ...card, p: 0.75, mb: 2.5 }}>
-        <Tabs value={tab} onChange={handleChangeTab} variant="scrollable" scrollButtons="auto"
-          sx={{
-            minHeight: 44,
-            '& .MuiTabs-indicator': { display: 'none' },
-            '& .MuiTab-root': { textTransform: 'none', color: MUTED, minHeight: 44, fontSize: 13.5, fontWeight: 700, borderRadius: '8px', transition: 'all 0.15s' },
-            '& .Mui-selected': { color: INK, fontWeight: 800, bgcolor: HOVER },
-          }}>
-          <Tab label="Caja" />
-          <Tab data-tour="caja-tab-movimientos" label="Movimientos" />
-          <Tab data-tour="caja-tab-resumen" label="Resumen" />
-          {puedeVerHistorial && <Tab data-tour="caja-tab-historial" label="Historial" />}
-        </Tabs>
+      {/* Contenido scrolleable */}
+      <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 2, md: 3 } }}>
+        {tab === 0 && <TabCaja caja={caja} onAbrir={handleAbrir} onCerrar={handleIrAResumen} arqueoIniciado={puedeVerMontos ? false : (arqueoIniciado && !resultadoCierre)} />}
+        {tab === 1 && <TabMovimientos movimientos={movimientos} onAgregar={agregarMovimientoCaja} cajaAbierta={caja.abierta} ocultarMontos={puedeVerMontos ? false : (arqueoIniciado && !resultadoCierre)} />}
+        {tab === 2 && <TabResumen caja={caja} movimientos={movimientos} onConfirmarCierre={handleConfirmarCierre} cerrando={cerrando} resultadoCierre={resultadoCierre} metodosVisibles={arqueoMetodosVisibles} puedeVerMontos={puedeVerMontos} />}
+        {tab === 3 && puedeVerHistorial && <Box data-tour="caja-historial-box"><TabHistorial visible={tab === 3} puedeVerMontos={puedeVerMontos} puedeFiltrarFechas={puedeFiltrarFechas} /></Box>}
       </Box>
-
-      {tab === 0 && <TabCaja caja={caja} onAbrir={handleAbrir} onCerrar={handleIrAResumen} arqueoIniciado={puedeVerMontos ? false : (arqueoIniciado && !resultadoCierre)} />}
-      {tab === 1 && <TabMovimientos movimientos={movimientos} onAgregar={agregarMovimientoCaja} cajaAbierta={caja.abierta} ocultarMontos={puedeVerMontos ? false : (arqueoIniciado && !resultadoCierre)} />}
-      {tab === 2 && <TabResumen caja={caja} movimientos={movimientos} onConfirmarCierre={handleConfirmarCierre} cerrando={cerrando} resultadoCierre={resultadoCierre} metodosVisibles={arqueoMetodosVisibles} puedeVerMontos={puedeVerMontos} />}
-      {tab === 3 && puedeVerHistorial && <Box data-tour="caja-historial-box"><TabHistorial visible={tab === 3} puedeVerMontos={puedeVerMontos} puedeFiltrarFechas={puedeFiltrarFechas} /></Box>}
     </Box>
   );
 }
